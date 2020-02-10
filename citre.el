@@ -33,6 +33,63 @@
 ;; variable declarations in each section, run M-x occur with the
 ;; following query: ^;;;;* \|^(
 
+;;;; Libraries
+
+(require 'project)
+(require 'cl-lib)
+
+;;;; User options
+
+(defgroup ctags-ide nil
+  "Code navigation, completion and help message based on ctags."
+  :group 'convenience
+  :group 'tools
+  :prefix "ctags-ide-"
+  :link '(url-link "https://github.com/AmaiKinono/ctags-ide"))
+
+(defcustom ctags-ide-project-denoter-files
+  '(".projectile" ".dumbjump" "Makefile" "makefile")
+  "List of project denoter files.
+If automatic detection for project root fails, put a file with one of these
+names in your project root.  The list is in descending order of priority."
+  :type '(repeat string))
+
+(defcustom ctags-ide-project-root nil
+  "Absolute root directory of current project.
+Set this in your .dir-locals.el if automatic detection fails, and for some
+reason you can't put a denoter file in the project root."
+  :type '(choice (const nil) string))
+
+(make-variable-buffer-local 'ctags-ide-project-root)
+
+;;;; Utilities
+
+(defun ctags-ide--project-root ()
+  "Find project root of current file in buffer.
+If `ctags-ide-project-root' is set, return it.  Otherwise search up directory
+hierarchy for a file in `ctags-ide-project-denoter-files'.  If this fails, use
+`project-current'.  If this also fails, use the directory of current file."
+  (if ctags-ide-project-root
+      ctags-ide-project-root
+    (let ((current-file (buffer-file-name))
+          (denoter-dir nil))
+      (when current-file
+        (cl-dolist (denoter ctags-ide-project-denoter-files)
+          (setq denoter-dir (locate-dominating-file current-file denoter))
+          (when denoter-dir
+            (cl-return denoter-dir)))
+        (or denoter-dir
+            (cdr (project-current nil))
+            (file-name-directory current-file))))))
+
+;;;; Commands
+
+(defun ctags-ide-show-project-root ()
+  "Show project root of current file in buffer.
+Use this command to see if ctags-ide detects the project root corectly."
+  (interactive)
+  (message (or (ctags-ide--project-root) "Buffer is not visiting a file")))
+
 (provide 'citre)
 
 ;; Local Variables:
