@@ -37,6 +37,7 @@
 
 (require 'cl-lib)
 (require 'project)
+(require 'ring)
 (require 'subr-x)
 (require 'thingatpt)
 
@@ -71,12 +72,16 @@ In a large project, `citre-excluded-patterns-in-large-project' will also be
 used in the default ctags command."
   :type 'integer)
 
-(defcustom citre-find-definition-command
-  #'citre-find-definitions-completing-read
-  "The command called by `citre-find-definition'.
+(defcustom citre-jump-command
+  #'citre-jump-completing-read
+  "The command called by `citre-jump'.
 Customize this to use your own command.  See README.md to find an example of
 user-defined command."
   :type 'function)
+
+(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
+  "Hook to run after `citre-jump' and `citre-jump-back'."
+  :type :hook)
 
 (defcustom citre-enabled-languages
   ;; Languages with a ";" are not officially supported by universal ctags.
@@ -309,7 +314,7 @@ If NUM is non-nil, it specifies the maximum number of lines.  if BUFFER is
 non-nil, use the project in BUFFER instead."
   (let ((buffer (or buffer (current-buffer))))
     (if (not (buffer-local-value citre-mode buffer))
-        (error "Citre mode not enabled")
+        (user-error "Citre mode not enabled")
       (let* ((regex
               (pcase match
                 ('prefix    (concat "^" symbol))
@@ -429,12 +434,11 @@ PROPERTIES should form a sequence of PROPERTY VALUE pairs."
            do (put-text-property 0 (length str) prop val str))
   str)
 
-(defun citre--open-file-and-jump-to-line (path linum)
-  "Open file PATH and jump to line LINUM."
+(defun citre--open-file-and-goto-line (path linum)
+  "Open file PATH and go to line LINUM."
   (switch-to-buffer (find-file-noselect path))
   (goto-char (point-min))
-  (forward-line linum)
-  (recenter))
+  (forward-line linum))
 
 ;;;; Commands: xref
 
@@ -484,13 +488,21 @@ PROPERTIES should form a sequence of PROPERTY VALUE pairs."
 
 ;;;; Commands: jump to definition
 
-(defun citre-find-definition-records (&optional symbol)
+(defvar citre--marker-ring (make-ring 50)
+  "The marker ring used by `citre-jump'.")
+
+(defun citre-get-definition-records (&optional symbol)
   "Get records whose tags match SYMBOL exactly."
   (let ((symbol (or symbol (thing-at-point 'symbol))))
     (citre-get-records symbol 'exact)))
 
-(defun citre-find-definitions-completing-read ()
-  "Find definition of the symbol at point.
+(defun citre-recenter-and-blink ()
+  "Recenter point and blink after point."
+  (recenter)
+  (pulse-momentary-highlight-region (point) (1+ (line-end-position))))
+
+(defun citre-jump-completing-read ()
+  "Jump to definition of the symbol at point.
 When there are more than 1 possible definitions, it will let you choose one in
 the minibuffer.
 
@@ -510,29 +522,43 @@ can use them directly."
             'citre-kind (citre-get-field 'kind record)
             'citre-linum (citre-get-field 'linum record)
             'citre-path (citre-get-field 'path record))))
-        (records (citre-find-definition-records))
+        (records (citre-get-definition-records))
         (target nil))
     (pcase (length records)
       (0 (message "Can't find definition"))
       (1 (let* ((record (car records))
                 (path (citre-get-field 'path record))
                 (linum (citre-get-field 'linum record)))
-           (switch-to-buffer (find-file-noselect path))
-           (goto-char (point-min))
-           (forward-line (1- linum))
-           (recenter)))
+           (citre--open-file-and-goto-line path linum)))
       (_ (setq target
                (completing-read "location: "
                                 (cl-map 'list candidate-generator records)
                                 nil t))
-         (citre--open-file-and-jump-to-line
+         (citre--open-file-and-goto-line
           (get-text-property 0 'citre-path target)
           (get-text-property 0 'citre-linum target))))))
 
-(defun citre-find-definition ()
-  "Find definition of the symbol at point."
+(defun citre-jump ()
+  "Jump to definition of the symbol at point."
   (interactive)
-  (call-interactively citre-find-definition-command))
+  (let ((marker (point-marker)))
+    (call-interactively citre-jump-command)
+    (ring-insert citre--marker-ring marker)
+    (run-hooks 'citre-after-jump-hook)))
+
+(defun citre-jump-back ()
+  "Go back to the position before last `citre-jump'."
+  (interactive)
+  (let ((ring citre--marker-ring))
+    (when (ring-empty-p ring)
+      (user-error "No more previous history"))
+    (let ((marker (ring-remove ring 0)))
+      (switch-to-buffer
+       (or (marker-buffer marker)
+           (user-error "The previous buffer has been deleted")))
+      (goto-char (marker-position marker))
+      (set-marker marker nil)
+      (run-hooks 'citre-after-jump-hook))))
 
 ;;;; Commands: misc
 
