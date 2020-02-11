@@ -408,7 +408,9 @@ Normally, there's no need to set BUFFER.  But there are situations when
 `citre-get-records' are called in a buffer which is not what we want.  For
 example, when getting records during a minibuffer session, or some interactive
 UI that uses its own buffer.  In these situations, the commands that build on
-top of `citre-get-records' are responsible to offer the right BUFFER.
+top of `citre-get-records' are responsible to offer the right BUFFER.  The
+normal way to do this is let bound a variable to (current-buffer) at the entry
+of the command, before entering the interactive UI, so you can use it later.
 
 This uses `citre-get-lines' to get ctags output, and `citre-parse-line' to
 parse each line in the output.  See their docstrings to get an idea how this
@@ -419,13 +421,6 @@ interactive commands should use, and ideally should only use."
 
 ;;;; Tools
 ;; These are functions to use by interactive commands.
-
-(defun citre--current-buffer ()
-  "Return current buffer or the buffer before entering minibuffer.
-See the docstring of `citre-get-records' to know when to use it."
-  (if (minibufferp)
-      (window-buffer (minibuffer-selected-window))
-    (current-buffer)))
 
 (defun citre--propertize-destructive (str &rest properties)
   "Propertize STR destructively and return it.
@@ -478,13 +473,14 @@ PROPERTIES should form a sequence of PROPERTY VALUE pairs."
 (cl-defmethod xref-backend-identifier-completion-table
   ((_backend (eql citre)))
   "Return a function for xref to find all completions of a prefix."
-  (lambda (str pred action)
-    (let ((collection
-           (cl-map 'list (apply-partially #'citre-get-field 'tag)
-                   ;; `citre--current-buffer' is used here because this
-                   ;; anonymous function may be called in a minibuffer.
-                   (citre-get-records str 'prefix (citre--current-buffer)))))
-      (complete-with-action action collection str pred))))
+  (let ((buffer (current-buffer)))
+    (lambda (str pred action)
+      (let ((collection
+             (cl-map 'list (apply-partially #'citre-get-field 'tag)
+                     ;; `citre--current-buffer' is used here because this
+                     ;; anonymous function may be called in a minibuffer.
+                     (citre-get-records str 'prefix nil buffer))))
+        (complete-with-action action collection str pred)))))
 
 ;;;; Commands: jump to definition
 
