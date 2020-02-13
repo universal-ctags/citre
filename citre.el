@@ -313,7 +313,7 @@ SYMBOL is a string.  MATCH is a symbol, which can be:
 If NUM is non-nil, it specifies the maximum number of lines.  if BUFFER is
 non-nil, use the project in BUFFER instead."
   (let ((buffer (or buffer (current-buffer))))
-    (if (not (buffer-local-value citre-mode buffer))
+    (if (not (buffer-local-value 'citre-mode buffer))
         (user-error "Citre mode not enabled")
       (let* ((regex
               (pcase match
