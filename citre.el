@@ -741,7 +741,9 @@ default one."
 Use this command to see if citre detects the project root
 corectly."
   (interactive)
-  (message (or (citre--project-root) "Buffer is not visiting a file")))
+  (if (citre--project-root)
+      (message (citre--project-root))
+    (user-error "Buffer is not visiting a file")))
 
 ;;;; Citre mode
 
@@ -751,8 +753,8 @@ corectly."
   :lighter " citre"
   (cond
    ((not (buffer-file-name))
-    (message "Can't enable citre mode: buffer is not visiting a file")
-    (setq citre-mode nil))
+    (setq citre-mode nil)
+    (user-error "Can't enable citre mode: buffer is not visiting a file"))
    (citre-mode
     (setf (alist-get (citre--project-root)
                      citre--project-info-alist nil nil #'equal)
