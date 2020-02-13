@@ -398,8 +398,8 @@ RECORD is an output from `citre-parse-line'.  FIELD is a symbol which can be:
    start with a dot.
 - \\='path: The absolute path of the file containing the symbol.
 - \\='linum: The line number of the symbol in the file.
-- \\='line: The line containing the symbol.  Whitespaces at the beginning and
-   end are trimmed.
+- \\='line: The line containing the symbol.  Leading and trailing whitespaces
+   are trimmed.
 
 `citre-get-field' and `citre-get-records' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
@@ -512,8 +512,11 @@ details."
     (lambda (str pred action)
       (let ((collection
              (cl-map 'list (apply-partially #'citre-get-field 'tag)
-                     ;; `citre--current-buffer' is used here because this
-                     ;; anonymous function may be called in a minibuffer.
+                     ;; No need to use 'substring match style here even when
+                     ;; using 'substring or 'flex completion styles.  Since
+                     ;; Emacs know nothing about the internal of a collection
+                     ;; function, it will call this closure with an empty STR
+                     ;; to get the whole collection anyway.
                      (citre-get-records str 'prefix buffer))))
         (complete-with-action action collection str pred)))))
 
