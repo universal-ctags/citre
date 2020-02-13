@@ -675,10 +675,14 @@ default one."
            (completion-all-completions str collection predicate (- end start))
            nil))
          (completion nil))
-    (setq candidate (completing-read (format "(%s): " str)
-                                     candidates predicate t))
-    (delete-region start end)
-    (insert (substring-no-properties completion))))
+    (pcase (length candidates)
+      (0 (message "No completions"))
+      (1 (setq completion (car candidates)))
+      (_ (setq completion (completing-read (format "(%s): " str)
+                                           candidates predicate t))))
+    (when completion
+      (delete-region start end)
+      (insert (substring-no-properties completion)))))
 
 ;;;;; Commands
 
