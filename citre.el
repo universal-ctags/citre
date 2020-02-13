@@ -716,7 +716,23 @@ default one."
       (list start end collection
             :annotation-function get-annotation
             :company-docsig get-docsig
-            :exclusive 'no))))
+            ;; This makes our completion function a "non-exclusive" one, which
+            ;; means to try next completion function when current completion
+            ;; table fails to match the text at point (see the docstring of
+            ;; `completion-at-point-functions').  This is the desired behavior
+            ;; but actually it breaks our substring completion.  This is a bug
+            ;; of Emacs, see the FIXME comment in the code of
+            ;; `completion--capf-wrapper'.  I believe I've fixed it, so let's
+            ;; leave this line commented rather than delete it, and see if my
+            ;; patch will get itself into Emacs.
+
+            ;; It actually doesn't make much a difference.  Now our completion
+            ;; function works well, the only problem is it won't fallback to
+            ;; the next one when no tags are matched, which I believe also
+            ;; happens in other completion functions.
+
+            ;; :exclusive 'no
+            ))))
 
 ;;;; Misc commands
 
