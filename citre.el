@@ -433,7 +433,7 @@ PROPERTIES should form a sequence of PROPERTY VALUE pairs."
   "Open file PATH and go to line LINUM."
   (switch-to-buffer (find-file-noselect path))
   (goto-char (point-min))
-  (forward-line linum))
+  (forward-line (1- linum)))
 
 ;;;; Commands: xref
 
