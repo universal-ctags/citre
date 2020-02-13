@@ -450,12 +450,21 @@ interactive commands should use, and ideally should only use."
 ;;;; Tools
 ;; These are functions to use by interactive commands.
 
-(defun citre--propertize-destructive (str &rest properties)
-  "Propertize STR destructively and return it.
-PROPERTIES should form a sequence of PROPERTY VALUE pairs."
-  (cl-loop for (prop val) on properties by #'cddr
-           do (put-text-property 0 (length str) prop val str))
-  str)
+(defun citre--propertize (str record &rest fields)
+  "Return a copy of STR, propertized by FIELDS in RECORD.
+Added text properties are prefixed by \"citre-\".  For example, the \\='kind
+field becomes the \\='citre-kind property."
+  (let ((property-list nil))
+    (dolist (field fields)
+      (push (intern (concat "citre-" (symbol-name field))) property-list)
+      (push (citre-get-field field record) property-list))
+    (apply #'propertize str (nreverse property-list))))
+
+(defun citre--get-property (str field)
+  "Get text property corresponding to FIELD in STR.
+STR should be propertized by `citre--propertize', see its docstring for
+details."
+  (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
 
 (defun citre--open-file-and-goto-line (path linum)
   "Open file PATH and go to line LINUM."
@@ -476,9 +485,7 @@ PROPERTIES should form a sequence of PROPERTY VALUE pairs."
         (line (citre-get-field 'line record)))
     (xref-make
      (concat
-      (citre--propertize-destructive
-       kind 'face 'warning)
-      " " line)
+      (propertize kind 'face 'warning) " " line)
      (xref-make-file-location path linum 0))))
 
 (defun citre--xref-find-definition (symbol)
@@ -537,15 +544,13 @@ can use them directly."
   (interactive)
   (let ((candidate-generator
          (lambda (record)
-           (citre--propertize-destructive
-            (concat (citre--propertize-destructive
+           (citre--propertize
+            (concat (propertize
                      (citre-get-field 'file record)
                      'face 'warning)
                     ": "
                     (citre-get-field 'line record))
-            'citre-kind (citre-get-field 'kind record)
-            'citre-linum (citre-get-field 'linum record)
-            'citre-path (citre-get-field 'path record))))
+            record 'kind 'linum 'path)))
         (records (citre-get-definition-records))
         (target nil))
     (pcase (length records)
@@ -559,8 +564,8 @@ can use them directly."
                                 (cl-map 'list candidate-generator records)
                                 nil t))
          (citre--open-file-and-goto-line
-          (get-text-property 0 'citre-path target)
-          (get-text-property 0 'citre-linum target))))))
+          (citre--get-property target 'path)
+          (citre--get-property target 'linum))))))
 
 (defun citre-jump ()
   "Jump to definition of the symbol at point."
