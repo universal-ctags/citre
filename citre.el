@@ -50,56 +50,33 @@
   :prefix "citre-"
   :link '(url-link "https://github.com/AmaiKinono/citre"))
 
+;;;;; Project related options
+
 (defcustom citre-project-denoter-files
   '(".projectile" ".dumbjump" "Makefile" "makefile")
   "List of project denoter files.
-If automatic detection for project root fails, put a file with one of these
-names in your project root.  The list is in descending order of priority."
+If automatic detection for project root fails, put a file with
+one of these names in your project root.  The list is in
+descending order of priority."
   :type '(repeat string))
 
 (defcustom citre-project-root nil
   "Absolute root directory of current project.
-Set this in your .dir-locals.el if automatic detection fails, and for some
-reason you can't put a denoter file in the project root.  If you don't set this
-manually, it will automatically be set when enabling `citre-mode'."
+Set this in your .dir-locals.el if automatic detection fails, and
+for some reason you can't put a denoter file in the project root.
+If you don't set this manually, it will automatically be set when
+enabling `citre-mode'."
   :type '(choice (const nil) string))
 
 (make-variable-buffer-local 'citre-project-root)
 
 (defcustom citre-project-size-threshold 100
   "Size threshold (in MiB) between small and large projects.
-In a large project, `citre-excluded-patterns-in-large-project' will also be
-used in the default ctags command."
+In a large project, `citre-excluded-patterns-in-large-project'
+will also be used in the default ctags command."
   :type 'integer)
 
-(defcustom citre-jump-command
-  #'citre-jump-completing-read
-  "The command called by `citre-jump'.
-Customize this to use your own command.  See README.md to find an example of
-user-defined command."
-  :type 'function)
-
-(defcustom citre-get-completions-by-substring t
-  "When searching for completions, whether to match by substring.
-Non-nil means to match tags CONTAINING the symbol at point.
-Otherwise match tags START WITH the symbol at point.
-
-Notice that when listing the candidates, Emacs itself will
-further filtering from the completions we supply, and this
-behavior is controled by `completion-styles'.  You need to set
-`citre-get-completions-by-substring' to non-nil, AND add
-substring to `completion-styles' to do \"fuzzy completion\" (for
-Emacs 27, there is also a flex style)."
-  :type 'boolean)
-
-(defcustom citre-completion-in-region-function
-  #'citre-completion-in-region
-  "The function used for `completion-in-region-function'.
-See docstring of `citre-completion-in-region' for detail.")
-
-(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
-  "Hook to run after `citre-jump' and `citre-jump-back'."
-  :type :hook)
+;;;;; Ctags command related options
 
 (defcustom citre-enabled-languages
   ;; Languages with a ";" are not officially supported by universal ctags.
@@ -166,8 +143,9 @@ See docstring of `citre-completion-in-region' for detail.")
     "YACC"
     "Zephir")
   "Languages used for default ctags command.
-Notice that in the default value, some languages are not officially supported
-by ctags, but you can extend ctags with your own regex to support them."
+Notice that in the default value, some languages are not
+officially supported by ctags, but you can extend ctags with your
+own regex to support them."
   :type '(repeat string))
 
 (defcustom citre-excluded-patterns
@@ -180,15 +158,51 @@ by ctags, but you can extend ctags with your own regex to support them."
     "_MTN"
     "test"
     "tests")
-  "Excluded patterns to use in default ctags command."
+  "Excluded patterns in default ctags command."
   :type '(repeat string))
 
 (defcustom citre-excluded-patterns-in-large-project
   '("node_modules")
-  "Excluded patterns to use in default ctags command for large projects."
+  "Excluded patterns in default ctags command for large projects."
   :type '(repeat string))
 
-;;;; Misc
+;;;;; Code navigation related options
+
+(defcustom citre-jump-command
+  #'citre-jump-completing-read
+  "The command called by `citre-jump'.
+Customize this to use your own command.  See README.md to find an
+example of user-defined command."
+  :type 'function)
+
+(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
+  "Hook to run after `citre-jump' and `citre-jump-back'."
+  :type :hook)
+
+;;;;; Auto completion related options
+
+(defcustom citre-get-completions-by-substring t
+  "When searching for completions, whether to match by substring.
+Non-nil means to match tags CONTAINING the symbol at point.
+Otherwise match tags START WITH the symbol at point.
+
+Notice that when listing the candidates, Emacs itself will
+further filtering from the completions we supply, and this
+behavior is controled by `completion-styles'.  You need to set
+`citre-get-completions-by-substring' to non-nil, AND add
+substring to `completion-styles' to do \"fuzzy completion\" (for
+Emacs 27, there is also a flex style)."
+  :type 'boolean)
+
+(defcustom citre-completion-in-region-function
+  #'citre-completion-in-region
+  "The function used for `completion-in-region-function'.
+See docstring of `citre-completion-in-region' for detail."
+  :type :function)
+
+;;;; Internals
+
+;;;;; Misc
 
 ;; `define-minor-mode' actually defines this for us.  But since it's used in
 ;; the code before we define the minor mode, we need to define the variable
@@ -197,40 +211,39 @@ by ctags, but you can extend ctags with your own regex to support them."
   "Non-nil if Citre mode is enabled.
 Use the command `citre-mode' to change this variable.")
 
-(defvar citre-completion-in-region-function-orig nil
-  "This stores the original `completion-in-region-function'.")
-
 (defun citre--prevent-gc ()
   "Prevent GC before idle.
-This sets GC threshold to the largest possible value, and restore it after
-idling for 1 second.  Put this function at the entry of time-consuming
-tasks.
+This sets GC threshold to the largest possible value, and restore
+it after idling for 1 second.  Put this function at the entry of
+time-consuming tasks.
 
-This is for internal use only.  Functions built on the APIs should never use
-this unless it hacks Citre really hard."
+This is for internal use only.  Functions built on the APIs
+should never use this unless it hacks Citre really hard."
   (let ((gc-threshold-orig gc-cons-threshold))
     (setq gc-cons-threshold most-positive-fixnum)
     (run-with-idle-timer
      1 nil (lambda () (setq gc-cons-threshold gc-threshold-orig)))))
 
-;;;; Utilities: project
+;;;;; Dealing with projects
 
 (defvar citre--project-info-alist nil
   "Alist to record project informations.
-The key is the absolute path of the project, the value is a plist consists of
-size, tags generation recipe and tags use recipe.")
+The key is the absolute path of the project, the value is a plist
+consists of size, tags generation recipe and tags use recipe.")
 
 (defun citre--get-project-info (key &optional buffer)
-  "Get info of project in current buffer, or BUFFER if it's non-nil.
-KEY specifies the info type."
+  "Get info of project in current buffer.
+When BUFFER is non-nil, use project in BUFFER instead.  KEY
+specifies the info type."
   (plist-get
    (alist-get (citre--project-root buffer)
               citre--project-info-alist nil nil #'equal)
    key))
 
 (defun citre--set-project-info (key val &optional buffer)
-  "Set info of project in current buffer, or BUFFER if it's non-nil.
-KEY specifies the info type, VAL is the value."
+  "Set info of project in current buffer.
+When BUFFER is non-nil, use project in BUFFER instead.  KEY
+specifies the info type, VAL is the value."
   (plist-put
    (alist-get (citre--project-root buffer)
               citre--project-info-alist nil nil #'equal)
@@ -238,13 +251,15 @@ KEY specifies the info type, VAL is the value."
 
 (defun citre--project-root (&optional buffer)
   "Find project root of current file.
-Return `citre-project-root' directly if it's set.  Otherwise, search up
-directory hierarchy for a file in `citre-project-denoter-files'.  If this
-fails, use `project-current'.  If this also fails, use the directory of current
-file.  After project root is found, set `citre-project-root' in current
-buffer.
+Return `citre-project-root' directly if it's set.  Otherwise,
+search up directory hierarchy for a file in
+`citre-project-denoter-files'.  If this fails, use
+`project-current'.  If this also fails, use the directory of
+current file.  After project root is found, set
+`citre-project-root' in current buffer.
 
-When BUFFER is non-nil, find project root for the file in BUFFER instead."
+When BUFFER is non-nil, find project root for the file in BUFFER
+instead."
   (let ((buffer (or buffer (current-buffer))))
     (with-current-buffer buffer
       (or citre-project-root
@@ -270,9 +285,9 @@ When BUFFER is non-nil, find project root for the file in BUFFER instead."
   "Calculate size (in MiB) of DIR and write it to project info.
 Patterns in `citre-ignored-patterns' will be ignored.
 
-This uses the \"du\" program. If it doesn't exist, or takes more than 3 second
-to run, nothing will be written, and DIR will be treated as a large project by
-citre."
+This uses the \"du\" program. If it doesn't exist, or takes more
+than 3 second to run, nothing will be written, and DIR will be
+treated as a large project by citre."
   (let* ((default-directory (citre--project-root))
          (args nil)
          (du-process nil))
@@ -302,10 +317,13 @@ citre."
   "Wait for current project size to be set.
 If BUFFER is non-nil, use the project in BUFFER instead.
 
-This is only needed for functions that depends directly on the project size.
-Functions built on the APIs of citre don't need to care about this."
+This is only needed for functions that depends directly on the
+project size.  Functions built on the APIs of citre don't need to
+care about this."
   (while (not (citre--get-project-info :size buffer))
     (sleep-for 0.05)))
+
+;;;;; Ctags command
 
 (defun citre--default-ctags-command (&optional buffer)
   "Return default ctags command for current project.
@@ -334,18 +352,22 @@ If BUFFER is non-nil, use the project in BUFFER instead."
          (list "ctags" excludes extra-excludes languages extra-args) " ")
       (string-join (list "ctags" excludes languages extra-args) " "))))
 
-;;;; APIs
+;;;;; Fetch and parse ctags output
 
 (defun citre-get-lines (symbol match &optional buffer num)
-  "Get lines in ctags output that match SYMBOL, return a list of the lines.
-SYMBOL is a string.  MATCH is a symbol, which can be:
+  "Get lines in ctags output that match SYMBOL.
+The function returns a list of the lines.  SYMBOL is a string.
+MATCH is a symbol, which can be:
 
-- \\='prefix: Match all lines whose tag begins with SYMBOL, case insensitively
-- \\='substring: Match all lines whose tag contains SYMBOL, case insensitively.
-- \\='exact: Match all lines whose tag is exactly SYMBOL, case sensitively.
+- \\='prefix: Match all lines whose tag begins with SYMBOL,
+   case insensitively
+- \\='substring: Match all lines whose tag contains SYMBOL,
+   case insensitively.
+- \\='exact: Match all lines whose tag is exactly SYMBOL,
+   case sensitively.
 
-if BUFFER is non-nil, use the project in BUFFER instead.  If NUM is non-nil, it
-specifies the maximum number of lines."
+if BUFFER is non-nil, use the project in BUFFER instead.  If NUM
+is non-nil, it specifies the maximum number of lines."
   (let ((buffer (or buffer (current-buffer))))
     (if (not (buffer-local-value 'citre-mode buffer))
         (user-error "Citre mode not enabled")
@@ -375,8 +397,9 @@ specifies the maximum number of lines."
 
 (defun citre-parse-line (line)
   "Parse a line in ctags output.
-LINE is the line to be parsed.  This returns a list consists of the tag, its
-kind, signature, relative path of the file and line number."
+LINE is the line to be parsed.  This returns a list consists of
+the tag, its kind, signature, relative path of the file and line
+number."
   (let* ((elts (split-string line "\t" t))
          (kind nil)
          (signature nil)
@@ -408,22 +431,29 @@ kind, signature, relative path of the file and line number."
       (setq kind (nth 3 elts)))
     (list (car elts) kind signature (nth 1 elts) linum)))
 
+;;;; APIs
+
+;;;;; Main APIs
+
 (defun citre-get-field (field record)
   "Get FIELD from RECORD.
-RECORD is an output from `citre-parse-line'.  FIELD is a symbol which can be:
+RECORD is an output from `citre-parse-line'.  FIELD is a symbol
+which can be:
 
 - \\='tag: The tag name, i.e. the symbol name.
-- \\='kind: The kind.  This tells if the symbol is a variable or function, etc.
+- \\='kind: The kind.  This tells if the symbol is a variable or
+   function, etc.
 - \\='signature: The signature of a callable symbol.
-- \\='file: The relative path of the file containing the symbol.  It does not
-   start with a dot.
+- \\='file: The relative path of the file containing the symbol.
+  It does not start with a dot.
 - \\='path: The absolute path of the file containing the symbol.
 - \\='linum: The line number of the symbol in the file.
-- \\='line: The line containing the symbol.  Leading and trailing whitespaces
-   are trimmed.
+- \\='line: The line containing the symbol.  Leading and trailing
+   whitespaces are trimmed.
 
-`citre-get-field' and `citre-get-records' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
+`citre-get-field' and `citre-get-records' are the 2 main APIs
+that interactive commands should use, and ideally should only
+use."
   (cond
    ((eq field 'line)
     (with-temp-buffer
@@ -446,35 +476,38 @@ commands should use, and ideally should only use."
         (_      val))))))
 
 (defun citre-get-records (symbol match &optional buffer num)
-  "Get parsed tags information of project in current buffer.
+  "Get parsed tags information of project.
 SYMBOL is the symbol to search.  MATCH is how should the tags
 match SYMBOL.  See the docstring of `citre-get-lines' for detail.
 If BUFFER is non-nil, use project in BUFFER instead.  NUM is the
 maximum number of records.
 
-Normally, there's no need to set BUFFER.  But there are situations when
-`citre-get-records' are called in a buffer which is not what we want.  For
-example, when getting records during a minibuffer session, or some interactive
-UI that uses its own buffer.  In these situations, the commands that build on
-top of `citre-get-records' are responsible to offer the right BUFFER.  The
-normal way to do this is let bound a variable to (current-buffer) at the entry
-of the command, before entering the interactive UI, so you can use it later.
+Normally, there's no need to set BUFFER, since the current buffer
+will be used.  But there are situations when `citre-get-records'
+are called in a buffer which is not what we want.  For example,
+when getting records during a minibuffer session, or some
+interactive UI that uses its own buffer.  In these situations,
+the commands that build on top of `citre-get-records' are
+responsible to offer the right BUFFER.  The normal way to do this
+is let bound a variable to (current-buffer) at the entry of the
+command, before entering the interactive UI, so you can use it
+later.
 
-This uses `citre-get-lines' to get ctags output, and `citre-parse-line' to
-parse each line in the output.  See their docstrings to get an idea how this
-works.  `citre-get-records' and `citre-get-field' are the 2 main APIs that
-interactive commands should use, and ideally should only use."
+This uses `citre-get-lines' to get ctags output, and
+`citre-parse-line' to parse each line in the output.  See their
+docstrings to get an idea how this works.  `citre-get-records'
+and `citre-get-field' are the 2 main APIs that interactive
+commands should use, and ideally should only use."
   (citre--prevent-gc)
   (cl-map 'list #'citre-parse-line
        (citre-get-lines symbol match num buffer)))
 
-;;;; Tools
-;; These are functions to use by interactive commands.
+;;;;; Helper functions
 
 (defun citre--propertize (str record &rest fields)
   "Return a copy of STR, propertized by FIELDS in RECORD.
-Added text properties are prefixed by \"citre-\".  For example, the \\='kind
-field becomes the \\='citre-kind property."
+Added text properties are prefixed by \"citre-\".  For example,
+the \\='kind field becomes the \\='citre-kind property."
   (let ((property-list nil))
     (dolist (field fields)
       (push (intern (concat "citre-" (symbol-name field))) property-list)
@@ -483,8 +516,8 @@ field becomes the \\='citre-kind property."
 
 (defun citre--get-property (str field)
   "Get text property corresponding to FIELD in STR.
-STR should be propertized by `citre--propertize', see its docstring for
-details."
+STR should be propertized by `citre--propertize', see its
+docstring for details."
   (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
 
 (defun citre--open-file-and-goto-line (path linum)
@@ -493,7 +526,7 @@ details."
   (goto-char (point-min))
   (forward-line (1- linum)))
 
-;;;; Commands: xref
+;;;; Action: jump to definition (based on xref)
 
 (declare-function xref-make "xref" (summary location))
 (declare-function xref-make-file-location "xref" (file line column))
@@ -541,7 +574,9 @@ details."
                      (citre-get-records str 'prefix buffer))))
         (complete-with-action action collection str pred)))))
 
-;;;; Commands: jump to definition
+;;;; Action: jump to definition
+
+;;;;; Internals
 
 (defvar citre--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
@@ -558,13 +593,14 @@ details."
 
 (defun citre-jump-completing-read ()
   "Jump to definition of the symbol at point.
-When there are more than 1 possible definitions, it will let you choose one in
-the minibuffer.
+When there are more than 1 possible definitions, it will let you
+choose one in the minibuffer.
 
-The kind, line number and path information are stored in \\='citre-kind,
-\\='citre-linum and \\='citre-path properties of each candidate, so if you want
-to build a more informative UI using some minibuffer completing framework, you
-can use them directly."
+The kind, line number and path information are stored in
+\\='citre-kind, \\='citre-linum and \\='citre-path properties of
+each candidate, so if you want to build a more informative UI
+using some minibuffer completing framework, you can use them
+directly."
   (interactive)
   (let ((candidate-generator
          (lambda (record)
@@ -591,6 +627,8 @@ can use them directly."
           (citre--get-property target 'path)
           (citre--get-property target 'linum))))))
 
+;;;;; Commands
+
 (defun citre-jump ()
   "Jump to definition of the symbol at point."
   (interactive)
@@ -613,9 +651,39 @@ can use them directly."
       (set-marker marker nil)
       (run-hooks 'citre-after-jump-hook))))
 
-;;;; Commands: completion
+;;;; Action: auto completion
+
+;;;;; Internals
+
+(defvar citre-completion-in-region-function-orig nil
+  "This stores the original `completion-in-region-function'.")
+
+(defun citre-completion-in-region (start end collection &optional predicate)
+  "A function that replace default `completion-in-region-function'.
+This completes the text between START and END using COLLECTION.
+PREDICATE says when to exit.
+
+When there are multiple candidates, this uses standard
+`completing-read' interface, while the default one in Emacs pops
+a *Completions* buffer to show them.  When combined with some
+minibuffer completion framework, it's more user-friendly then the
+default one."
+  (let* ((str (buffer-substring-no-properties start end))
+         (completion-ignore-case (string= str (downcase str)))
+         (candidates
+          (nconc
+           (completion-all-completions str collection predicate (- end start))
+           nil))
+         (completion nil))
+    (setq candidate (completing-read (format "(%s): " str)
+                                     candidates predicate t))
+    (delete-region start end)
+    (insert (substring-no-properties completion))))
+
+;;;;; Commands
 
 (defun citre-completion-at-point ()
+  "Function used for `completion-at-point-functions'."
   (interactive)
   (let* ((symbol (thing-at-point 'symbol))
          (bounds (bounds-of-thing-at-point 'symbol))
@@ -646,36 +714,16 @@ can use them directly."
             :company-docsig get-docsig
             :exclusive 'no))))
 
-(defun citre-completion-in-region (start end collection &optional predicate)
-  "A function that replaces default `completion-in-region-function'.
-This completes the text between START and END using COLLECTION.
-PREDICATE says when to exit.
-
-When there are multiple candidates, this uses standard
-`completing-read' interface, while the default one in Emacs pops
-a *Completions* buffer to show them.  When combined with some
-minibuffer completion framework, it's more user-friendly then the
-default one."
-  (let* ((str (buffer-substring-no-properties start end))
-         (completion-ignore-case (string= str (downcase str)))
-         (candidates
-          (nconc
-           (completion-all-completions str collection predicate (- end start))
-           nil))
-         (completion nil))
-    (setq candidate (completing-read (format "(%s): " str) candidates predicate t))
-    (delete-region start end)
-    (insert (substring-no-properties completion))))
-
-;;;; Commands: misc
+;;;; Misc commands
 
 (defun citre-show-project-root ()
   "Show project root of current file in buffer.
-Use this command to see if citre detects the project root corectly."
+Use this command to see if citre detects the project root
+corectly."
   (interactive)
   (message (or (citre--project-root) "Buffer is not visiting a file")))
 
-;;;; citre-mode
+;;;; Citre mode
 
 ;;;###autoload
 (define-minor-mode citre-mode
@@ -694,7 +742,8 @@ Use this command to see if citre detects the project root corectly."
     (add-hook 'xref-backend-functions #'citre-xref-backend nil t)
     (add-hook 'completion-at-point-functions
               #'citre-completion-at-point nil t)
-    (setq citre-completion-in-region-function-orig completion-in-region-function)
+    (setq citre-completion-in-region-function-orig
+          completion-in-region-function)
     (setq completion-in-region-function #'citre-completion-in-region))
    (t
     (setq citre--project-info-alist
@@ -703,7 +752,8 @@ Use this command to see if citre detects the project root corectly."
                      :key #'car :test #'equal))
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
-    (setq completion-in-region-function citre-completion-in-region-function-orig))))
+    (setq completion-in-region-function
+          citre-completion-in-region-function-orig))))
 
 (provide 'citre)
 
