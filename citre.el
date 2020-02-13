@@ -315,7 +315,7 @@ If BUFFER is non-nil, use the project in BUFFER instead."
 
 ;;;; APIs
 
-(defun citre-get-lines (symbol match &optional num buffer)
+(defun citre-get-lines (symbol match &optional buffer num)
   "Get lines in ctags output that match SYMBOL, return a list of the lines.
 SYMBOL is a string.  MATCH is a symbol, which can be:
 
@@ -323,8 +323,8 @@ SYMBOL is a string.  MATCH is a symbol, which can be:
 - \\='substring: Match all lines whose tag contains SYMBOL, case insensitively.
 - \\='exact: Match all lines whose tag is exactly SYMBOL, case sensitively.
 
-If NUM is non-nil, it specifies the maximum number of lines.  if BUFFER is
-non-nil, use the project in BUFFER instead."
+if BUFFER is non-nil, use the project in BUFFER instead.  If NUM is non-nil, it
+specifies the maximum number of lines."
   (let ((buffer (or buffer (current-buffer))))
     (if (not (buffer-local-value 'citre-mode buffer))
         (user-error "Citre mode not enabled")
@@ -424,11 +424,12 @@ commands should use, and ideally should only use."
         ('path  (expand-file-name val (citre--project-root)))
         (_      val))))))
 
-(defun citre-get-records (symbol match &optional num buffer)
+(defun citre-get-records (symbol match &optional buffer num)
   "Get parsed tags information of project in current buffer.
-SYMBOL is the symbol to search.  MATCH is how should the tags match SYMBOL.
-See the docstring of `citre-get-lines' for detail.  NUM is the maximum number
-of records.  If BUFFER is non-nil, use project in BUFFER instead.
+SYMBOL is the symbol to search.  MATCH is how should the tags
+match SYMBOL.  See the docstring of `citre-get-lines' for detail.
+If BUFFER is non-nil, use project in BUFFER instead.  NUM is the
+maximum number of records.
 
 Normally, there's no need to set BUFFER.  But there are situations when
 `citre-get-records' are called in a buffer which is not what we want.  For
@@ -506,7 +507,7 @@ PROPERTIES should form a sequence of PROPERTY VALUE pairs."
              (cl-map 'list (apply-partially #'citre-get-field 'tag)
                      ;; `citre--current-buffer' is used here because this
                      ;; anonymous function may be called in a minibuffer.
-                     (citre-get-records str 'prefix nil buffer))))
+                     (citre-get-records str 'prefix buffer))))
         (complete-with-action action collection str pred)))))
 
 ;;;; Commands: jump to definition
