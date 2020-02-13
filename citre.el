@@ -79,6 +79,24 @@ Customize this to use your own command.  See README.md to find an example of
 user-defined command."
   :type 'function)
 
+(defcustom citre-get-completions-by-substring t
+  "When searching for completions, whether to match by substring.
+Non-nil means to match tags CONTAINING the symbol at point.
+Otherwise match tags START WITH the symbol at point.
+
+Notice that when listing the candidates, Emacs itself will
+further filtering from the completions we supply, and this
+behavior is controled by `completion-styles'.  You need to set
+`citre-get-completions-by-substring' to non-nil, AND add
+substring to `completion-styles' to do \"fuzzy completion\" (for
+Emacs 27, there is also a flex style)."
+  :type 'boolean)
+
+(defcustom citre-completion-in-region-function
+  #'citre-completion-in-region
+  "The function used for `completion-in-region-function'.
+See docstring of `citre-completion-in-region' for detail.")
+
 (defcustom citre-after-jump-hook '(citre-recenter-and-blink)
   "Hook to run after `citre-jump' and `citre-jump-back'."
   :type :hook)
@@ -178,6 +196,9 @@ by ctags, but you can extend ctags with your own regex to support them."
 (defvar citre-mode nil
   "Non-nil if Citre mode is enabled.
 Use the command `citre-mode' to change this variable.")
+
+(defvar citre-completion-in-region-function-orig nil
+  "This stores the original `completion-in-region-function'.")
 
 (defun citre--prevent-gc ()
   "Prevent GC before idle.
@@ -592,6 +613,60 @@ can use them directly."
       (set-marker marker nil)
       (run-hooks 'citre-after-jump-hook))))
 
+;;;; Commands: completion
+
+(defun citre-completion-at-point ()
+  (interactive)
+  (let* ((symbol (thing-at-point 'symbol))
+         (bounds (bounds-of-thing-at-point 'symbol))
+         (start (car bounds))
+         (end (cdr bounds))
+         (collection nil)
+         (match (if citre-get-completions-by-substring
+                    'substring 'prefix))
+         (candidate-generator
+          (lambda (record)
+            (citre--propertize
+             (citre-get-field 'tag record)
+             record 'kind 'signature)))
+         (get-annotation
+          (lambda (candidate)
+            (concat
+             " (" (citre--get-property candidate 'kind) ")")))
+         (get-docsig
+          (lambda (candidate)
+            (citre--get-property candidate 'signature))))
+    (when symbol
+      (setq collection
+            (cl-map 'list candidate-generator
+                    (citre-get-records symbol match))))
+    (when collection
+      (list start end collection
+            :annotation-function get-annotation
+            :company-docsig get-docsig
+            :exclusive 'no))))
+
+(defun citre-completion-in-region (start end collection &optional predicate)
+  "A function that replaces default `completion-in-region-function'.
+This completes the text between START and END using COLLECTION.
+PREDICATE says when to exit.
+
+When there are multiple candidates, this uses standard
+`completing-read' interface, while the default one in Emacs pops
+a *Completions* buffer to show them.  When combined with some
+minibuffer completion framework, it's more user-friendly then the
+default one."
+  (let* ((str (buffer-substring-no-properties start end))
+         (completion-ignore-case (string= str (downcase str)))
+         (candidates
+          (nconc
+           (completion-all-completions str collection predicate (- end start))
+           nil))
+         (completion nil))
+    (setq candidate (completing-read (format "(%s): " str) candidates predicate t))
+    (delete-region start end)
+    (insert (substring-no-properties completion))))
+
 ;;;; Commands: misc
 
 (defun citre-show-project-root ()
@@ -616,13 +691,19 @@ Use this command to see if citre detects the project root corectly."
           '(:size nil :tags-recipe nil :tags-use nil))
     (citre--write-project-size)
     (require 'xref)
-    (add-hook 'xref-backend-functions #'citre-xref-backend nil t))
+    (add-hook 'xref-backend-functions #'citre-xref-backend nil t)
+    (add-hook 'completion-at-point-functions
+              #'citre-completion-at-point nil t)
+    (setq citre-completion-in-region-function-orig completion-in-region-function)
+    (setq completion-in-region-function #'citre-completion-in-region))
    (t
     (setq citre--project-info-alist
           (cl-delete (citre--project-root)
                      citre--project-info-alist
                      :key #'car :test #'equal))
-    (remove-hook 'xref-backend-functions #'citre-xref-backend t))))
+    (remove-hook 'xref-backend-functions #'citre-xref-backend t)
+    (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
+    (setq completion-in-region-function citre-completion-in-region-function-orig))))
 
 (provide 'citre)
 
