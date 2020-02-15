@@ -581,10 +581,25 @@ docstring for details."
 (defvar citre--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
 
-(defun citre-get-definition-records (&optional symbol)
-  "Get records whose tags match SYMBOL exactly."
-  (let ((symbol (or symbol (thing-at-point 'symbol))))
-    (citre-get-records symbol 'exact)))
+(defun citre-get-definition-locations (&optional symbol)
+  "Get locations of symbol at point, or SYMBOL if it's non-nil.
+The result is a list of strings, each string consists of relative
+file path and the line content, with text properties containing
+the kind, linum and absolute path of the tag."
+  (let ((symbol (or symbol (thing-at-point 'symbol)))
+        (location-str-generator
+         (lambda (record)
+           (citre--propertize
+            (concat (propertize
+                     (citre-get-field 'file record)
+                     'face 'warning)
+                    ": "
+                    (citre-get-field 'line record))
+            record 'kind 'linum 'path))))
+    (unless symbol
+      (user-error "No symbol at point"))
+    (cl-map 'list location-str-generator
+            (citre-get-records symbol 'exact))))
 
 (defun citre-recenter-and-blink ()
   "Recenter point and blink after point."
@@ -602,27 +617,15 @@ each candidate, so if you want to build a more informative UI
 using some minibuffer completing framework, you can use them
 directly."
   (interactive)
-  (let ((candidate-generator
-         (lambda (record)
-           (citre--propertize
-            (concat (propertize
-                     (citre-get-field 'file record)
-                     'face 'warning)
-                    ": "
-                    (citre-get-field 'line record))
-            record 'kind 'linum 'path)))
-        (records (citre-get-definition-records))
+  (let ((locations (citre-get-definition-locations))
         (target nil))
-    (pcase (length records)
+    (pcase (length locations)
       (0 (message "Can't find definition"))
-      (1 (let* ((record (car records))
-                (path (citre-get-field 'path record))
-                (linum (citre-get-field 'linum record)))
-           (citre--open-file-and-goto-line path linum)))
+      (1 (citre--open-file-and-goto-line
+          (citre--get-property (car locations) 'path)
+          (citre--get-property (car locations) 'linum)))
       (_ (setq target
-               (completing-read "location: "
-                                (cl-map 'list candidate-generator records)
-                                nil t))
+               (completing-read "location: " locations nil t))
          (citre--open-file-and-goto-line
           (citre--get-property target 'path)
           (citre--get-property target 'linum))))))
@@ -658,6 +661,23 @@ directly."
 (defvar citre-completion-in-region-function-orig nil
   "This stores the original `completion-in-region-function'.")
 
+(defun citre-get-completions (&optional symbol)
+  "Get completions of symbol at point, or SYMBOL if it's non-nil.
+The result is a list of strings, each string is the complete tag
+name, with text properties containing the kind and signature."
+  (let ((symbol (or symbol (thing-at-point 'symbol)))
+        (match (if citre-get-completions-by-substring
+                    'substring 'prefix))
+        (candidate-str-generator
+          (lambda (record)
+            (citre--propertize
+             (citre-get-field 'tag record)
+             record 'kind 'signature))))
+    (unless symbol
+      (user-error "No symbol at point"))
+    (cl-map 'list candidate-str-generator
+            (citre-get-records symbol match))))
+
 (defun citre-completion-in-region (start end collection &optional predicate)
   "A function that replace default `completion-in-region-function'.
 This completes the text between START and END using COLLECTION.
@@ -689,18 +709,10 @@ default one."
 (defun citre-completion-at-point ()
   "Function used for `completion-at-point-functions'."
   (interactive)
-  (let* ((symbol (thing-at-point 'symbol))
-         (bounds (bounds-of-thing-at-point 'symbol))
+  (let* ((bounds (bounds-of-thing-at-point 'symbol))
          (start (car bounds))
          (end (cdr bounds))
-         (collection nil)
-         (match (if citre-get-completions-by-substring
-                    'substring 'prefix))
-         (candidate-generator
-          (lambda (record)
-            (citre--propertize
-             (citre-get-field 'tag record)
-             record 'kind 'signature)))
+         (collection (citre-get-completions))
          (get-annotation
           (lambda (candidate)
             (concat
@@ -708,11 +720,6 @@ default one."
          (get-docsig
           (lambda (candidate)
             (citre--get-property candidate 'signature))))
-    (when symbol
-      (setq collection
-            (cl-map 'list candidate-generator
-                    (citre-get-records symbol match))))
-    (when collection
       (list start end collection
             :annotation-function get-annotation
             :company-docsig get-docsig
@@ -732,7 +739,7 @@ default one."
             ;; happens in other completion functions.
 
             ;; :exclusive 'no
-            ))))
+            )))
 
 ;;;; Misc commands
 
