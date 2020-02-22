@@ -535,7 +535,7 @@ and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
   (citre--prevent-gc)
   (cl-map 'list #'citre-parse-line
-       (citre-get-lines symbol match num buffer)))
+          (citre-get-lines symbol match num buffer)))
 
 ;;;;; Helper functions
 
@@ -607,7 +607,7 @@ doesn't affected by its surroundings."
 (defun citre--xref-find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
   (cl-map 'list #'citre--make-xref-object
-       (citre-get-records symbol 'exact)))
+          (citre-get-records symbol 'exact)))
 
 (defun citre-xref-backend ()
   "Define the Citre backend for xref."
@@ -1050,12 +1050,12 @@ The result is a list of strings, each string is the complete tag
 name, with text properties containing the kind and signature."
   (let ((symbol (or symbol (thing-at-point 'symbol)))
         (match (if citre-get-completions-by-substring
-                    'substring 'prefix))
+                   'substring 'prefix))
         (candidate-str-generator
-          (lambda (record)
-            (citre--propertize
-             (citre-get-field 'tag record)
-             record 'kind 'signature))))
+         (lambda (record)
+           (citre--propertize
+            (citre-get-field 'tag record)
+            record 'kind 'signature))))
     (unless symbol
       (user-error "No symbol at point"))
     (cl-map 'list candidate-str-generator
@@ -1103,26 +1103,26 @@ default one."
          (get-docsig
           (lambda (candidate)
             (citre--get-property candidate 'signature))))
-      (list start end collection
-            :annotation-function get-annotation
-            :company-docsig get-docsig
-            ;; This makes our completion function a "non-exclusive" one, which
-            ;; means to try next completion function when current completion
-            ;; table fails to match the text at point (see the docstring of
-            ;; `completion-at-point-functions').  This is the desired behavior
-            ;; but actually it breaks our substring completion.  This is a bug
-            ;; of Emacs, see the FIXME comment in the code of
-            ;; `completion--capf-wrapper'.  I believe I've fixed it, so let's
-            ;; leave this line commented rather than delete it, and see if my
-            ;; patch will get itself into Emacs.
+    (list start end collection
+          :annotation-function get-annotation
+          :company-docsig get-docsig
+          ;; This makes our completion function a "non-exclusive" one, which
+          ;; means to try next completion function when current completion
+          ;; table fails to match the text at point (see the docstring of
+          ;; `completion-at-point-functions').  This is the desired behavior
+          ;; but actually it breaks our substring completion.  This is a bug
+          ;; of Emacs, see the FIXME comment in the code of
+          ;; `completion--capf-wrapper'.  I believe I've fixed it, so let's
+          ;; leave this line commented rather than delete it, and see if my
+          ;; patch will get itself into Emacs.
 
-            ;; It actually doesn't make much a difference.  Now our completion
-            ;; function works well, the only problem is it won't fallback to
-            ;; the next one when no tags are matched, which I believe also
-            ;; happens in other completion functions.
+          ;; It actually doesn't make much a difference.  Now our completion
+          ;; function works well, the only problem is it won't fallback to
+          ;; the next one when no tags are matched, which I believe also
+          ;; happens in other completion functions.
 
-            ;; :exclusive 'no
-            )))
+          ;; :exclusive 'no
+          )))
 
 ;;;; Misc commands
 
