@@ -505,26 +505,53 @@ commands should use, and ideally should only use."
 ;;;;; Helper functions
 
 (defun citre--propertize (str record &rest fields)
-  "Return a copy of STR, propertized by FIELDS in RECORD.
+  "Propertize STR by FIELDS in RECORD.
 Added text properties are prefixed by \"citre-\".  For example,
-the \\='kind field becomes the \\='citre-kind property."
-  (let ((property-list nil))
+the \\='kind field becomes the \\='citre-kind property.
+
+Notice that this is destructive, which is different from
+`propertize'.  The propertized STR is returned."
+  (let ((len (length str)))
     (dolist (field fields)
-      (push (intern (concat "citre-" (symbol-name field))) property-list)
-      (push (citre-get-field field record) property-list))
-    (apply #'propertize str (nreverse property-list))))
+      (put-text-property 0 len
+                         (intern (concat "citre-" (symbol-name field)))
+                         (citre-get-field field record)
+                         str))
+    str))
 
 (defun citre--get-property (str field)
   "Get text property corresponding to FIELD in STR.
-STR should be propertized by `citre--propertize', see its
-docstring for details."
+STR should be propertized by `citre--propertize' or
+`citre--put-property'."
   (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
+
+(defun citre--put-property (str prop val)
+  "Set the text property corresponding to PROP in STR.
+The value is specified by VAL.  The text property added is
+prefixed by \"citre-\".  Propertized STR is returned."
+  (put-text-property 0 (length str)
+                     (intern (concat "citre-" (symbol-name prop)))
+                     val str)
+  str)
 
 (defun citre--open-file-and-goto-line (path linum)
   "Open file PATH and go to line LINUM."
   (switch-to-buffer (find-file-noselect path))
   (goto-char (point-min))
   (forward-line (1- linum)))
+
+(defun citre--add-face (str face)
+  "Add FACE to STR, and return it.
+This is mainly for displaying STR in an overlay.  For example,
+FACE only specifies background color, then STR will have that
+background color, with all other face attributes preserved.
+
+`default' face is appended to make sure the display in overlay
+doesn't affected by its surroundings."
+  (let ((len (length str)))
+    (add-face-text-property 0 len face nil str)
+    (add-face-text-property 0 len 'default 'append str)
+    str))
 
 ;;;; Action: jump to definition (based on xref)
 
