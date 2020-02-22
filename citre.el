@@ -647,7 +647,7 @@ directly."
   (let ((locations (citre-get-definition-locations))
         (target nil))
     (pcase (length locations)
-      (0 (message "Can't find definition"))
+      (0 (user-error "Can't find definition"))
       (1 (citre--open-file-and-goto-line
           (citre--get-property (car locations) 'path)
           (citre--get-property (car locations) 'linum)))
