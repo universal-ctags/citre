@@ -179,6 +179,41 @@ example of user-defined command."
   "Hook to run after `citre-jump' and `citre-jump-back'."
   :type :hook)
 
+(defcustom citre-peek-file-content-height 12
+  "Number of file content lines displayed in the peeking window."
+  :type 'integer)
+
+(defcustom citre-peek-locations-height 3
+  "Number of locations displayed in the peeking window."
+  :type 'integer)
+
+(defcustom citre-peek-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "M-n") 'citre-peek-next-line)
+    (define-key map (kbd "M-p") 'citre-peek-prev-line)
+    (define-key map (kbd "M-N") 'citre-peek-next-location)
+    (define-key map (kbd "M-P") 'citre-peek-prev-location)
+    (define-key map [remap keyboard-quit] ' citre-peek-abort)
+    map)
+  "Keymap used when peeking."
+  :type 'keymap)
+
+(defface citre-peek-border-face
+  '((((background light))
+     :height 15 :background "#ffcbd3")
+    (t
+     :height 15 :background "#db8e93"))
+  "Face used for borders of the peeking window.
+In terminal version of Emacs, the background of this face is used
+as the foreground of the dashes.")
+
+(defface citre-peek-current-location-face
+  '((((background light))
+     :background "#c0c0c0")
+    (t
+     :background "#666666"))
+  "Face used for current location in the peeking window.")
+
 ;;;;; Auto completion related options
 
 (defcustom citre-get-completions-by-substring t
@@ -601,6 +636,319 @@ doesn't affected by its surroundings."
                      (citre-get-records str 'prefix buffer))))
         (complete-with-action action collection str pred)))))
 
+;;;; Action: peek definition
+
+;;;;; Helpers
+
+(defun citre--subseq (seq interval)
+  "Return the subsequence of SEQ in INTERVAL.
+INTERVAL is a cons pair, its car is the starting index, cdr is
+the ending index (not included).  Cdr can be smaller than car,
+then the result will go from index car, to the end of SEQ, then
+back to the start of SEQ, and end before index cdr."
+  (let ((start (car interval))
+        (end (cdr interval)))
+    (if (<= start end)
+        (cl-subseq seq start end)
+      (append
+       (cl-subseq seq start)
+       (cl-subseq seq 0 end)))))
+
+(defun citre--index-in-interval (num interval wrapnum)
+  "Return the index of NUM inside INTERVAL, or nil if it's not inside.
+INTERVAL is a cons pair of integers.  The car is included, and
+cdr is not included.  Cdr can be smaller than car, which means
+the interval goes from car to WRAPNUM (which is not included),
+then from 0 to cdr (not included)."
+  (let* ((start (car interval))
+         (end (cdr interval))
+         (len (if (<= start end)
+                  (- end start)
+                (+ (- wrapnum start) end)))
+         (index (- num start)))
+    (when (< num wrapnum)
+      (when (< index 0)
+        (setq index (+ index wrapnum)))
+      (when (< index len)
+        index))))
+
+(defun citre--file-total-linum (path)
+  "Return total number of lines of file PATH."
+  (with-temp-buffer
+    (insert-file-contents path)
+    (line-number-at-pos (point-max))))
+
+(defun citre--fit-line (str)
+  "Fit STR in current window.
+When STR is too long, it will be truncated, and \"...\" is added
+at the end."
+  ;; Depending on the wrapping behavior, in some terminals, a line with exact
+  ;; (window-body-width) characters can be wrapped. So we minus it by one.
+  (let ((limit (1- (window-body-width))))
+    (if (> (length str) limit)
+        (concat (substring str 0 (- limit 3))
+                "...")
+      str)))
+
+(defun citre--color-blend (c1 c2 alpha)
+  "Blend two colors C1 and C2 with ALPHA.
+C1 and C2 are hexidecimal strings.  ALPHA is a number between 0.0
+and 1.0 which is the influence of C1 on the result."
+  (apply (lambda (r g b)
+           (format "#%02x%02x%02x"
+                   (ash r -8)
+                   (ash g -8)
+                   (ash b -8)))
+         (cl-mapcar
+          (lambda (x y)
+            (round (+ (* x alpha) (* y (- 1 alpha)))))
+          (color-values c1) (color-values c2))))
+
+;;;;; Internals
+
+(defvar-local citre-peek--ov nil
+  "Current overlay used for peeking.")
+
+(defvar-local citre-peek--locations nil
+  "List of definition locations used when peeking.
+Each element is a string to be displayed, with text property
+`citre-path' for the full path, and `citre-linum' for the line
+number.")
+
+(defvar-local citre-peek--displayed-locations-interval nil
+  "The index of displayed locations in `citre-peek--locations'.
+This is a cons pair, its car is the index of first displayed
+location, and cdr is of the last one.")
+
+(defvar-local citre-peek--location-index nil
+  "The index of current location in `citre-peek--locations'.")
+
+(defvar-local citre-peek--temp-buffer-alist nil
+  "A list of file buffers that don't exist before peeking.
+These will be killed after `citre-peek-abort'.")
+
+(defvar citre-peek--bg nil
+  "Background color used for file contents when peeking.")
+
+(defvar citre-peek--bg-alt nil
+  "Background color used for unselected locations when peeking.")
+
+;; Actually we can make Emacs believe our temp buffer is visiting FILENAME (by
+;; setting `buffer-file-name' and `buffer-file-truename'), but then the buffer
+;; is not hidden (Emacs hides buffers whose name begin with a space, but those
+;; visiting a file are not hidden), and Emacs ask you to confirm when killing
+;; it because its content are modified.  Rather than trying to workaround these
+;; issues, it's better to create this function instead.
+(defun citre-peek--find-buffer-visiting (filename)
+  "Return the buffer visiting file FILENAME (a string).
+This is like `find-buffer-visiting', but it also searches
+`citre-peek--temp-buffer-alist', so it can handle temporary
+buffers created when peekin."
+  (or (alist-get filename citre-peek--temp-buffer-alist)
+      (find-buffer-visiting filename)))
+
+(defun citre-peek--get-content (path linum n)
+  "Get file content for peeking.
+PATH is the path of the file.  LINUM is the starting line.  N is
+the number of lines.
+
+If there's no buffer visiting PATH currently, create a new
+temporary buffer for it.  They will be killed by `citre-abort'."
+  (delay-mode-hooks
+    (let* ((buf-opened (citre-peek--find-buffer-visiting path))
+           (buf nil))
+      (if buf-opened
+          (setq buf buf-opened)
+        (setq buf (generate-new-buffer (format " *citre-peek-%s*" path)))
+        (with-current-buffer buf
+          (insert-file-contents path)
+          ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
+          (let ((buffer-file-name path))
+            (delay-mode-hooks
+              (set-auto-mode))))
+        (push (cons path buf) citre-peek--temp-buffer-alist))
+      (with-current-buffer buf
+        (let ((beg nil)
+              (end nil))
+          (save-excursion
+            (goto-char (point-min))
+            (forward-line (1- linum))
+            (setq beg (point))
+            (forward-line (1- n))
+            (setq end (point-at-eol))
+            (font-lock-fontify-region beg end)
+            (concat (buffer-substring beg end) "\n")))))))
+
+(defun citre-peek--location-index-forward (n)
+  "Move current location N steps forward.
+N can be negative."
+  (let ((start (car citre-peek--displayed-locations-interval))
+        (end (cdr citre-peek--displayed-locations-interval))
+        (len (length citre-peek--locations)))
+    (setq citre-peek--location-index
+          (mod (+ n citre-peek--location-index) len))
+    (unless (citre--index-in-interval
+             citre-peek--location-index
+             citre-peek--displayed-locations-interval len)
+      (setcar citre-peek--displayed-locations-interval
+              (mod (+ n start) len))
+      (setcdr citre-peek--displayed-locations-interval
+              (mod (+ n end) len)))))
+
+(defun citre-peek--line-forward (n)
+  "Scroll N lines forward.
+N can be negative."
+  (let* ((loc (nth citre-peek--location-index
+                   citre-peek--locations))
+         (target (+ n (citre--get-property loc 'linum)))
+         (total-linum (citre--get-property loc 'total-linum))
+         (target (cond
+                  ((< target 1) 1)
+                  ((> target total-linum) total-linum)
+                  (t target))))
+    (citre--put-property loc 'linum target)))
+
+(defun citre-peek--make-border ()
+  "Return the border to be used in peeking window."
+  (if (display-graphic-p)
+      (propertize "\n" 'face 'citre-peek-border-face)
+    (propertize
+     (concat (make-string (1- (window-body-width)) ?-) "\n")
+     'face (list :inherit 'default
+                 :foreground
+                 (face-attribute 'citre-peek-border-face
+                                 :background)))))
+
+(defun citre-peek--post-command-function ()
+  "Deal with content & display updating when peeking."
+  (unless (minibufferp)
+    (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
+      (move-overlay citre-peek--ov overlay-pos overlay-pos))
+    (let* ((loc (nth citre-peek--location-index citre-peek--locations))
+           (initial-newline (if (= (point-at-eol) (point-max))
+                                "\n" ""))
+           (border (citre-peek--make-border))
+           (file-content (citre-peek--get-content
+                          (citre--get-property loc 'path)
+                          (citre--get-property loc 'linum)
+                          citre-peek-file-content-height))
+           (displayed-locs (citre--subseq
+                            citre-peek--locations
+                            citre-peek--displayed-locations-interval))
+           (displayed-loc-nums
+            (- (cdr citre-peek--displayed-locations-interval)
+               (car citre-peek--displayed-locations-interval)))
+           (displayed-index
+            (citre--index-in-interval citre-peek--location-index
+                                      citre-peek--displayed-locations-interval
+                                      displayed-loc-nums)))
+      ;; Trim the location strings.
+      (setq displayed-locs
+            (mapcar #'citre--fit-line displayed-locs))
+      ;; Add faces.
+      (citre--add-face file-content
+                       (list :background citre-peek--bg))
+      (dotimes (n (length displayed-locs))
+        (let ((line (concat (nth n displayed-locs) "\n")))
+          (if (= n displayed-index)
+              (setf (nth n displayed-locs)
+                    (citre--add-face line 'citre-peek-current-location-face))
+            (setf (nth n displayed-locs)
+                  (citre--add-face line
+                                   (list :background citre-peek--bg-alt))))))
+      ;; And peek it!
+      (overlay-put citre-peek--ov 'after-string
+                   (concat initial-newline border file-content
+                           (string-join displayed-locs)
+                           border)))))
+
+;;;;; Commands
+
+(defun citre-peek ()
+  "Peek the definition of the symbol at point."
+  (interactive)
+  ;; Quit existing peek sessions.
+  (when (overlayp citre-peek--ov)
+    (citre-peek-abort))
+  ;; Fetch informations to show
+  (setq citre-peek--locations (citre-get-definition-locations))
+  (when (null citre-peek--locations)
+    (user-error "Can't find definition"))
+  (dolist (loc citre-peek--locations)
+    (citre--put-property loc 'total-linum
+                         (citre--file-total-linum
+                          (citre--get-property loc 'path)))
+    (citre--put-property loc 'buffer-exist-p
+                         (find-buffer-visiting
+                          (citre--get-property loc 'path))))
+  ;; Setup environment for peeking
+  (setf (alist-get 'citre-mode minor-mode-overriding-map-alist)
+        citre-peek-keymap)
+  (setq citre-peek--ov (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
+  (setq citre-peek--displayed-locations-interval
+        (cons 0 (min citre-peek-locations-height
+                     (length citre-peek--locations))))
+  (setq citre-peek--location-index 0)
+  (let* ((bg-mode (frame-parameter nil 'background-mode))
+         (bg-unspecified-p (string= (face-background 'default)
+                                    "unspecified-bg"))
+         (bg (cond
+              ((and bg-unspecified-p (eq bg-mode 'dark)) "#333333")
+              ((and bg-unspecified-p (eq bg-mode 'light)) "#dddddd")
+              (t (face-background 'default)))))
+    (cond
+     ((eq bg-mode 'dark)
+      (setq citre-peek--bg (citre--color-blend "#ffffff" bg 0.03))
+      (setq citre-peek--bg-alt (citre--color-blend "#ffffff" bg 0.1)))
+     (t
+      (setq citre-peek--bg (citre--color-blend "#000000" bg 0.03))
+      (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.1)))))
+  (add-hook 'post-command-hook #'citre-peek--post-command-function))
+
+(defun citre-peek-next-line ()
+  "Peek next line."
+  (interactive)
+  (citre-peek--line-forward 1))
+
+(defun citre-peek-prev-line ()
+  "Peek previous line."
+  (interactive)
+  (citre-peek--line-forward -1))
+
+(defun citre-peek-next-location ()
+  "Peek the next location of definition."
+  (interactive)
+  (unless (citre--get-property (nth citre-peek--location-index
+                                    citre-peek--locations)
+                               'buffer-exist-p))
+  (citre-peek--location-index-forward 1))
+
+(defun citre-peek-prev-location ()
+  "Peek the previous location of definition."
+  (interactive)
+  (unless (citre--get-property (nth citre-peek--location-index
+                                    citre-peek--locations)
+                               'buffer-exist-p))
+  (citre-peek--location-index-forward -1))
+
+(defun citre-peek-abort ()
+  "Abort peeking."
+  (interactive)
+  (delete-overlay citre-peek--ov)
+  (mapc (lambda (pair)
+          (kill-buffer (cdr pair)))
+        citre-peek--temp-buffer-alist)
+  (setq citre-peek--temp-buffer-alist nil)
+  (setq citre-peek--ov nil)
+  (setq citre-peek--locations nil)
+  (setq citre-peek--displayed-locations-interval nil)
+  (setq citre-peek--location-index nil)
+  (setq citre-peek--bg nil)
+  (setq citre-peek--bg-alt nil)
+  (setq minor-mode-overriding-map-alist
+        (cl-delete 'citre-mode minor-mode-overriding-map-alist :key #'car))
+  (remove-hook 'post-command-hook #'citre-peek--post-command-function))
+
 ;;;; Action: jump to definition
 
 ;;;;; Internals
@@ -663,7 +1011,15 @@ directly."
   "Jump to definition of the symbol at point."
   (interactive)
   (let ((marker (point-marker)))
-    (call-interactively citre-jump-command)
+    (if (overlayp citre-peek--ov)
+        (progn
+          (let* ((loc (nth citre-peek--location-index
+                           citre-peek--locations)))
+            (citre-peek-abort)
+            (citre--open-file-and-goto-line
+             (citre--get-property loc 'path)
+             (citre--get-property loc 'linum))))
+      (call-interactively citre-jump-command))
     (ring-insert citre--marker-ring marker)
     (run-hooks 'citre-after-jump-hook)))
 
