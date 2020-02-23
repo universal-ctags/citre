@@ -724,8 +724,9 @@ location, and cdr is of the last one.")
   "The index of current location in `citre-peek--locations'.")
 
 (defvar-local citre-peek--temp-buffer-alist nil
-  "A list of file buffers that don't exist before peeking.
-These will be killed after `citre-peek-abort'.")
+  "Files and their temporary buffers that don't exist before peeking.
+Keys are file paths, values are buffers.  The buffers will be
+killed after `citre-peek-abort'.")
 
 (defvar citre-peek--bg nil
   "Background color used for file contents when peeking.")
