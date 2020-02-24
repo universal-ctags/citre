@@ -96,7 +96,27 @@
   pattern" and give the wrong results. So I think it's better to keep other
   tags as well.
 
-  Also, we need to see if we can feed ctags output to stdin of readtags.
+  readtags can't read tags from stdin, one way I found is to use named pipe, it
+  functions like a file but is a pipe. Bash and some other shells can do
+  "process substitution", like this:
+
+  ```console
+  $ readtags -t <(ctags -R -f-) -l
+  ```
+
+  This is really neat, but not POSIX compatible. For POSIX compatible solution,
+  we can create a named pipe with a unique name first, and use it:
+
+  ```console
+  $ tmp=$(mktemp -u citre-temp-XXXX --tmpdir)
+  # I don't know why I can't write ctags output directly to this named pipe
+  # here. I have to redirect to it.
+  $ mkfifo $tmp && (ctags -R -f- > $tmp &) && readtags -t $tmp -l && rm $tmp
+  ... readtags output ...
+  ```
+
+  We could put them in one line, and that's pretty much a poor man's process
+  substitution.
 
 # Misc
 
