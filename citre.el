@@ -377,8 +377,8 @@ If BUFFER is non-nil, use the project in BUFFER instead."
                  (string-join citre-enabled-languages ",")))
         (extra-args
          (concat
-          "--file-scope=no "
-          "--fields=KznS "
+          "--extras='-{fileScope}' "
+          "--fields='K{kind}{line}{signature}' "
           "-R"))
         (size (citre--get-project-info :size buffer)))
     (citre--wait-for-project-size buffer)
