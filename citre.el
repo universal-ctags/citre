@@ -246,19 +246,6 @@ See docstring of `citre-completion-in-region' for detail."
   "Non-nil if Citre mode is enabled.
 Use the command `citre-mode' to change this variable.")
 
-(defun citre--prevent-gc ()
-  "Prevent GC before idle.
-This sets GC threshold to the largest possible value, and restore
-it after idling for 1 second.  Put this function at the entry of
-time-consuming tasks.
-
-This is for internal use only.  Functions built on the APIs
-should never use this unless it hacks Citre really hard."
-  (let ((gc-threshold-orig gc-cons-threshold))
-    (setq gc-cons-threshold most-positive-fixnum)
-    (run-with-idle-timer
-     1 nil (lambda () (setq gc-cons-threshold gc-threshold-orig)))))
-
 ;;;;; Dealing with projects
 
 (defvar citre--project-info-alist nil
@@ -533,7 +520,6 @@ This uses `citre-get-lines' to get ctags output, and
 docstrings to get an idea how this works.  `citre-get-records'
 and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
-  (citre--prevent-gc)
   (cl-map 'list #'citre-parse-line
           (citre-get-lines symbol match num buffer)))
 
