@@ -11,6 +11,11 @@
 
    When doing "exact match", we should always do case sensitive search.
 
+- An user option for enabling different features.
+
+  We should have a set of local variables to let the user decide which features
+  to enable.
+
 - Tags generation recipe system
 
   Through such system, people can specify target name, target path (`nil` means
