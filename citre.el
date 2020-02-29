@@ -1358,9 +1358,12 @@ corectly."
     (setq citre-mode nil)
     (user-error "Can't enable citre mode: buffer is not visiting a file"))
    (citre-mode
-    (setf (alist-get (citre--project-root)
-                     citre--project-info-alist nil nil #'equal)
-          '(:size nil :tags-recipe nil :tags-use nil))
+    (unless (cl-member (citre--project-root)
+                       citre--project-info-alist
+                       :key #'car :test #'equal)
+      (setf (alist-get (citre--project-root)
+                       citre--project-info-alist nil nil #'equal)
+            '(:size nil :tags-recipe nil :tags-use nil)))
     (citre--write-project-size)
     (require 'xref)
     (add-hook 'xref-backend-functions #'citre-xref-backend nil t)
@@ -1374,10 +1377,6 @@ corectly."
                   #'citre-eldoc-function)
     (eldoc-mode))
    (t
-    (setq citre--project-info-alist
-          (cl-delete (citre--project-root)
-                     citre--project-info-alist
-                     :key #'car :test #'equal))
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
     (setq completion-in-region-function
