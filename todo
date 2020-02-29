@@ -135,3 +135,11 @@
 
   - When calling `citre-jump` without symbol at point, ask for user input to
     search for symbols.
+
+  - Signal an error when the needed fields are not presented.
+
+    We need to think carefully about this. Technically we only need the tag itself for completion, and line number for various jumping commands. But it's in the plan to make Citre give more accurate results based on various informations, and we want to make use of the readtags program. It's better to design this behavior after these changes. We need to figure out:
+
+   - Which are the fields needed for every user commands. Citre should fail when the command is called, and the needed fields are not presented. I think it's safe to assume a user would use both completion and jumping functionalities, so Citre should fail while parsing, to make sure all necessary fields are presented.
+
+   - Which are the fields that gives better experience/UI. We should put these in the manual.
