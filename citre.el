@@ -439,19 +439,23 @@ is non-nil, it specifies the maximum number of lines."
            (shell-command-to-string command)
            "\n" t))))))
 
-(defun citre-parse-line (line)
+(defun citre-parse-line (line &optional buffer)
   "Parse a line in ctags output.
 LINE is the line to be parsed.  This returns a list consists of
-the tag, its kind, signature, relative path of the file and line
-number."
-  (let* ((elts (split-string line "\t" t))
-         (kind nil)
-         (signature nil)
-         (linum nil)
-         (found-kind nil)
-         (found-signature nil)
-         (found-linum nil)
-         (found-any nil))
+the tag, its kind, signature, absolute path of the file and line
+number.
+
+If the tags file uses relative path, it's expanded to absolute
+path using current project root.  When BUFFER is given, use the
+project root in BUFFER instead."
+  (let* ((buf (or buffer (current-buffer)))
+         (elts (split-string line "\t" t))
+         kind signature path linum
+         found-kind found-signature found-linum found-any)
+    ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
+    ;; absolute path. This is the desired behavior.
+    (setq path (expand-file-name (nth 1 elts)
+                                 (citre--project-root buf)))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -473,7 +477,7 @@ number."
         (cl-return)))
     (unless kind
       (setq kind (nth 3 elts)))
-    (list (car elts) kind signature (nth 1 elts) linum)))
+    (list (car elts) kind signature path linum)))
 
 ;;;; APIs
 
@@ -488,8 +492,6 @@ which can be:
 - \\='kind: The kind.  This tells if the symbol is a variable or
    function, etc.
 - \\='signature: The signature of a callable symbol.
-- \\='file: The relative path of the file containing the symbol.
-  It does not start with a dot.
 - \\='path: The absolute path of the file containing the symbol.
 - \\='linum: The line number of the symbol in the file.
 - \\='line: The line containing the symbol.  Leading and trailing
@@ -511,13 +513,9 @@ use."
                 ('tag 0)
                 ('kind 1)
                 ('signature 2)
-                ('file 3)
                 ('path 3)
-                ('linum 4)))
-           (val (nth n record)))
-      (pcase field
-        ('path  (expand-file-name val (citre--project-root)))
-        (_      val))))))
+                ('linum 4))))
+      (nth n record)))))
 
 (defun citre-get-records (symbol match &optional buffer num)
   "Get parsed tags information of project.
@@ -542,7 +540,7 @@ This uses `citre-get-lines' to get ctags output, and
 docstrings to get an idea how this works.  `citre-get-records'
 and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
-  (cl-map 'list #'citre-parse-line
+  (mapcar (lambda (line) (citre-parse-line line buffer))
           (citre-get-lines symbol match num buffer)))
 
 ;;;;; Helper functions
@@ -595,6 +593,16 @@ doesn't affected by its surroundings."
     (add-face-text-property 0 len face nil str)
     (add-face-text-property 0 len 'default 'append str)
     str))
+
+(defun citre--relative-path (path &optional buffer)
+  "Return PATH but relative to current project root.
+If PATH is not under the project, it's directly returned.  When
+BUFFER is specified, use the project root in BUFFER instead."
+  (let* ((buf (or buffer (current-buffer)))
+         (project (citre--project-root buf)))
+    (if (string-prefix-p project path)
+        (file-relative-name path project)
+      project)))
 
 ;;;; Action: jump to definition (based on xref)
 
@@ -984,7 +992,8 @@ the kind, linum and absolute path of the tag."
          (lambda (record)
            (citre--propertize
             (concat (propertize
-                     (citre-get-field 'file record)
+                     (citre--relative-path
+                      (citre-get-field 'path record))
                      'face 'warning)
                     ": "
                     (citre-get-field 'line record))
