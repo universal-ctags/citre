@@ -91,6 +91,33 @@
   specify the input files for each target can be handy). If this can be done,
   everything should work like usual.
 
+  Let me rethink this. We want to make sure these things works after jumping to
+  a definition that's not in the project root:
+
+  - If itself is a configured project, then everything should works. We can
+    confirm this by detecting tags file / tags generation recipe. Notice that
+    for the code map, they should still be treated as in the project we jump
+    from, or the history will lost. We can do this by a buffer-local
+    `citre--map-project-root` variable.
+
+  - If it isn't a configured project, then at least jumping to definition
+    should works so we can go really deep. My thought is just set its root to
+    the project we come from. This should work and the reason is long:
+
+    In future ctags will have the ability to automatically analyse the imported
+    modules in a file, so we'll have an `citre-common-dependency-alist` whose
+    keys are languages (maybe major modes, or file extensions), and values are
+    typical dependency/site-package directories of popular package
+    manager/virtualenvs. We can also explicitely specify the dependency
+    directories for a project. When using Citre, it will scan the current file,
+    find the tags in the tags file, and if there are still modules that's not
+    covered, find in dependency dirs (maybe an option for users who only wants
+    to use the tags file and not do further search). Now when we are in a file
+    that belongs to a project, but not in its root, we can do basically the
+    same thing, maybe get rid of the relative paths in
+    `citre-common-dependency-alist` and the specified dependencies since they
+    are for things in the project root.
+
 # API
 
 - Rework the APIs so we can use readtags to do filtering based on any fields.
