@@ -76,6 +76,13 @@ In a large project, `citre-excluded-patterns-in-large-project'
 will also be used in the default ctags command."
   :type 'integer)
 
+(defcustom citre-tags-files '(".tags" "tags")
+  "The tags file paths, in the order of precedence.
+Can use relative path to the project root, or absolute path."
+  :type '(repeat string))
+
+(make-variable-buffer-local 'citre-tags-files)
+
 ;;;;; Ctags command related options
 
 (defcustom citre-enabled-languages
@@ -415,7 +422,13 @@ is non-nil, it specifies the maximum number of lines."
   (let ((buffer (or buffer (current-buffer))))
     (if (not (buffer-local-value 'citre-mode buffer))
         (user-error "Citre mode not enabled")
-      (let* ((regex
+      (let* ((root-dir (citre--project-root buffer))
+             (tags-file (cl-some
+                         (lambda (file)
+                           (let ((tags-file (expand-file-name file root-dir)))
+                             (when (file-exists-p tags-file) tags-file)))
+                         citre-tags-files))
+             (regex
               (pcase match
                 ('prefix    (concat "^" symbol))
                 ('substring (concat "^(?!!_)\\S*" symbol))
@@ -429,12 +442,12 @@ is non-nil, it specifies the maximum number of lines."
                  "")))
              (command
               (concat
-               (citre--default-ctags-command buffer)
-               " -f- 2>/dev/null | grep "
-               extra-arg
-               "-P --color=never -e "
-               "'" regex "'")))
-        (let ((default-directory (citre--project-root buffer)))
+               (if tags-file
+                   (format "cat %s " tags-file)
+                 (format "%s -f- 2>/dev/null "
+                         (citre--default-ctags-command buffer)))
+               (format "| grep %s -P --color=never -e '%s'" extra-arg regex))))
+        (let ((default-directory root-dir))
           (split-string
            (shell-command-to-string command)
            "\n" t))))))
