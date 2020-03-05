@@ -592,11 +592,25 @@ prefixed by \"citre-\".  Propertized STR is returned."
                      val str)
   str)
 
-(defun citre--open-file-and-goto-line (path linum)
-  "Open file PATH and go to line LINUM."
-  (switch-to-buffer (find-file-noselect path))
-  (goto-char (point-min))
-  (forward-line (1- linum)))
+(defun citre--open-file-and-goto-line (path linum &optional window)
+  "Open file PATH and goto the line LINUM.
+WINDOW can be:
+
+- nil: Use current window.
+- other-window: Use other window.
+- other-window-noselect: Use other window but don't select it."
+  ;; TODO: I actually don't know well about this whole display-buffer,
+  ;; pop-to-buffer and switch-to-buffer thing.  Will come back and see if this
+  ;; docstring describes the behavior well.
+  (let ((buf (current-buffer)))
+    (if window
+        (pop-to-buffer (find-file-noselect path))
+      (switch-to-buffer (find-file-noselect path)))
+    (goto-char (point-min))
+    (forward-line (1- linum))
+    (run-hooks 'citre-after-jump-hook)
+    (when (eq window 'other-window-noselect)
+      (pop-to-buffer buf))))
 
 (defun citre--add-face (str face)
   "Add FACE to STR, and return it.
@@ -1063,8 +1077,7 @@ directly."
              (citre--get-property loc 'path)
              (citre--get-property loc 'linum))))
       (call-interactively citre-jump-command))
-    (ring-insert citre--marker-ring marker)
-    (run-hooks 'citre-after-jump-hook)))
+    (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
   "Go back to the position before last `citre-jump'."
