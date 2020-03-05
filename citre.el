@@ -282,24 +282,6 @@ Use the command `citre-mode' to change this variable.")
 The key is the absolute path of the project, the value is a plist
 consists of size, tags generation recipe and tags use recipe.")
 
-(defun citre--get-project-info (key &optional buffer)
-  "Get info of project in current buffer.
-When BUFFER is non-nil, use project in BUFFER instead.  KEY
-specifies the info type."
-  (plist-get
-   (alist-get (citre--project-root buffer)
-              citre--project-info-alist nil nil #'equal)
-   key))
-
-(defun citre--set-project-info (key val &optional buffer)
-  "Set info of project in current buffer.
-When BUFFER is non-nil, use project in BUFFER instead.  KEY
-specifies the info type, VAL is the value."
-  (plist-put
-   (alist-get (citre--project-root buffer)
-              citre--project-info-alist nil nil #'equal)
-   key val))
-
 (defun citre--project-root (&optional buffer)
   "Find project root of current file.
 Return `citre-project-root' directly if it's set.  Otherwise,
@@ -331,6 +313,24 @@ instead."
                     (or denoter-dir
                         project-current-dir
                         (file-name-directory filename)))))))))
+
+(defun citre--get-project-info (key &optional project)
+  "Get info of current project.
+KEY specifies the info type.  If project root PROJECT is non-nil,
+use that project instead."
+  (plist-get
+   (alist-get (or project (citre--project-root))
+              citre--project-info-alist nil nil #'equal)
+   key))
+
+(defun citre--set-project-info (key val &optional project)
+  "Set info of current project.
+KEY specifies the info type, VAL is its value.  If project root
+PROJECT is non-nil, use that project instead."
+  (plist-put
+   (alist-get (or project (citre--project-root))
+              citre--project-info-alist nil nil #'equal)
+   key val))
 
 (defun citre--write-project-size ()
   "Calculate size (in MiB) of DIR and write it to project info.
@@ -364,22 +364,25 @@ treated as a large project by citre."
       (message "Program \"du\" not found")
       (citre--set-project-info :size 'large))))
 
-(defun citre--wait-for-project-size (&optional buffer)
+(defun citre--wait-for-project-size (&optional project)
   "Wait for current project size to be set.
-If BUFFER is non-nil, use the project in BUFFER instead.
+If project root PROJECT is non-nil, use that project instead.
 
 This is only needed for functions that depends directly on the
 project size.  Functions built on the APIs of citre don't need to
 care about this."
-  (while (not (citre--get-project-info :size buffer))
-    (sleep-for 0.05)))
+  (unless citre-mode
+    (error "`citre--wait-for-project-size' called with Citre mode disabled"))
+  (let ((project (or project (citre--project-root))))
+    (while (not (citre--get-project-info :size project))
+      (sleep-for 0.05))))
 
 ;;;;; Ctags command
 
-(defun citre--default-ctags-command (&optional buffer)
+(defun citre--default-ctags-command (&optional project)
   "Return default ctags command for current project.
-If BUFFER is non-nil, use the project in BUFFER instead."
-  (let ((buffer (or buffer (current-buffer)))
+If project root PROJECT is non-nil, use that project instead."
+  (let ((project (or project (citre--project-root)))
         (excludes
          (concat "--exclude="
                  (string-join
@@ -396,8 +399,8 @@ If BUFFER is non-nil, use the project in BUFFER instead."
           "--extras='-{fileScope}' "
           "--fields='K{kind}{line}{signature}' "
           "-R"))
-        (size (citre--get-project-info :size buffer)))
-    (citre--wait-for-project-size buffer)
+        (size (citre--get-project-info :size project)))
+    (citre--wait-for-project-size project)
     (if (or (eq size 'large) (> size citre-project-size-threshold))
         (string-join
          (list "ctags" excludes extra-excludes languages extra-args) " ")
@@ -405,27 +408,27 @@ If BUFFER is non-nil, use the project in BUFFER instead."
 
 ;;;;; Fetch and parse ctags output
 
-(defun citre-get-lines (symbol match &optional buffer num)
+(defun citre--get-lines (symbol match &optional project num)
   "Get lines in ctags output that match SYMBOL.
 The function returns a list of the lines.  SYMBOL is a string.
 MATCH is a symbol, which can be:
 
-- \\='prefix: Match all lines whose tag begins with SYMBOL,
-   case insensitively
-- \\='substring: Match all lines whose tag contains SYMBOL,
-   case insensitively.
-- \\='exact: Match all lines whose tag is exactly SYMBOL,
-   case sensitively.
+- `prefix': Match all lines whose tag begins with SYMBOL, case
+  insensitively
+- `substring': Match all lines whose tag contains SYMBOL, case
+  insensitively.
+- `exact': Match all lines whose tag is exactly SYMBOL, case
+  sensitively.
 
-if BUFFER is non-nil, use the project in BUFFER instead.  If NUM
-is non-nil, it specifies the maximum number of lines."
-  (let ((buffer (or buffer (current-buffer))))
-    (if (not (buffer-local-value 'citre-mode buffer))
-        (user-error "Citre mode not enabled")
-      (let* ((root-dir (citre--project-root buffer))
-             (tags-file (cl-some
+if project root PROJECT is non-nil, use that project instead.  If
+NUM is non-nil, it specifies the maximum number of lines."
+  (let ((project (or project (citre--project-root))))
+    (if (not (cl-member project citre--project-info-alist
+                        :key #'car :test #'equal))
+        (error "Citre mode not enabled for %s" project)
+      (let* ((tags-file (cl-some
                          (lambda (file)
-                           (let ((tags-file (expand-file-name file root-dir)))
+                           (let ((tags-file (expand-file-name file project)))
                              (when (file-exists-p tags-file) tags-file)))
                          citre-tags-files))
              (regex
@@ -445,30 +448,28 @@ is non-nil, it specifies the maximum number of lines."
                (if tags-file
                    (format "cat %s " tags-file)
                  (format "%s -f- 2>/dev/null "
-                         (citre--default-ctags-command buffer)))
+                         (citre--default-ctags-command project)))
                (format "| grep %s -P --color=never -e '%s'" extra-arg regex))))
-        (let ((default-directory root-dir))
+        (let ((default-directory project))
           (split-string
            (shell-command-to-string command)
            "\n" t))))))
 
-(defun citre-parse-line (line &optional buffer)
+(defun citre--parse-line (line &optional project)
   "Parse a line in ctags output.
 LINE is the line to be parsed.  This returns a list consists of
 the tag, its kind, signature, absolute path of the file and line
 number.
 
 If the tags file uses relative path, it's expanded to absolute
-path using current project root.  When BUFFER is given, use the
-project root in BUFFER instead."
-  (let* ((buf (or buffer (current-buffer)))
+path using current project root, or PROJECT if it's non-nil."
+  (let* ((project (or project (citre--project-root)))
          (elts (split-string line "\t" t))
          kind signature path linum
          found-kind found-signature found-linum found-any)
     ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
     ;; absolute path. This is the desired behavior.
-    (setq path (expand-file-name (nth 1 elts)
-                                 (citre--project-root buf)))
+    (setq path (expand-file-name (nth 1 elts) project))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -498,17 +499,17 @@ project root in BUFFER instead."
 
 (defun citre-get-field (field record)
   "Get FIELD from RECORD.
-RECORD is an output from `citre-parse-line'.  FIELD is a symbol
+RECORD is an output from `citre--parse-line'.  FIELD is a symbol
 which can be:
 
-- \\='tag: The tag name, i.e. the symbol name.
-- \\='kind: The kind.  This tells if the symbol is a variable or
-   function, etc.
-- \\='signature: The signature of a callable symbol.
-- \\='path: The absolute path of the file containing the symbol.
-- \\='linum: The line number of the symbol in the file.
-- \\='line: The line containing the symbol.  Leading and trailing
-   whitespaces are trimmed.
+- `tag': The tag name, i.e. the symbol name.
+- `kind': The kind.  This tells if the symbol is a variable or
+  function, etc.
+- `signature': The signature of a callable symbol.
+- `path': The absolute path of the file containing the symbol.
+- `linum': The line number of the symbol in the file.
+- `line': The line containing the symbol.  Leading and trailing
+  whitespaces are trimmed.
 
 `citre-get-field' and `citre-get-records' are the 2 main APIs
 that interactive commands should use, and ideally should only
@@ -530,31 +531,34 @@ use."
                 ('linum 4))))
       (nth n record)))))
 
-(defun citre-get-records (symbol match &optional buffer num)
+(defun citre-get-records (symbol match &optional project num)
   "Get parsed tags information of project.
 SYMBOL is the symbol to search.  MATCH is how should the tags
-match SYMBOL.  See the docstring of `citre-get-lines' for detail.
-If BUFFER is non-nil, use project in BUFFER instead.  NUM is the
-maximum number of records.
+match SYMBOL.  See the docstring of `citre--get-lines' for
+detail.  If project root PROJECT is non-nil, use that project
+instead.  NUM is the maximum number of records.
 
-Normally, there's no need to set BUFFER, since the current buffer
-will be used.  But there are situations when `citre-get-records'
-are called in a buffer which is not what we want.  For example,
-when getting records during a minibuffer session, or some
-interactive UI that uses its own buffer.  In these situations,
-the commands that build on top of `citre-get-records' are
-responsible to offer the right BUFFER.  The normal way to do this
-is let bound a variable to (current-buffer) at the entry of the
-command, before entering the interactive UI, so you can use it
-later.
+Normally, there's no need to set PROJECT, since the current
+buffer will be used.  But there are situations when
+`citre-get-records' are called in a buffer which is not in the
+project.  For example, when getting records during a minibuffer
+session, or some interactive UI that uses its own buffer.  In
+these situations, the commands that build on top of
+`citre-get-records' are responsible to offer the right PROJECT.
+The normal way to do this is let bound a variable
+to (citre--project-root) at the entry of the command, before
+entering the interactive UI, so you can use it later.  For a
+complex UI that uses its own buffer, you can then set its
+`citre-project-root' value to this variable, so Citre will treat
+it as in the project.
 
-This uses `citre-get-lines' to get ctags output, and
-`citre-parse-line' to parse each line in the output.  See their
+This uses `citre--get-lines' to get ctags output, and
+`citre--parse-line' to parse each line in the output.  See their
 docstrings to get an idea how this works.  `citre-get-records'
 and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre-parse-line line buffer))
-          (citre-get-lines symbol match num buffer)))
+  (mapcar (lambda (line) (citre--parse-line line project))
+          (citre--get-lines symbol match num project)))
 
 ;;;;; Helper functions
 
@@ -607,12 +611,11 @@ doesn't affected by its surroundings."
     (add-face-text-property 0 len 'default 'append str)
     str))
 
-(defun citre--relative-path (path &optional buffer)
+(defun citre--relative-path (path &optional project)
   "Return PATH but relative to current project root.
-If PATH is not under the project, it's directly returned.  When
-BUFFER is specified, use the project root in BUFFER instead."
-  (let* ((buf (or buffer (current-buffer)))
-         (project (citre--project-root buf)))
+If PATH is not under the project, it's directly returned.  If
+project root PROJECT is specified, use that projct instead."
+  (let* ((project (or project (citre--project-root))))
     (if (string-prefix-p project path)
         (file-relative-name path project)
       project)))
@@ -653,7 +656,7 @@ BUFFER is specified, use the project root in BUFFER instead."
 (cl-defmethod xref-backend-identifier-completion-table
   ((_backend (eql citre)))
   "Return a function for xref to find all completions of a prefix."
-  (let ((buffer (current-buffer)))
+  (let ((project (citre--project-root)))
     (lambda (str pred action)
       (let ((collection
              (cl-map 'list (apply-partially #'citre-get-field 'tag)
@@ -662,7 +665,7 @@ BUFFER is specified, use the project root in BUFFER instead."
                      ;; Emacs know nothing about the internal of a collection
                      ;; function, it will call this closure with an empty STR
                      ;; to get the whole collection anyway.
-                     (citre-get-records str 'prefix buffer))))
+                     (citre-get-records str 'prefix project))))
         (complete-with-action action collection str pred)))))
 
 ;;;; Action: peek definition
@@ -1361,13 +1364,13 @@ and is used as eldoc message."
 ;;;; Misc commands
 
 (defun citre-show-project-root ()
-  "Show project root of current file in buffer.
+  "Show project root of current buffer.
 Use this command to see if citre detects the project root
 corectly."
   (interactive)
   (if (citre--project-root)
       (message (citre--project-root))
-    (user-error "Buffer is not visiting a file")))
+    (user-error "Buffer is not in a project")))
 
 ;;;; Citre mode
 
