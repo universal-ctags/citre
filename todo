@@ -165,8 +165,43 @@
 
   - Signal an error when the needed fields are not presented.
 
-    We need to think carefully about this. Technically we only need the tag itself for completion, and line number for various jumping commands. But it's in the plan to make Citre give more accurate results based on various informations, and we want to make use of the readtags program. It's better to design this behavior after these changes. We need to figure out:
+    We need to think carefully about this. Technically we only need the tag
+    itself for completion, and line number for various jumping commands. But
+    it's in the plan to make Citre give more accurate results based on various
+    informations, and we want to make use of the readtags program. It's better
+    to design this behavior after these changes. We need to figure out:
 
-   - Which are the fields needed for every user commands. Citre should fail when the command is called, and the needed fields are not presented. I think it's safe to assume a user would use both completion and jumping functionalities, so Citre should fail while parsing, to make sure all necessary fields are presented.
+   - Which are the fields needed for every user commands. Citre should fail
+     when the command is called, and the needed fields are not presented. I
+     think it's safe to assume a user would use both completion and jumping
+     functionalities, so Citre should fail while parsing, to make sure all
+     necessary fields are presented.
 
-   - Which are the fields that gives better experience/UI. We should put these in the manual.
+   - Which are the fields that gives better experience/UI. We should put these
+     in the manual.
+
+  - Since in the future we'll know and scan imported modules for current file,
+    the "project size" thing doesn't really matter. We'll get rid of it. Then
+    `citre-mode` is not really necessary too, it has two uses:
+
+    - Set up the hooks/functions to offer integration with Emacs built-in
+      mechanisms.
+    - Write project information, including the size.
+
+    We require `citre-mode` to be enabled when using interactive commands,
+    because calculating the size may take a while. But in the future we could
+    create a procedure to write project information if it's not presented (it
+    will be fast since we don't need the size), then use it in all the
+    interactive commands, so they can be used when `citre-mode` is not enabled.
+
+    The keybindings in citre-peek is based on overriding the keybindings of
+    `citre-mode`. We should create its own minor mode and handle keybindings
+    using it.
+
+    And now there are 3 things that needs citre-mode: capf, xref, eldoc. For
+    the first two, we could create our own `citre-xref-find-definition` and
+    `citre-completion-at-point` functions, they let bind the necessary
+    variables and call xref/capf commands. In this way we could use all the
+    functionalities except eldoc integration without citre-mode. But maybe we
+    are going too far. If the user want this, they could wrap their own
+    commands.
