@@ -333,12 +333,12 @@ PROJECT is non-nil, use that project instead."
    key val))
 
 (defun citre--write-project-size ()
-  "Calculate size (in MiB) of DIR and write it to project info.
+  "Calculate size (in MiB) of current project and write it to project info.
 Patterns in `citre-ignored-patterns' will be ignored.
 
 This uses the \"du\" program. If it doesn't exist, or takes more
-than 3 second to run, nothing will be written, and DIR will be
-treated as a large project by citre."
+than 3 second to run, the project will be treated as a large
+project by citre."
   (let* ((default-directory (citre--project-root))
          (args nil)
          (du-process nil))
@@ -565,7 +565,7 @@ commands should use, and ideally should only use."
 (defun citre--propertize (str record &rest fields)
   "Propertize STR by FIELDS in RECORD.
 Added text properties are prefixed by \"citre-\".  For example,
-the \\='kind field becomes the \\='citre-kind property.
+the `kind' field becomes the `citre-kind' property.
 
 Notice that this is destructive, which is different from
 `propertize'.  The propertized STR is returned."
@@ -790,7 +790,7 @@ killed after `citre-peek-abort'.")
   "Return the buffer visiting file FILENAME (a string).
 This is like `find-buffer-visiting', but it also searches
 `citre-peek--temp-buffer-alist', so it can handle temporary
-buffers created when peekin."
+buffers created when peeking."
   (or (alist-get filename citre-peek--temp-buffer-alist)
       (find-buffer-visiting filename)))
 
@@ -1044,10 +1044,9 @@ When there are more than 1 possible definitions, it will let you
 choose one in the minibuffer.
 
 The kind, line number and path information are stored in
-\\='citre-kind, \\='citre-linum and \\='citre-path properties of
-each candidate, so if you want to build a more informative UI
-using some minibuffer completing framework, you can use them
-directly."
+`citre-kind', `citre-linum' and `citre-path' properties of each
+candidate, so if you want to build a more informative UI using
+some minibuffer completing framework, you can use them directly."
   (interactive)
   (let ((locations (citre-get-definition-locations))
         (target nil))
