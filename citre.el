@@ -1096,7 +1096,7 @@ some minibuffer completing framework, you can use them directly."
 
 ;;;;; Internals
 
-(defvar citre-completion-in-region-function-orig nil
+(defvar-local citre-completion-in-region-function-orig nil
   "This stores the original `completion-in-region-function'.")
 
 (defun citre-get-completions (&optional symbol)
@@ -1406,9 +1406,11 @@ corectly."
     (add-hook 'xref-backend-functions #'citre-xref-backend nil t)
     (add-hook 'completion-at-point-functions
               #'citre-completion-at-point nil t)
-    (setq citre-completion-in-region-function-orig
-          completion-in-region-function)
-    (setq completion-in-region-function #'citre-completion-in-region)
+    (when (local-variable-p completion-in-region-function)
+      (setq citre-completion-in-region-function-orig
+            completion-in-region-function))
+    (set (make-local-variable 'completion-in-region-function)
+         #'citre-completion-in-region)
     (setq citre-eldoc-mode-enabled-orig eldoc-mode)
     (add-function :before-until (local 'eldoc-documentation-function)
                   #'citre-eldoc-function)
@@ -1416,8 +1418,12 @@ corectly."
    (t
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
-    (setq completion-in-region-function
-          citre-completion-in-region-function-orig)
+    (if citre-completion-in-region-function-orig
+        (progn
+          (setq completion-in-region-function
+                citre-completion-in-region-function-orig)
+          (setq citre-completion-in-region-function-orig nil))
+      (kill-local-variable 'completion-in-region-function))
     (remove-function (local 'eldoc-documentation-function)
                      #'citre-eldoc-function)
     (unless citre-eldoc-mode-enabled-orig
