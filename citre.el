@@ -1102,7 +1102,9 @@ some minibuffer completing framework, you can use them directly."
 (defun citre-get-completions (&optional symbol)
   "Get completions of symbol at point, or SYMBOL if it's non-nil.
 The result is a list of strings, each string is the complete tag
-name, with text properties containing the kind and signature."
+name, with text properties containing the kind and signature.
+
+It returns nil when the completion can't be done."
   (let ((symbol (or symbol (thing-at-point 'symbol)))
         (match (if citre-get-completions-by-substring
                    'substring 'prefix))
@@ -1111,10 +1113,9 @@ name, with text properties containing the kind and signature."
            (citre--propertize
             (citre-get-field 'tag record)
             record 'kind 'signature))))
-    (unless symbol
-      (user-error "No symbol at point"))
-    (cl-map 'list candidate-str-generator
-            (citre-get-records symbol match))))
+    (when symbol
+      (cl-map 'list candidate-str-generator
+              (citre-get-records symbol match)))))
 
 (defun citre-completion-in-region (start end collection &optional predicate)
   "A function that replace default `completion-in-region-function'.
@@ -1125,39 +1126,45 @@ When there are multiple candidates, this uses standard
 `completing-read' interface, while the default one in Emacs pops
 a *Completions* buffer to show them.  When combined with some
 minibuffer completion framework, it's more user-friendly then the
-default one."
-  (let* ((str (buffer-substring-no-properties start end))
-         (completion-ignore-case (string= str (downcase str)))
-         (candidates
-          (nconc
-           (completion-all-completions str collection predicate (- end start))
-           nil))
-         (completion nil))
-    (pcase (length candidates)
-      (0 (message "No completions"))
-      (1 (setq completion (car candidates)))
-      (_ (setq completion (completing-read (format "(%s): " str)
-                                           candidates predicate t))))
-    (when completion
-      (delete-region start end)
-      (insert (substring-no-properties completion)))))
+default one.
+
+Notice when `completing-read-function' is
+`completing-read-default' (i.e., not enhanced by a minibuffer
+completion framework), this falls back to
+`completion--in-region'."
+  (if (eq completing-read-function #'completing-read-default)
+      (completion--in-region start end collection predicate)
+    (let* ((str (buffer-substring-no-properties start end))
+           (completion-ignore-case (string= str (downcase str)))
+           (candidates
+            (nconc
+             (completion-all-completions str collection predicate (- end start))
+             nil))
+           (completion nil))
+      (pcase (length candidates)
+        (0 (message "No completions"))
+        (1 (setq completion (car candidates)))
+        (_ (setq completion (completing-read (format "(%s): " str)
+                                             candidates predicate t))))
+      (when completion
+        (delete-region start end)
+        (insert (substring-no-properties completion))))))
 
 ;;;;; Commands
 
 (defun citre-completion-at-point ()
   "Function used for `completion-at-point-functions'."
-  (interactive)
-  (let* ((bounds (bounds-of-thing-at-point 'symbol))
-         (start (car bounds))
-         (end (cdr bounds))
-         (collection (citre-get-completions))
-         (get-annotation
-          (lambda (candidate)
-            (concat
-             " (" (citre--get-property candidate 'kind) ")")))
-         (get-docsig
-          (lambda (candidate)
-            (citre--get-property candidate 'signature))))
+  (when-let* ((bounds (bounds-of-thing-at-point 'symbol))
+              (start (car bounds))
+              (end (cdr bounds))
+              (collection (citre-get-completions))
+              (get-annotation
+               (lambda (candidate)
+                 (concat
+                  " (" (citre--get-property candidate 'kind) ")")))
+              (get-docsig
+               (lambda (candidate)
+                 (citre--get-property candidate 'signature))))
     (list start end collection
           :annotation-function get-annotation
           :company-docsig get-docsig
