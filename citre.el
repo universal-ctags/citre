@@ -53,11 +53,19 @@
 ;;;;; Project related options
 
 (defcustom citre-project-denoter-files
-  '(".projectile" ".dumbjump" "Makefile" "makefile")
+  '(".citre" ".projectile" ".dumbjump")
   "List of project denoter files.
 If automatic detection for project root fails, put a file with
 one of these names in your project root.  The list is in
 descending order of priority."
+  :type '(repeat string))
+
+(defcustom citre-project-fallback-denoter-files
+  '("Makefile" "makefile" "tags" ".tags")
+  "List of project denoter files used when `project-current' fails.
+These are files that may appear in some parent directory of the
+project, thus should only be rely on when `project-current'
+fails, or we would have the wrong result."
   :type '(repeat string))
 
 (defcustom citre-project-root nil
@@ -282,37 +290,44 @@ Use the command `citre-mode' to change this variable.")
 The key is the absolute path of the project, the value is a plist
 consists of size, tags generation recipe and tags use recipe.")
 
+(defun citre--find-dir-with-denoters (file denoters)
+  "Search up directory hierarchy from FILE for the denoter file.
+DENOTERS is a list of denoter files, in the order of
+precedence (i.e., If we find one, then the rest will be ignored).
+The directory containing the denoter file will be returned.  If
+such directory doesn't exist, nil will be returned."
+  (cl-dolist (denoter denoters)
+    (let ((dir (locate-dominating-file file denoter)))
+      (when dir
+        (cl-return (file-name-directory (expand-file-name dir)))))))
+
 (defun citre--project-root (&optional buffer)
   "Find project root of current file.
-Return `citre-project-root' directly if it's set.  Otherwise,
-search up directory hierarchy for a file in
-`citre-project-denoter-files'.  If this fails, use
-`project-current'.  If this also fails, use the directory of
-current file.  After project root is found, set
-`citre-project-root' in current buffer.
+The following methods are tried in order, and the first successed
+one determines the root:
 
-When BUFFER is non-nil, find project root for the file in BUFFER
-instead."
-  (let ((buffer (or buffer (current-buffer))))
-    (with-current-buffer buffer
-      (or citre-project-root
-          (let ((filename (buffer-file-name))
-                (denoter-dir nil)
-                (project-current-dir nil))
-            (when filename
-              (cl-dolist (denoter citre-project-denoter-files)
-                (setq denoter-dir (locate-dominating-file filename denoter))
-                (when denoter-dir
-                  (cl-return (file-name-directory
-                              (expand-file-name denoter-dir)))))
-              (when (project-current)
-                (setq project-current-dir
-                      (file-name-directory
-                       (expand-file-name (cdr (project-current nil))))))
-              (setq citre-project-root
-                    (or denoter-dir
-                        project-current-dir
-                        (file-name-directory filename)))))))))
+- Return `citre-project-root' directly if it's set.
+- Search up directory hierarchy for a file in
+  `citre-project-denoter-files'.
+- Use `project-current'. It's an API offerd by `project',
+  currently it only deals with projects under version control.
+- Search up directory hierarchy for a file in
+  `citre-project-fallback-denoter-files'.
+- Use the directory of current file.
+
+After the project root is found, `citre-project-root' in current
+buffer is set.  When BUFFER is non-nil, find project root for the
+file in BUFFER instead."
+  (with-current-buffer (or buffer (current-buffer))
+    (or citre-project-root
+        (when-let ((file (buffer-file-name)))
+          (setq citre-project-root
+                (or (citre--find-dir-with-denoters
+                     file citre-project-denoter-files)
+                    (ignore-errors (expand-file-name (cdr (project-current))))
+                    (citre--find-dir-with-denoters
+                     file citre-project-fallback-denoter-files)
+                    (file-name-directory file)))))))
 
 (defun citre--get-project-info (key &optional project)
   "Get info of current project.
