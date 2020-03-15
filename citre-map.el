@@ -47,6 +47,7 @@
     (define-key map (kbd "RET") 'citre-code-map-forward)
     (define-key map (kbd "b") 'citre-code-map-backward)
     (define-key map (kbd "m") 'citre-code-map-mark)
+    (define-key map (kbd "M") 'citre-code-map-unmark-all)
     (define-key map (kbd "h") 'citre-code-map-hide)
     (define-key map (kbd "S") 'citre-code-map-show-all)
     (define-key map [remap save-buffer] 'citre-save-code-map)
@@ -632,7 +633,16 @@ region.  This should be intuitive to use."
       (citre--tabulated-list-mark))
     (forward-line)))
 
-;; TODO: a unmark-all command.
+(defun citre-code-map-unmark-all ()
+  "Unmark all items."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (save-excursion
+    (goto-char (point-min))
+    (while (and (<= (point) (point-max)) (not (eobp)))
+      (when (get-text-property (point) 'citre-map-mark)
+        (citre--tabulated-list-unmark))
+      (forward-line))))
 
 (defun citre-code-map-hide ()
   "Hide some of the definitions.
