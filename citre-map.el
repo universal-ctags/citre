@@ -593,14 +593,15 @@ definition."
   (citre--error-if-not-in-code-map)
   (let* ((id (tabulated-list-get-id))
          (pos-depth (nth 3 (citre--code-map-position))))
-    (setf (nth pos-depth (citre--code-map-position)) id)
-    (if (< pos-depth 2)
-        (progn
-          (setf (nth 3 (citre--code-map-position)) (1+ pos-depth))
-          (citre--code-map-refresh 'switch-page))
-      (citre--open-file-and-goto-line (citre-get-field 'path id)
-                                      (citre-get-field 'linum id)
-                                      'other-window-noselect))))
+    (when id
+      (setf (nth pos-depth (citre--code-map-position)) id)
+      (if (< pos-depth 2)
+          (progn
+            (setf (nth 3 (citre--code-map-position)) (1+ pos-depth))
+            (citre--code-map-refresh 'switch-page))
+        (citre--open-file-and-goto-line (citre-get-field 'path id)
+                                        (citre-get-field 'linum id)
+                                        'other-window-noselect)))))
 
 (defun citre-code-map-mark ()
   "Mark or unmark current item.
