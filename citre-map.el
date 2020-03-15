@@ -687,22 +687,28 @@ This only take effect in a symbol list or file list.
 This operation can't be undone, so it will ask whether you really
 want to remove them.")
 
-;; TODO: mark the added items.
 (defun citre-code-map-show-all ()
   "Show hidden definitions."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos (citre--code-map-position))
          (pos-depth (nth 3 (citre--code-map-position)))
-         (definition-list-length nil))
+         (definition-list (citre--get-in-code-map (car pos) (nth 1 pos)))
+         (added-ids nil))
     (when (< pos-depth 2)
       (user-error "Hide is only for definitions"))
-    (setq definition-list-length
-          (length (citre--get-in-code-map (car pos) (nth 1 pos))))
-    (dotimes (n definition-list-length)
+    (dotimes (n (length definition-list))
+      (when (cdr (nth n definition-list))
+        (push (car (nth n definition-list)) added-ids))
       (setf (cdr (nth n (citre--get-in-code-map (car pos) (nth 1 pos)))) nil))
     (citre--set-code-map-disk-state t)
-    (citre--code-map-refresh 'add-item)))
+    (citre--code-map-refresh 'add-item)
+    (save-excursion
+      (goto-char (point-min))
+      (while (and (<= (point) (point-max)) (not (eobp)))
+        (when (member (tabulated-list-get-id) added-ids)
+          (citre--tabulated-list-mark))
+        (forward-line)))))
 
 (defun citre-code-map-keep ()
   "Keep marked items.
