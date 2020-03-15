@@ -738,12 +738,10 @@ When PROJECT is specified, save the code map of PROJECT."
       (citre--set-code-map-disk-state nil saveto project)
       (message "Code map of %s saved" project))))
 
-;; TODO: ask for conformation when load a code map of current project, and the
-;; current one is not saved.
 (defun citre-load-code-map ()
   "Load map from file."
   (interactive)
-  (let* ((file (car (citre--get-code-map-disk-state)))
+  (let* ((file (cdr (citre--get-code-map-disk-state)))
          (dir (if file (file-name-directory file) (citre--project-root)))
          (filename (when (and dir
                               (file-readable-p (concat dir ".codemap")))
@@ -752,11 +750,15 @@ When PROJECT is specified, save the code map of PROJECT."
     (unless (string-empty-p readfrom)
       (let* ((data (citre--read-value-from-file readfrom))
              (project (plist-get data :project-root)))
-        (setf (citre--get-in-code-map nil nil project) (plist-get data :map))
-        (setf (citre--code-map-position project) (plist-get data :position))
-        (citre--set-code-map-disk-state nil readfrom project)
-        (citre--open-code-map project)
-        (message "Code map of %s loaded" project)))))
+        (when (or (not (car (citre--get-code-map-disk-state project)))
+                  (y-or-n-p
+                   (format "Current code map of %s is not saved.  Continue? "
+                           project)))
+          (setf (citre--get-in-code-map nil nil project) (plist-get data :map))
+          (setf (citre--code-map-position project) (plist-get data :position))
+          (citre--set-code-map-disk-state nil readfrom project)
+          (citre--open-code-map project)
+          (message "Code map of %s loaded" project))))))
 
 ;;;; Setup
 
