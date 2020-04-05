@@ -423,9 +423,9 @@ If project root PROJECT is non-nil, use that project instead."
 
 ;;;;; Fetch and parse ctags output
 
-(defun citre--get-lines (symbol match &optional project num)
-  "Get lines in ctags output that match SYMBOL.
-The function returns a list of the lines.  SYMBOL is a string.
+(defun citre--get-lines (symbol match file &optional project)
+  "Get lines in ctags file FILE that match SYMBOL.
+This function returns a list of the lines.  SYMBOL is a string.
 MATCH is a symbol, which can be:
 
 - `prefix': Match all lines whose tag begins with SYMBOL, case
@@ -435,40 +435,24 @@ MATCH is a symbol, which can be:
 - `exact': Match all lines whose tag is exactly SYMBOL, case
   sensitively.
 
-if project root PROJECT is non-nil, use that project instead.  If
-NUM is non-nil, it specifies the maximum number of lines."
+if project root PROJECT is non-nil, use that project instead."
   (let ((project (or project (citre--project-root))))
-    (if (not (cl-member project citre--project-info-alist
-                        :key #'car :test #'equal))
-        (error "Citre mode not enabled for %s" project)
-      (let* ((tags-file (cl-some
-                         (lambda (file)
-                           (let ((tags-file (expand-file-name file project)))
-                             (when (file-exists-p tags-file) tags-file)))
-                         citre-tags-files))
-             (regex
-              (pcase match
-                ('prefix    (concat "^" symbol))
-                ('substring (concat "^(?!!_)\\S*" symbol))
-                ('exact     (concat "^" symbol "\\t"))))
-             (extra-arg
-              (concat
-               (pcase match
-                 ('exact "")
-                 (_      "-i "))
-               (if num (format "--max-count=%d " num)
-                 "")))
-             (command
-              (concat
-               (if tags-file
-                   (format "cat %s " tags-file)
-                 (format "%s -f- 2>/dev/null "
-                         (citre--default-ctags-command project)))
-               (format "| grep %s -P --color=never -e '%s'" extra-arg regex))))
-        (let ((default-directory project))
-          (split-string
-           (shell-command-to-string command)
-           "\n" t))))))
+    (unless (cl-member project citre--project-info-alist
+                       :key #'car :test #'equal)
+      (user-error "Citre mode not enabled for %s" project))
+    (let* ((expr (pcase match
+                   ('prefix (format
+                             "(prefix? (downcase $name) (downcase \"%s\"))"
+                             symbol))
+                   ('substring (format
+                                "(substr? (downcase $name) (downcase \"%s\"))"
+                                symbol))
+                   ('exact (format "(eq? $name \"%s\")" symbol))))
+           (command (format "readtags -t '%s' -Q '%s' -nel" file expr))
+           (default-directory project))
+      (split-string
+       (shell-command-to-string command)
+       "\n" t))))
 
 (defun citre--parse-line (line &optional project)
   "Parse a line in ctags output.
@@ -546,12 +530,12 @@ use."
                 ('linum 4))))
       (nth n record)))))
 
-(defun citre-get-records (symbol match &optional project num)
+(defun citre-get-records (symbol match &optional project)
   "Get parsed tags information of project.
 SYMBOL is the symbol to search.  MATCH is how should the tags
 match SYMBOL.  See the docstring of `citre--get-lines' for
 detail.  If project root PROJECT is non-nil, use that project
-instead.  NUM is the maximum number of records.
+instead.
 
 Normally, there's no need to set PROJECT, since the current
 buffer will be used.  But there are situations when
@@ -572,8 +556,15 @@ This uses `citre--get-lines' to get ctags output, and
 docstrings to get an idea how this works.  `citre-get-records'
 and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre--parse-line line project))
-          (citre--get-lines symbol match num project)))
+  (let ((tags-file (cl-some
+                    (lambda (file)
+                      (let ((tags-file (expand-file-name file project)))
+                        (when (file-exists-p tags-file) tags-file)))
+                    citre-tags-files)))
+    (unless tags-file
+      (user-error "Tags file not found"))
+    (mapcar (lambda (line) (citre--parse-line line project))
+            (citre--get-lines symbol match tags-file project))))
 
 ;;;;; Helper functions
 
