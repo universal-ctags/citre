@@ -272,6 +272,23 @@ Emacs 27, there is also a flex style)."
 See docstring of `citre-completion-in-region' for detail."
   :type :function)
 
+(defcustom citre-case-sensitivity 'smart
+  "Case sensitivity of completion.  Can be:
+
+- `sensitive': Always do case sensitive completion.
+- `insensitive': Always do case insensitive completion.
+- `smart': Be sensive when completing a symbol with uppercase
+  letters, otherwise be insensitive.
+
+Note for developers: Actually this doesn't affect completion
+directly.  This option controls the behavior of
+`citre--get-lines' when its argument MATCH is `prefix' or
+`substring', and in Citre, only completion uses these match
+styles."
+  :type '(choice (const :tag "Sensitive" 'sensitive)
+                 (const :tag "Insensitive" 'insensitive)
+                 (const :tag "Smart" smart)))
+
 ;;;; Internals
 
 ;;;;; Misc
@@ -440,14 +457,24 @@ if project root PROJECT is non-nil, use that project instead."
     (unless (cl-member project citre--project-info-alist
                        :key #'car :test #'equal)
       (user-error "Citre mode not enabled for %s" project))
-    (let* ((expr (pcase match
-                   ('prefix (format
-                             "(prefix? (downcase $name) (downcase \"%s\"))"
-                             symbol))
-                   ('substring (format
-                                "(substr? (downcase $name) (downcase \"%s\"))"
-                                symbol))
-                   ('exact (format "(eq? $name \"%s\")" symbol))))
+    (let* ((case-sensitive (pcase citre-case-sensitivity
+                             ('sensitive t)
+                             ('insensitive nil)
+                             ('smart (if (eq match 'exact)
+                                         t
+                                       (if (string= (downcase symbol) symbol)
+                                           nil t)))))
+           (op (pcase match
+                 ('prefix "prefix?")
+                 ('substring "substr?")
+                 ('exact "eq?")))
+           (symbol-expr (if case-sensitive
+                            (format "\"%s\"" symbol)
+                          (format "(downcase \"%s\")" symbol)))
+           (name-expr (if case-sensitive
+                          "$name"
+                        "(downcase $name)"))
+           (expr (format "(%s %s %s)" op name-expr symbol-expr))
            (command (format "readtags -t '%s' -Q '%s' -nel" file expr))
            (default-directory project))
       (split-string
