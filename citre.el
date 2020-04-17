@@ -44,7 +44,7 @@
 ;;;; User options
 
 (defgroup citre nil
-  "Code navigation, completion and help message based on ctags."
+  "Code editing & reading solution based on Universal Ctags."
   :group 'convenience
   :group 'tools
   :prefix "citre-"
@@ -55,25 +55,35 @@
 (defcustom citre-project-denoter-files
   '(".citre" ".projectile" ".dumbjump")
   "List of project denoter files.
-If automatic detection for project root fails, put a file with
-one of these names in your project root.  The list is in
-descending order of priority."
+If the project root detection fails, put a file with one of these
+names in your project root.  This list is in descending order of
+priority (i.e., if we find one, then the rest will be ignored).
+
+See `citre--project-root' to know how Citre detects the project
+root."
   :type '(repeat string))
 
 (defcustom citre-project-fallback-denoter-files
   '("Makefile" "makefile" "tags" ".tags")
-  "List of project denoter files used when `project-current' fails.
+  "List of project denoter files used as fallbacks.
 These are files that may appear in some parent directory of the
-project, thus should only be rely on when `project-current'
-fails, or we would have the wrong result."
+project, thus they are used only when normal detection methods
+fail.  This list is in descending order of priority (i.e., if we
+find one, then the rest will be ignored).
+
+See `citre--project-root' to know how Citre detects the project
+root."
   :type '(repeat string))
 
 (defcustom citre-project-root nil
-  "Absolute root directory of current project.
-Set this in your .dir-locals.el if automatic detection fails, and
-for some reason you can't put a denoter file in the project root.
-If you don't set this manually, it will automatically be set when
-enabling `citre-mode'."
+  "Absolute path of project root directory.
+Set this in your .dir-locals.el if the project root detection
+fails, and for some reason you can't put a denoter file in the
+project root (see `citre-project-denoter-files').
+
+If you don't set this manually, Citre will detect the project
+root and set it automatically.  See `citre--project-root' to know
+how this is done."
   :type '(choice (const nil) string))
 
 (make-variable-buffer-local 'citre-project-root)
@@ -85,14 +95,18 @@ will also be used in the default ctags command."
   :type 'integer)
 
 (defcustom citre-tags-files '(".tags" "tags")
-  "The tags file paths, in the order of precedence.
-Can use relative path to the project root, or absolute path."
+  "List of tags file paths.
+Relative paths to the project root or absolute paths can both be
+used as elements.  This list is in descending order of
+priority (i.e., if we find one, then the rest will be ignored)."
   :type '(repeat string))
 
 (make-variable-buffer-local 'citre-tags-files)
 
 ;;;;; Ctags command related options
 
+;; TODO: this may be better replaced by a `citre-excluded-languages'.  We use
+;; it to exclude uninterested languages like markup languages.
 (defcustom citre-enabled-languages
   ;; Languages with a ";" are not officially supported by universal ctags.
   '("Ada"
@@ -183,23 +197,28 @@ own regex to support them."
 
 ;;;;; Code navigation related options
 
+;; TODO: Replace this by a `citre-jump-select-location-function'.  It should
+;; accept a non-nil list of locations (given by `citre-jump'), and return an
+;; element in it.
 (defcustom citre-jump-command
   #'citre-jump-completing-read
-  "The command called by `citre-jump'.
-Customize this to use your own command.  See README.md to find an
-example of user-defined command."
+  "The actual jumping command called by `citre-jump'.
+It should get the definition locations of the symbol at point,
+let the user choose one if there are multiple locations, and jump
+to it.  See `citre-jump-completing-read' for an example of
+implementation."
   :type 'function)
 
 (defcustom citre-after-jump-hook '(citre-recenter-and-blink)
-  "Hook to run after `citre-jump' and `citre-jump-back'."
+  "Hook to run after jumping to a location."
   :type :hook)
 
 (defcustom citre-peek-file-content-height 12
-  "Number of file content lines displayed in the peeking window."
+  "Number of lines displaying file contents in the peek window."
   :type 'integer)
 
 (defcustom citre-peek-locations-height 3
-  "Number of locations displayed in the peeking window."
+  "Number of locations displayed in the peek window."
   :type 'integer)
 
 (defcustom citre-peek-keymap
@@ -210,7 +229,7 @@ example of user-defined command."
     (define-key map (kbd "M-P") 'citre-peek-prev-location)
     (define-key map [remap keyboard-quit] ' citre-peek-abort)
     map)
-  "Keymap used when peeking."
+  "Keymap used for `citre-peek' sessions."
   :type 'keymap)
 
 (defface citre-peek-border-face
@@ -218,18 +237,22 @@ example of user-defined command."
      :height 15 :background "#ffcbd3")
     (t
      :height 15 :background "#db8e93"))
-  "Face used for borders of the peeking window.
-In terminal version of Emacs, the background of this face is used
-as the foreground of the dashes.")
+  "Face used for borders of peek windows.
+You can customize the appearance of the borders by setting the
+height and background properties of this face.
+
+In the terminal version of Emacs, a dashed pattern is used as the
+border, and only the background property of this face is used, as
+the color of the dashes.")
 
 (defface citre-peek-current-location-face
   '((((background light))
      :background "#c0c0c0")
     (t
      :background "#666666"))
-  "Face used for current location in the peeking window.")
+  "Face used for the current location in the peek window.")
 
-;;;;; Peek function & eldoc related options
+;;;;; Eldoc & citre-peek-function related options
 
 (defcustom citre-find-function-name-limit 1500
   "The limit of chars that Citre goes back to find function name.
@@ -239,12 +262,11 @@ This is used in `citre-peek-function' and eldoc integration."
 (defcustom citre-find-function-name-pos-function-alist
   '(((lisp-mode emacs-lisp-mode) . citre--find-function-name-pos-lisp)
     (t                           . citre--find-function-name-pos-generic))
-  "The find-function-name-pos functions to call in different modes.
+  "The function for finding current function name position in different modes.
 The key should be a major mode, or a list of major modes.  The
-value should be the find-function-name-pos function to use when
-current major mode is a derived mode of its key.  The last
-element in this list should have a key of t, then the funcion
-will be used as a fallback.
+value should be the function to use when current major mode is a
+derived mode of its key.  The last element in this list should
+have a key of t, then the funcion will be used as a fallback.
 
 This is used in `citre-peek-function' and eldoc integration."
   :type '(alist
@@ -252,7 +274,7 @@ This is used in `citre-peek-function' and eldoc integration."
                             symbol (repeat symbol))
           :value-type function))
 
-;;;;; Auto completion related options
+;;;;; Auto-completion related options
 
 (defcustom citre-do-substring-completion t
   "Whether do substring completion.
@@ -271,22 +293,23 @@ non-nil, *and* add `substring' to `completion-styles' (for Emacs
 (defcustom citre-completion-in-region-function
   #'citre-completion-in-region
   "The function used for `completion-in-region-function'.
-See docstring of `citre-completion-in-region' for detail."
+This is called by `completion-at-point' in buffers where Citre
+mode is enabled."
   :type 'function)
 
 (defcustom citre-case-sensitivity 'smart
-  "Case sensitivity of completion.  Can be:
+  "Case sensitivity of auto-completion.  Can be:
 
 - `sensitive': Always do case sensitive completion.
 - `insensitive': Always do case insensitive completion.
 - `smart': Be sensive when completing a symbol with uppercase
   letters, otherwise be insensitive.
 
-Note for developers: Actually this doesn't affect completion
+Note for developers: Actually this doesn't affect auto-completion
 directly.  This option controls the behavior of
 `citre--get-lines' when its argument MATCH is `prefix' or
-`substring', and in Citre, only completion uses these match
-styles."
+`substring', and in Citre, these two match styles are only used
+by auto completion."
   :type '(choice (const :tag "Sensitive" sensitive)
                  (const :tag "Insensitive" insensitive)
                  (const :tag "Smart" smart)))
@@ -297,7 +320,7 @@ styles."
 
 ;; `define-minor-mode' actually defines this for us.  But since it's used in
 ;; the code before we define the minor mode, we need to define the variable
-;; here to suppress compiler warning.
+;; here to suppress the compiler warning.
 (defvar citre-mode nil
   "Non-nil if Citre mode is enabled.
 Use the command `citre-mode' to change this variable.")
@@ -305,14 +328,14 @@ Use the command `citre-mode' to change this variable.")
 ;;;;; Dealing with projects
 
 (defvar citre--project-info-alist nil
-  "Alist to record project informations.
-The key is the absolute path of the project, the value is a plist
-consists of size, tags generation recipe and tags use recipe.")
+  "Alist for storing project info.
+The keys are the absolute paths of project roots, the values are
+plists containing the info of the projects.")
 
 (defun citre--find-dir-with-denoters (file denoters)
-  "Search up directory hierarchy from FILE for the denoter file.
+  "Search up directory hierarchy from FILE for a denoter file.
 DENOTERS is a list of denoter files, in the order of
-precedence (i.e., If we find one, then the rest will be ignored).
+precedence (i.e., if we find one, then the rest will be ignored).
 The directory containing the denoter file will be returned.  If
 such directory doesn't exist, nil will be returned."
   (cl-dolist (denoter denoters)
@@ -321,15 +344,15 @@ such directory doesn't exist, nil will be returned."
         (cl-return (file-name-directory (expand-file-name dir)))))))
 
 (defun citre--project-root (&optional buffer)
-  "Find project root of current file.
-The following methods are tried in order, and the first successed
-one determines the root:
+  "Find the project root of current file.
+The following methods are tried in turn, and the first succeeded
+one determines the project root:
 
 - Return `citre-project-root' directly if it's set.
 - Search up directory hierarchy for a file in
   `citre-project-denoter-files'.
-- Use `project-current'. It's an API offerd by `project',
-  currently it only deals with projects under version control.
+- Use `project-current'.  Currently it only deals with projects
+  under version control.
 - Search up directory hierarchy for a file in
   `citre-project-fallback-denoter-files'.
 - Use the directory of current file.
@@ -416,7 +439,7 @@ care about this."
 ;;;;; Ctags command
 
 (defun citre--default-ctags-command (&optional project)
-  "Return default ctags command for current project.
+  "Return the default ctags command for current project.
 If project root PROJECT is non-nil, use that project instead."
   (let ((project (or project (citre--project-root)))
         (excludes
@@ -445,15 +468,15 @@ If project root PROJECT is non-nil, use that project instead."
 ;;;;; Fetch and parse ctags output
 
 (defun citre--get-lines (symbol match file &optional project)
-  "Get lines in ctags file FILE that match SYMBOL.
+  "Get lines in tags file FILE that match SYMBOL.
 This function returns a list of the lines.  SYMBOL is a string.
 MATCH is a symbol, which can be:
 
-- `prefix': Match all lines whose tag begins with SYMBOL, case
+- `prefix': Match all lines whose tags begin with SYMBOL, case
   insensitively
-- `substring': Match all lines whose tag contains SYMBOL, case
+- `substring': Match all lines whose tags contain SYMBOL, case
   insensitively.
-- `exact': Match all lines whose tag is exactly SYMBOL, case
+- `exact': Match all lines whose tags are exactly SYMBOL, case
   sensitively.
 
 if project root PROJECT is non-nil, use that project instead."
@@ -486,13 +509,14 @@ if project root PROJECT is non-nil, use that project instead."
        "\n" t))))
 
 (defun citre--parse-line (line &optional project)
-  "Parse a line in ctags output.
+  "Parse a line from readtags output.
 LINE is the line to be parsed.  This returns a list consists of
 the tag, its kind, signature, absolute path of the file and line
-number.
+number, which can be utilized by `citre-get-field'.
 
-If the tags file uses relative path, it's expanded to absolute
-path using current project root, or PROJECT if it's non-nil."
+If the file field in the line uses relative path, it's expanded
+to absolute path using current project root, or PROJECT if it's
+non-nil."
   (let* ((project (or project (citre--project-root)))
          (elts (split-string line "\t" t))
          kind signature path linum
@@ -562,29 +586,33 @@ use."
       (nth n record)))))
 
 (defun citre-get-records (symbol match &optional project)
-  "Get parsed tags information of project.
-SYMBOL is the symbol to search.  MATCH is how should the tags
-match SYMBOL.  See the docstring of `citre--get-lines' for
-detail.  If project root PROJECT is non-nil, use that project
-instead.
+  "Get records of tags in current project that match SYMBOL.
+MATCH is how should the tags match SYMBOL.  See the docstring of
+`citre--get-lines' for details.  If project root PROJECT is
+non-nil, use that project instead.
 
-Normally, there's no need to set PROJECT, since the current
-buffer will be used.  But there are situations when
-`citre-get-records' are called in a buffer which is not in the
-project.  For example, when getting records during a minibuffer
-session, or some interactive UI that uses its own buffer.  In
-these situations, the commands that build on top of
-`citre-get-records' are responsible to offer the right PROJECT.
-The normal way to do this is let bound a variable
-to (citre--project-root) at the entry of the command, before
-entering the interactive UI, so you can use it later.  For a
-complex UI that uses its own buffer, you can then set its
-`citre-project-root' value to this variable, so Citre will treat
-it as in the project.
+Each element in the returned value is a list containing the tag
+and some of its fields, which can be utilized by
+`citre-get-field'.
 
-This uses `citre--get-lines' to get ctags output, and
-`citre--parse-line' to parse each line in the output.  See their
-docstrings to get an idea how this works.  `citre-get-records'
+Normally, there's no need to set PROJECT, since current project
+will be used.  But there are situations where `citre-get-records'
+is called in a buffer which is not in the project.  For example,
+when getting records during a minibuffer session, or in some
+interactive UI that uses its own buffer.  In these situations,
+the project root needs to be provided.  The normal way is to call
+`citre--project-root', and let bound its returned value to a
+variable at the entry of the command, and before entering the
+interactive UI, so you can use it later:
+
+- For a simple UI, you can then pass it to `citre-get-records'.
+- For a complex UI that may call `citre-get-records' multiple
+  times, you can just set its `citre-project-root' to this
+  variable, so Citre will treat it as in the project.
+
+This function uses `citre--get-lines' to get lines from tags
+file, and `citre--parse-line' to parse each line.  See their
+docstrings to get an idea of how this works.  `citre-get-records'
 and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
   (let ((tags-file (cl-some
@@ -602,7 +630,7 @@ commands should use, and ideally should only use."
 (defun citre--propertize (str record &rest fields)
   "Propertize STR by FIELDS in RECORD.
 Added text properties are prefixed by \"citre-\".  For example,
-the `kind' field becomes the `citre-kind' property.
+the `kind' field will be stored in the `citre-kind' property.
 
 Notice that this is destructive, which is different from
 `propertize'.  The propertized STR is returned."
@@ -615,7 +643,7 @@ Notice that this is destructive, which is different from
     str))
 
 (defun citre--get-property (str field)
-  "Get text property corresponding to FIELD in STR.
+  "Get the text property corresponding to FIELD in STR.
 STR should be propertized by `citre--propertize' or
 `citre--put-property'."
   (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
@@ -634,8 +662,8 @@ prefixed by \"citre-\".  Propertized STR is returned."
 WINDOW can be:
 
 - nil: Use current window.
-- other-window: Use other window.
-- other-window-noselect: Use other window but don't select it."
+- `other-window': Use other window.
+- `other-window-noselect': Use other window but don't select it."
   ;; TODO: I actually don't know well about this whole display-buffer,
   ;; pop-to-buffer and switch-to-buffer thing.  Will come back and see if this
   ;; docstring describes the behavior well.
@@ -651,12 +679,12 @@ WINDOW can be:
 
 (defun citre--add-face (str face)
   "Add FACE to STR, and return it.
-This is mainly for displaying STR in an overlay.  For example,
-FACE only specifies background color, then STR will have that
+This is mainly for displaying STR in an overlay.  For example, if
+FACE specifies background color, then STR will have that
 background color, with all other face attributes preserved.
 
-`default' face is appended to make sure the display in overlay
-doesn't affected by its surroundings."
+`default' face is appended to make sure the display in overlay is
+not affected by its surroundings."
   (let ((len (length str)))
     (add-face-text-property 0 len face nil str)
     (add-face-text-property 0 len 'default 'append str)
@@ -665,7 +693,7 @@ doesn't affected by its surroundings."
 (defun citre--relative-path (path &optional project)
   "Return PATH but relative to current project root.
 If PATH is not under the project, it's directly returned.  If
-project root PROJECT is specified, use that projct instead."
+project root PROJECT is specified, use that project instead."
   (let* ((project (or project (citre--project-root))))
     (if (string-prefix-p project path)
         (file-relative-name path project)
@@ -711,9 +739,9 @@ project root PROJECT is specified, use that projct instead."
     (lambda (str pred action)
       (let ((collection
              (cl-map 'list (apply-partially #'citre-get-field 'tag)
-                     ;; No need to use 'substring match style here even when
-                     ;; using 'substring or 'flex completion styles.  Since
-                     ;; Emacs know nothing about the internal of a collection
+                     ;; No need to use `substring' match style here when the
+                     ;; completion style is `substring' or `flex'.  Since Emacs
+                     ;; knows nothing about the internal of a collection
                      ;; function, it will call this closure with an empty STR
                      ;; to get the whole collection anyway.
                      (citre-get-records str 'prefix project))))
@@ -727,8 +755,8 @@ project root PROJECT is specified, use that projct instead."
   "Return the subsequence of SEQ in INTERVAL.
 INTERVAL is a cons pair, its car is the starting index, cdr is
 the ending index (not included).  Cdr can be smaller than car,
-then the result will go from index car, to the end of SEQ, then
-back to the start of SEQ, and end before index cdr."
+then the result will go from the index car, to the end of SEQ,
+then back to the start of SEQ, and end before the index cdr."
   (let ((start (car interval))
         (end (cdr interval)))
     (if (<= start end)
@@ -741,8 +769,8 @@ back to the start of SEQ, and end before index cdr."
   "Return the index of NUM inside INTERVAL, or nil if it's not inside.
 INTERVAL is a cons pair of integers.  The car is included, and
 cdr is not included.  Cdr can be smaller than car, which means
-the interval goes from car to WRAPNUM (which is not included),
-then from 0 to cdr (not included)."
+the interval goes from car to WRAPNUM (not included), then from 0
+to cdr (not included)."
   (let* ((start (car interval))
          (end (cdr interval))
          (len (if (<= start end)
@@ -756,7 +784,7 @@ then from 0 to cdr (not included)."
         index))))
 
 (defun citre--file-total-linum (path)
-  "Return total number of lines of file PATH."
+  "Return the total number of lines of file PATH."
   (with-temp-buffer
     (insert-file-contents path)
     (line-number-at-pos (point-max))))
@@ -773,9 +801,10 @@ at the end."
                 "...")
       str)))
 
+;; Ref: https://oremacs.com/2015/04/28/blending-faces/
 (defun citre--color-blend (c1 c2 alpha)
   "Blend two colors C1 and C2 with ALPHA.
-C1 and C2 are hexidecimal strings.  ALPHA is a number between 0.0
+C1 and C2 are hexadecimal strings.  ALPHA is a number between 0.0
 and 1.0 which is the influence of C1 on the result."
   (apply (lambda (r g b)
            (format "#%02x%02x%02x"
@@ -794,21 +823,21 @@ and 1.0 which is the influence of C1 on the result."
 
 (defvar-local citre-peek--locations nil
   "List of definition locations used when peeking.
-Each element is a string to be displayed, with text property
-`citre-path' for the full path, and `citre-linum' for the line
-number.")
+Each element is a string to be displayed, with text properties
+`citre-path' being the absolute path, and `citre-linum' being the
+line number.")
 
 (defvar-local citre-peek--displayed-locations-interval nil
-  "The index of displayed locations in `citre-peek--locations'.
-This is a cons pair, its car is the index of first displayed
-location, and cdr is of the last one.")
+  "The interval of displayed locations in `citre-peek--locations'.
+This is a cons pair, its car is the index of the first displayed
+location, and cdr is the index of the last one.")
 
 (defvar-local citre-peek--location-index nil
   "The index of current location in `citre-peek--locations'.")
 
 (defvar-local citre-peek--temp-buffer-alist nil
   "Files and their temporary buffers that don't exist before peeking.
-Keys are file paths, values are buffers.  The buffers will be
+Its keys are file paths, values are buffers.  The buffers will be
 killed after `citre-peek-abort'.")
 
 (defvar citre-peek--bg nil
@@ -824,20 +853,20 @@ killed after `citre-peek-abort'.")
 ;; it because its content are modified.  Rather than trying to workaround these
 ;; issues, it's better to create this function instead.
 (defun citre-peek--find-buffer-visiting (filename)
-  "Return the buffer visiting file FILENAME (a string).
+  "Return the buffer visiting file FILENAME.
 This is like `find-buffer-visiting', but it also searches
 `citre-peek--temp-buffer-alist', so it can handle temporary
-buffers created when peeking."
+buffers created during peeking."
   (or (alist-get filename citre-peek--temp-buffer-alist)
       (find-buffer-visiting filename)))
 
 (defun citre-peek--get-content (path linum n)
-  "Get file content for peeking.
+  "Get file contents for peeking.
 PATH is the path of the file.  LINUM is the starting line.  N is
 the number of lines.
 
 If there's no buffer visiting PATH currently, create a new
-temporary buffer for it.  They will be killed by `citre-abort'."
+temporary buffer for it.  It will be killed by `citre-abort'."
   (delay-mode-hooks
     (let* ((buf-opened (citre-peek--find-buffer-visiting path))
            (buf nil))
@@ -864,7 +893,7 @@ temporary buffer for it.  They will be killed by `citre-abort'."
             (concat (buffer-substring beg end) "\n")))))))
 
 (defun citre-peek--location-index-forward (n)
-  "Move current location N steps forward.
+  "In a peek window, move current location N steps forward.
 N can be negative."
   (let ((start (car citre-peek--displayed-locations-interval))
         (end (cdr citre-peek--displayed-locations-interval))
@@ -880,7 +909,7 @@ N can be negative."
               (mod (+ n end) len)))))
 
 (defun citre-peek--line-forward (n)
-  "Scroll N lines forward.
+  "In a peek window, scroll N lines forward.
 N can be negative."
   (let* ((loc (nth citre-peek--location-index
                    citre-peek--locations))
@@ -893,7 +922,7 @@ N can be negative."
     (citre--put-property loc 'linum target)))
 
 (defun citre-peek--make-border ()
-  "Return the border to be used in peeking window."
+  "Return the border to be used in peek windows."
   (if (display-graphic-p)
       (propertize "\n" 'face 'citre-peek-border-face)
     (propertize
@@ -904,7 +933,7 @@ N can be negative."
                                  :background)))))
 
 (defun citre-peek--post-command-function ()
-  "Deal with content & display updating when peeking."
+  "Deal with the update of contents in peek windows."
   (unless (minibufferp)
     (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
       (move-overlay citre-peek--ov overlay-pos overlay-pos))
@@ -954,7 +983,7 @@ N can be negative."
   ;; Quit existing peek sessions.
   (when (overlayp citre-peek--ov)
     (citre-peek-abort))
-  ;; Fetch informations to show
+  ;; Fetch informations to show.
   (setq citre-peek--locations (citre-get-definition-locations))
   (when (null citre-peek--locations)
     (user-error "Can't find definition"))
@@ -965,7 +994,7 @@ N can be negative."
     (citre--put-property loc 'buffer-exist-p
                          (find-buffer-visiting
                           (citre--get-property loc 'path))))
-  ;; Setup environment for peeking
+  ;; Setup environment for peeking.
   (setf (alist-get 'citre-mode minor-mode-overriding-map-alist)
         citre-peek-keymap)
   (setq citre-peek--ov (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
@@ -990,7 +1019,7 @@ N can be negative."
   (add-hook 'post-command-hook #'citre-peek--post-command-function nil 'local))
 
 (defun citre-peek-function ()
-  "Peek the definition of function when inside a function call."
+  "When in a function call, peek the definition of the function."
   (interactive)
   (let ((func-pos (citre--find-function-name-pos)))
     (when func-pos
@@ -999,12 +1028,12 @@ N can be negative."
         (citre-peek)))))
 
 (defun citre-peek-next-line ()
-  "Peek next line."
+  "Scroll to the next line in a peek window."
   (interactive)
   (citre-peek--line-forward 1))
 
 (defun citre-peek-prev-line ()
-  "Peek previous line."
+  "Scroll to the previous line in a peek window."
   (interactive)
   (citre-peek--line-forward -1))
 
@@ -1078,12 +1107,7 @@ the kind, linum and absolute path of the tag."
 (defun citre-jump-completing-read ()
   "Jump to definition of the symbol at point.
 When there are more than 1 possible definitions, it will let you
-choose one in the minibuffer.
-
-The kind, line number and path information are stored in
-`citre-kind', `citre-linum' and `citre-path' properties of each
-candidate, so if you want to build a more informative UI using
-some minibuffer completing framework, you can use them directly."
+choose one in the minibuffer."
   (interactive)
   (let ((locations (citre-get-definition-locations))
         (target nil))
@@ -1101,7 +1125,9 @@ some minibuffer completing framework, you can use them directly."
 ;;;;; Commands
 
 (defun citre-jump ()
-  "Jump to definition of the symbol at point."
+  "Jump to the definition of the symbol at point.
+During an active `citre-peek' session, this jumps to the
+definition that is currently peeked."
   (interactive)
   (let ((marker (point-marker)))
     (if (overlayp citre-peek--ov)
@@ -1138,10 +1164,11 @@ some minibuffer completing framework, you can use them directly."
 
 (defun citre-get-completions (&optional symbol)
   "Get completions of symbol at point, or SYMBOL if it's non-nil.
-The result is a list of strings, each string is the complete tag
-name, with text properties containing the kind and signature.
+The result is a list of strings, each string is a tag name, with
+its text properties containing the kind and signature fields.
 
 It returns nil when the completion can't be done."
+  ;; TODO: When inside a symbol, don't grab the part after point.
   (let ((symbol (or symbol (thing-at-point 'symbol)))
         (match (if citre-do-substring-completion
                    'substring 'prefix))
@@ -1155,19 +1182,19 @@ It returns nil when the completion can't be done."
               (citre-get-records symbol match)))))
 
 (defun citre-completion-in-region (start end collection &optional predicate)
-  "A function that replace default `completion-in-region-function'.
+  "A function replacing the default `completion-in-region-function'.
 This completes the text between START and END using COLLECTION.
 PREDICATE says when to exit.
 
-When there are multiple candidates, this uses standard
-`completing-read' interface, while the default one in Emacs pops
-a *Completions* buffer to show them.  When combined with some
-minibuffer completion framework, it's more user-friendly then the
-default one.
+When there are multiple candidates, this uses the standard
+`completing-read' interface, while the default
+`completion--in-region' pops a *Completions* buffer to show them.
+When combined with some minibuffer completion framework, this is
+more user-friendly then the default one.
 
 Notice when `completing-read-function' is
 `completing-read-default' (i.e., not enhanced by a minibuffer
-completion framework), this falls back to
+completion framework), this falls back to the default
 `completion--in-region'."
   (if (eq completing-read-function #'completing-read-default)
       (completion--in-region start end collection predicate)
@@ -1206,25 +1233,27 @@ completion framework), this falls back to
           :annotation-function get-annotation
           :company-docsig get-docsig
           ;; This makes our completion function a "non-exclusive" one, which
-          ;; means to try next completion function when current completion
+          ;; means to try the next completion function when current completion
           ;; table fails to match the text at point (see the docstring of
           ;; `completion-at-point-functions').  This is the desired behavior
-          ;; but actually it breaks our substring completion.  This is a bug
-          ;; of Emacs, see the FIXME comment in the code of
+          ;; but actually it breaks our substring completion.  This is a bug of
+          ;; Emacs, see the FIXME comment in the code of
           ;; `completion--capf-wrapper'.  I believe I've fixed it, so let's
           ;; leave this line commented rather than delete it, and see if my
-          ;; patch will get itself into Emacs.
+          ;; patch will get itself into Emacs
+          ;; (https://debbugs.gnu.org/cgi/bugreport.cgi?bug=39600).
 
-          ;; It actually doesn't make much a difference.  Now our completion
-          ;; function works well, the only problem is it won't fallback to
-          ;; the next one when no tags are matched, which I believe also
-          ;; happens in other completion functions.
+          ;; It actually doesn't cause much inconvenience.  Our completion
+          ;; function works well, and the only problem is it won't fallback to
+          ;; the next one when no tags are matched, which I believe to also
+          ;; happen in other completion functions.
 
           ;; :exclusive 'no
           )))
 
 ;;;; Action: eldoc
 
+;; TODO: I think we shouldn't let Citre enable/disable eldoc mode.
 (defvar citre-eldoc-mode-enabled-orig nil
   "Whether eldoc mode is enabled before citre mode.")
 
@@ -1257,9 +1286,9 @@ vary, depending on whether font lock mode is enabled."
 About the optional arguments BOUND, NOERROR and COUNT, see the
 docstring of `search-backward'.
 
-This function will return the point position after search.  When
-search fails, it won't signal an error, but return nil.  This is
-different from `search-backward'."
+This function will return the point at the beginning of the first
+matched STR.  When the search fails, it won't signal an error,
+but return nil.  This is different from `search-backward'."
   (let ((pos-orig (point))
         (pos nil))
     (save-excursion
@@ -1276,7 +1305,9 @@ different from `search-backward'."
         (goto-char pos)
       (goto-char pos-orig))))
 
-
+;; TODO: Current implementation (of this and the next function) assumes the
+;; expression is balanced (since we use `up-list' and `forward-list'). We
+;; should get rid of this limitation.
 (defun citre--find-function-name-pos-generic (&optional pos)
   "When in a function call, return the beginning position of the function name.
 When POS is specified, use it as the position inside function
@@ -1299,7 +1330,7 @@ arglist."
       ;; skip over whitespaces first.
       (skip-chars-backward "\s\t")
       ;; If there's a symbol at point, and it has the form of a function call,
-      ;; that's the function name we are looking for.
+      ;; then it is the function name we are looking for.
       (when (setq sym-atpt-bound (bounds-of-thing-at-point 'symbol))
         (progn
           (goto-char (cdr sym-atpt-bound))
@@ -1308,7 +1339,7 @@ arglist."
             (setq func-beg (car sym-atpt-bound)))))
       ;; If the above detection fails, keep searching for open parenthesis
       ;; backward, and see 1. is there a symbol before it; 2. is POS inside the
-      ;; parentheses.  If these are true, then it's the function name we are
+      ;; parentheses.  If these are true, then it is the function name we are
       ;; looking for.
       (unless func-beg
         (goto-char pos)
@@ -1330,7 +1361,7 @@ arglist."
 When POS is specified, use it as the position inside function
 call.
 
-This is for using in Lisp languages."
+This is for use in Lisp languages."
   (let* ((pos (or pos (point)))
          (pos-limit (max (point-min)
                          (- pos citre-find-function-name-limit)))
@@ -1344,7 +1375,7 @@ This is for using in Lisp languages."
                     (progn (up-list -1 'escape-strings 'no-syntax-crossing)
                            t))
                   (> (point) pos-limit))
-        ;; `up-list' can also take up to other "beginning of sexps", like the
+        ;; `up-list' can also take us to other "beginning of sexps", like the
         ;; beginning of a string.  We need to rule out these situations.
         (when (and
                (eq (char-after) ?\()
@@ -1379,8 +1410,8 @@ This is for using in Lisp languages."
 When POS is specified, use it as the position inside function
 call.
 
-Its behavior depends on
-`citre-find-function-name-pos-function-alist'."
+It looks up `citre-find-function-name-pos-function-alist' to find
+the appropriate function to call."
   (let ((func nil))
     (cl-dolist (pair citre-find-function-name-pos-function-alist)
       (if (eq (car pair) t)
@@ -1400,10 +1431,12 @@ Its behavior depends on
         (goto-char pos)
         (thing-at-point 'symbol)))))
 
+;; TODO: When signature is nil, use the line in the definition location
+;; instead.  Maybe this is appropriate for other interfaces too.
 (defun citre-eldoc-function ()
   "When in a function call, return a help string about the function.
 The help string consists of the function name and its signature,
-and is used as eldoc message."
+and can be used as eldoc message."
   (let* ((func-name (citre--find-function-name))
          (records (citre-get-records func-name 'exact))
          (signature nil))
@@ -1420,9 +1453,9 @@ and is used as eldoc message."
 ;;;; Misc commands
 
 (defun citre-show-project-root ()
-  "Show project root of current buffer.
-Use this command to see if citre detects the project root
-corectly."
+  "Show the project root of current buffer.
+Use this command to see if Citre detects the project root
+correctly."
   (interactive)
   (if (citre--project-root)
       (message (citre--project-root))
