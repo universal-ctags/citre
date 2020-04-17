@@ -248,7 +248,8 @@ will be used as a fallback.
 
 This is used in `citre-peek-function' and eldoc integration."
   :type '(alist
-          :key-type (choice symbol boolean (list symbol))
+          :key-type (choice (const :tag "Fallback" t)
+                            symbol (repeat symbol))
           :value-type function))
 
 ;;;;; Auto completion related options
@@ -270,7 +271,7 @@ Emacs 27, there is also a flex style)."
   #'citre-completion-in-region
   "The function used for `completion-in-region-function'.
 See docstring of `citre-completion-in-region' for detail."
-  :type :function)
+  :type 'function)
 
 (defcustom citre-case-sensitivity 'smart
   "Case sensitivity of completion.  Can be:
@@ -285,8 +286,8 @@ directly.  This option controls the behavior of
 `citre--get-lines' when its argument MATCH is `prefix' or
 `substring', and in Citre, only completion uses these match
 styles."
-  :type '(choice (const :tag "Sensitive" 'sensitive)
-                 (const :tag "Insensitive" 'insensitive)
+  :type '(choice (const :tag "Sensitive" sensitive)
+                 (const :tag "Insensitive" insensitive)
                  (const :tag "Smart" smart)))
 
 ;;;; Internals
