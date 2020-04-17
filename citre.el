@@ -1253,10 +1253,6 @@ completion framework), this falls back to the default
 
 ;;;; Action: eldoc
 
-;; TODO: I think we shouldn't let Citre enable/disable eldoc mode.
-(defvar citre-eldoc-mode-enabled-orig nil
-  "Whether eldoc mode is enabled before citre mode.")
-
 (defun citre--pos-in-code-p (&optional pos)
   "Non-nil if position POS is in code.
 This means POS is not in comments or strings.  When POS is not
@@ -1488,10 +1484,8 @@ correctly."
             completion-in-region-function))
     (set (make-local-variable 'completion-in-region-function)
          #'citre-completion-in-region)
-    (setq citre-eldoc-mode-enabled-orig eldoc-mode)
     (add-function :before-until (local 'eldoc-documentation-function)
-                  #'citre-eldoc-function)
-    (eldoc-mode))
+                  #'citre-eldoc-function))
    (t
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
@@ -1502,9 +1496,7 @@ correctly."
           (setq citre-completion-in-region-function-orig nil))
       (kill-local-variable 'completion-in-region-function))
     (remove-function (local 'eldoc-documentation-function)
-                     #'citre-eldoc-function)
-    (unless citre-eldoc-mode-enabled-orig
-      (eldoc-mode -1)))))
+                     #'citre-eldoc-function))))
 
 (provide 'citre)
 
