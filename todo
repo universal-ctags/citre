@@ -205,3 +205,11 @@
     functionalities except eldoc integration without citre-mode. But maybe we
     are going too far. If the user want this, they could wrap their own
     commands.
+
+  - Some sequences (like tabs) are escaped in tags file. We need to figure out
+    how this is exactly down, and maybe do appropriate unescaping when parsing.
+    I believe they are mostly handled in the output of readtags, but we need to
+    confirm.
+
+    Ref: https://github.com/universal-ctags/libreadtags/issues/17 and
+    https://github.com/universal-ctags/ctags/pull/2459#issuecomment-597906216.
