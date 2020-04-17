@@ -987,7 +987,7 @@ N can be negative."
      (t
       (setq citre-peek--bg (citre--color-blend "#000000" bg 0.03))
       (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.1)))))
-  (add-hook 'post-command-hook #'citre-peek--post-command-function))
+  (add-hook 'post-command-hook #'citre-peek--post-command-function nil 'local))
 
 (defun citre-peek-function ()
   "Peek the definition of function when inside a function call."
@@ -1040,7 +1040,7 @@ N can be negative."
   (setq citre-peek--bg-alt nil)
   (setq minor-mode-overriding-map-alist
         (cl-delete 'citre-mode minor-mode-overriding-map-alist :key #'car))
-  (remove-hook 'post-command-hook #'citre-peek--post-command-function))
+  (remove-hook 'post-command-hook #'citre-peek--post-command-function 'local))
 
 ;;;; Action: jump to definition
 
