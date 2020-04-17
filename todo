@@ -213,3 +213,10 @@
 
     Ref: https://github.com/universal-ctags/libreadtags/issues/17 and
     https://github.com/universal-ctags/ctags/pull/2459#issuecomment-597906216.
+
+# Selectrum integration
+
+We want selectrum versions of these commands:
+
+- `citre-jump-command`
+- `citre-completion-in-region-function`
