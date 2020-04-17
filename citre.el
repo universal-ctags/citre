@@ -339,14 +339,16 @@ buffer is set.  When BUFFER is non-nil, find project root for the
 file in BUFFER instead."
   (with-current-buffer (or buffer (current-buffer))
     (or citre-project-root
-        (when-let ((file (buffer-file-name)))
+        (when-let* ((file (buffer-file-name))
+                    (dir (file-name-directory file)))
           (setq citre-project-root
                 (or (citre--find-dir-with-denoters
                      file citre-project-denoter-files)
-                    (ignore-errors (expand-file-name (cdr (project-current))))
+                    (when-let ((project (project-current nil dir)))
+                      (expand-file-name (cdr project)))
                     (citre--find-dir-with-denoters
                      file citre-project-fallback-denoter-files)
-                    (file-name-directory file)))))))
+                    dir))))))
 
 (defun citre--get-project-info (key &optional project)
   "Get info of current project.
