@@ -254,17 +254,18 @@ This is used in `citre-peek-function' and eldoc integration."
 
 ;;;;; Auto completion related options
 
-(defcustom citre-get-completions-by-substring t
-  "When searching for completions, whether to match by substring.
-Non-nil means to match tags CONTAINING the symbol at point.
-Otherwise match tags START WITH the symbol at point.
+(defcustom citre-do-substring-completion t
+  "Whether do substring completion.
+Non-nil means to match tags *containing* the symbol to be
+completed, Otherwise match tags *start with* the symbol to be
+completed.
 
 Notice that when listing the candidates, Emacs itself will
-further filtering from the completions we supply, and this
-behavior is controled by `completion-styles'.  You need to set
-`citre-get-completions-by-substring' to non-nil, AND add
-substring to `completion-styles' to do \"fuzzy completion\" (for
-Emacs 27, there is also a flex style)."
+further filter the completions we supply, and its behavior is
+controlled by `completion-styles'.  If you want substring
+completion, you need to set `citre-do-substring-completion' to
+non-nil, *and* add `substring' to `completion-styles' (for Emacs
+27, there is also a `flex' style that will work)."
   :type 'boolean)
 
 (defcustom citre-completion-in-region-function
@@ -1140,7 +1141,7 @@ name, with text properties containing the kind and signature.
 
 It returns nil when the completion can't be done."
   (let ((symbol (or symbol (thing-at-point 'symbol)))
-        (match (if citre-get-completions-by-substring
+        (match (if citre-do-substring-completion
                    'substring 'prefix))
         (candidate-str-generator
          (lambda (record)
