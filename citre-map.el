@@ -49,6 +49,7 @@
     (define-key map (kbd "m") 'citre-code-map-mark)
     (define-key map (kbd "M") 'citre-code-map-unmark-all)
     (define-key map (kbd "h") 'citre-code-map-hide)
+    (define-key map (kbd "d") 'citre-code-map-delete)
     (define-key map (kbd "S") 'citre-code-map-show-all)
     (define-key map [remap save-buffer] 'citre-save-code-map)
     (define-key map [remap find-file] 'citre-load-code-map)
@@ -193,6 +194,19 @@ record."
       (setf (cdr (nth idx
                       (citre--get-in-code-map (car pos) (nth 1 pos))))
             state))))
+
+(defun citre--delete-item-in-code-map (item)
+  "Remove ITEM in the current list in code map."
+  (let* ((pos (citre--code-map-position))
+         (pos-depth (nth 3 pos)))
+    (pcase pos-depth
+      (0 (setf (citre--get-in-code-map)
+               (cl-delete item (citre--get-in-code-map)
+                          :key #'car :test #'equal)))
+      (1 (setf (citre--get-in-code-map (nth 0 pos))
+               (cl-delete item (citre--get-in-code-map (nth 0 pos))
+                          :key #'car :test #'equal)))
+      (2 (error "Definitions can't be deleted")))))
 
 (defun citre--set-code-map-position (&optional filename symbol definition project)
   "Set the code map position in current project.
@@ -645,6 +659,9 @@ region.  This should be intuitive to use."
         (citre--tabulated-list-unmark))
       (forward-line))))
 
+;; TODO: refactor this like `citre-code-map-delete', so that a region that
+;; doesn't contain an item produces an empty "items to hide" list, so the disk
+;; state is not modified.
 (defun citre-code-map-hide ()
   "Hide some of the definitions.
 If there's an active region, hide definitions in the region; If
@@ -680,12 +697,50 @@ region.  This should be intuitive to use."
     (citre--set-code-map-disk-state t)
     (citre--code-map-refresh 'remove-item)))
 
-(defun citre-code-map-remove ()
-  "Remove current item, or marked items if there are any.
-This only take effect in a symbol list or file list.
+(defun citre-code-map-delete ()
+  "Delete some of the items in the current list.
+If there's an active region, delete items in the region; if there
+are no active regions, but marked items, delete them.  Otherwise
+delete current item.
 
 This operation can't be undone, so it will ask whether you really
-want to remove them.")
+want to remove them."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (let ((pos-depth (nth 3 (citre--code-map-position)))
+        (marked-pos nil)
+        (item-to-delete nil)
+        (total-item-number (length (citre--current-list-in-code-map))))
+    (when (= pos-depth 2)
+      (user-error "Only symbols or files can be removed"))
+    (cond
+     ((region-active-p)
+      (let ((region-to-delete (citre--clamp-region (region-beginning)
+                                                   (region-end))))
+        (when region-to-delete
+          (save-excursion
+            (goto-char (car region-to-delete))
+            (while (<= (point) (cdr region-to-delete))
+              (push (tabulated-list-get-id) item-to-delete)
+              (forward-line))))))
+     ((setq marked-pos (car (citre--tabulated-list-marked-positions)))
+      (save-excursion
+        (dolist (pos marked-pos)
+          (goto-char pos)
+          (push (tabulated-list-get-id) item-to-delete))))
+     (t
+      (push (tabulated-list-get-id) item-to-delete)))
+    (when (and item-to-delete
+               (y-or-n-p "This can't be undone.  Really delete the item(s)? "))
+      (dolist (item item-to-delete)
+        (citre--delete-item-in-code-map item))
+      ;; When there's no symbol left, also delete the file.
+      (when (and (= total-item-number (length item-to-delete))
+                 (= pos-depth 1))
+        (citre-code-map-backward)
+        (citre--delete-item-in-code-map (nth 0 (citre--code-map-position))))
+      (citre--set-code-map-disk-state t)
+      (citre--code-map-refresh 'remove-item))))
 
 (defun citre-code-map-show-all ()
   "Show hidden definitions."
