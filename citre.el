@@ -211,7 +211,7 @@ implementation."
 
 (defcustom citre-after-jump-hook '(citre-recenter-and-blink)
   "Hook to run after jumping to a location."
-  :type :hook)
+  :type 'hook)
 
 (defcustom citre-peek-file-content-height 12
   "Number of lines displaying file contents in the peek window."
