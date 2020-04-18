@@ -197,15 +197,23 @@ own regex to support them."
 
 ;;;;; Code navigation related options
 
-;; TODO: Replace this by a `citre-jump-select-location-function'.  It should
-;; accept a non-nil list of locations (given by `citre-jump'), and return an
-;; element in it.
-(defcustom citre-jump-command
-  #'citre-jump-completing-read
-  "The actual jumping command called by `citre-jump'.
-It should get the definition locations of the symbol at point,
-let the user choose one if there are multiple locations, and jump
-to it.  See `citre-jump-completing-read' for an example of
+(defcustom citre-select-location-function
+  #'citre-select-location-completing-read
+  "The function for the user to select a location from a list.
+It accepts a list of one or more strings, and returns one of
+them.  This is used for `citre-jump'.
+
+The strings are in the format of \"relative-file-path:
+line-content\", and the function should show it to the user. Each
+string also has `kind' and `linum' properties (see
+`citre-get-field'), which can be read by `citre--get-property'.
+The function can choose to also show them to the user.
+
+The list is guaranteed to have one or more elements. When there
+are only one element, the function can decide to let the user
+confirm, or return it directly.
+
+See `citre-select-location-completing-read' for an example of
 implementation."
   :type 'function)
 
@@ -1107,23 +1115,13 @@ the kind, linum and absolute path of the tag."
   (recenter)
   (pulse-momentary-highlight-region (point) (1+ (line-end-position))))
 
-(defun citre-jump-completing-read ()
-  "Jump to definition of the symbol at point.
-When there are more than 1 possible definitions, it will let you
-choose one in the minibuffer."
-  (interactive)
-  (let ((locations (citre-get-definition-locations))
-        (target nil))
-    (pcase (length locations)
-      (0 (user-error "Can't find definition"))
-      (1 (citre--open-file-and-goto-line
-          (citre--get-property (car locations) 'path)
-          (citre--get-property (car locations) 'linum)))
-      (_ (setq target
-               (completing-read "location: " locations nil t))
-         (citre--open-file-and-goto-line
-          (citre--get-property target 'path)
-          (citre--get-property target 'linum))))))
+(defun citre-select-location-completing-read (locations)
+  "Select an element in LOCATIONS.
+This uses the `completing-read' interface.  See
+`citre-select-location-function' for the use of this function."
+  (pcase (length locations)
+    (1 (car locations))
+    (_ (completing-read "location: " locations nil t))))
 
 ;;;;; Commands
 
@@ -1132,16 +1130,20 @@ choose one in the minibuffer."
 During an active `citre-peek' session, this jumps to the
 definition that is currently peeked."
   (interactive)
-  (let ((marker (point-marker)))
+  (let ((marker (point-marker))
+        (target nil))
     (if (overlayp citre-peek--ov)
         (progn
-          (let* ((loc (nth citre-peek--location-index
-                           citre-peek--locations)))
-            (citre-peek-abort)
-            (citre--open-file-and-goto-line
-             (citre--get-property loc 'path)
-             (citre--get-property loc 'linum))))
-      (call-interactively citre-jump-command))
+          (setq target (nth citre-peek--location-index
+                            citre-peek--locations))
+          (citre-peek-abort))
+      (let ((locations (citre-get-definition-locations)))
+        (if (null locations)
+            (user-error "Can't find definition")
+          (setq target (funcall citre-select-location-function locations)))))
+    (citre--open-file-and-goto-line
+     (citre--get-property target 'path)
+     (citre--get-property target 'linum))
     (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
