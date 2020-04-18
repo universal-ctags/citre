@@ -645,7 +645,10 @@ Notice that this is destructive, which is different from
 (defun citre--get-property (str field)
   "Get the text property corresponding to FIELD in STR.
 STR should be propertized by `citre--propertize' or
-`citre--put-property'."
+`citre--put-property'.
+
+What it actually does is prefix the FIELD by `citre-', and get
+that text property."
   (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
 
 (defun citre--put-property (str prop val)
