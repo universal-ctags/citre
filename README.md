@@ -92,6 +92,8 @@ jump to the definition location.
 
 Type `n`/`p` to go to the next/previous line.
 
+Type `o` (`citre-code-map-open-file`) to open current file in a file list.
+
 ### Modify the code map
 
 #### Mark/select
@@ -158,6 +160,6 @@ will be unhide.
 Currently, updating the code map can't handle situations where files in the
 file list is missing/renamed (don't worry too much, all symbols under it would
 still be preserved). If a symbol is renamed, Citre also won't know that. In the
-future, commands that deal with situations will be offered, but it's generally
-not suggested to use code map for a very long code reading session during which
-the code changes.
+future, commands that deal with such situations will be offered, but it's
+generally not suggested to use code map for a very long code reading session
+during which the code changes.

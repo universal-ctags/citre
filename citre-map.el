@@ -46,6 +46,7 @@
     (define-key map (kbd "f") 'citre-code-map-forward)
     (define-key map (kbd "RET") 'citre-code-map-forward)
     (define-key map (kbd "b") 'citre-code-map-backward)
+    (define-key map (kbd "o") 'citre-code-map-open-file)
     (define-key map (kbd "m") 'citre-code-map-mark)
     (define-key map (kbd "M") 'citre-code-map-unmark-all)
     (define-key map (kbd "h") 'citre-code-map-hide)
@@ -611,8 +612,6 @@ further to the file list."
       (setf (nth 3 (citre--code-map-position)) (1- pos-depth))
       (citre--code-map-refresh 'switch-page))))
 
-;; TODO: If call this on a file, and the file is not visited by any buffer, it
-;; should be opened.
 (defun citre-code-map-forward ()
   "Go \"forward\" in the code map.
 This means to go from the file list into the symbol list, or
@@ -631,6 +630,20 @@ definition."
         (citre--open-file-and-goto-line (citre-get-field 'path id)
                                         (citre-get-field 'linum id)
                                         'other-window-noselect)))))
+
+(defun citre-code-map-open-file ()
+  "Open the current file in file list."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (let ((pos-depth (nth 3 (citre--code-map-position))))
+    (unless (= pos-depth 0)
+      (user-error "Not in a file list"))
+    (let ((file (tabulated-list-get-id))
+          (path (expand-file-name (tabulated-list-get-id)
+                                  (citre--project-root))))
+      (if (file-exists-p path)
+          (pop-to-buffer (find-file-noselect path))
+        (user-error "%s doesn't exist" file)))))
 
 (defun citre-code-map-mark ()
   "Mark or unmark current item.
