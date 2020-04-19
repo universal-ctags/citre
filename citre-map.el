@@ -52,6 +52,7 @@
     (define-key map (kbd "d") 'citre-code-map-delete)
     (define-key map (kbd "k") 'citre-code-map-keep)
     (define-key map (kbd "S") 'citre-code-map-show-all)
+    (define-key map (kbd "U") 'citre-code-map-update)
     (define-key map [remap save-buffer] 'citre-save-code-map)
     (define-key map [remap find-file] 'citre-load-code-map)
     map)
@@ -781,10 +782,55 @@ really want to delete them."
       (citre--set-code-map-disk-state t)
       (citre--code-map-refresh 'remove-item))))
 
-(defun citre-code-map-refresh ()
-  "Refresh current item, or marked items if there are any.
-This means to rescan definitions of current/marked symbols, or
-rescan definitions of all symbols in current/marked files.")
+;; TODO: I once thought about handling missing files in this function, but it's
+;; very hard.  Let's do it this way: we don't care if the file is missing, but
+;; we offer a command `citre-code-map-mark-missings' to mark all missing files,
+;; then another command `citre-code-map-replace-item' to replace a file with
+;; another.
+
+;; It is generally hard to deal with changes.  We should also consider how to
+;; handle renamed symbols.  Here's one way: the mark missings command can also
+;; mark symbols that don't have definitions, and the replace command can modify
+;; a symbol and rescan its definitions.
+
+;; In the future ctags will have the ability to handle a source tree, which
+;; means it knows all external entities (all the imports/includes/dependencies
+;; ) of a file.  So finding the definition of a symbol is not just match its
+;; name with all the tags, but also influenced by other things in that file.
+;; This is wanted because we want more accurate candidates in
+;; completion/jumping to definition.  But it sure will make handle file changes
+;; in code map much more harder, because the concept of a code map actually
+;; assumes the code is not changing.  However, at least we still need a manual
+;; way to deal with changes, because deprecating a code map only due to file
+;; changes is simply unacceptable.
+(defun citre-code-map-update ()
+  "Update the code map.
+This means updating the definition locations for all symbols in
+the code map.  If you see the lines in definition lists are
+messed up due to file changes, update your tags file and call
+this command.
+
+This will unhide all hidden definitions, since there's no way to
+tell whether a new definition location is the \"updated version\"
+of an old one."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (when (y-or-n-p "This will unhide all hidden definitions.  Continue? ")
+    (dolist (file (citre--get-in-code-map))
+      (dolist (sym (cdr file))
+        (setf (citre--get-in-code-map (car file) (car sym))
+              (mapcar #'list (citre-get-records (car sym) 'exact)))))
+    ;; The original definitions are gone, so we remove the definition location
+    ;; in current position to prevent possible errors.
+    (setf (nth 2 (citre--code-map-position)) nil)
+    (citre--set-code-map-disk-state t)
+    ;; File/symbol lists won't change, so we only refresh when inside a
+    ;; definition list.
+    (when (= (nth 3 (citre--code-map-position)) 2)
+      ;; The `switch-page' style is appropriate here, see its implementation.
+      ;; It does a complete refresh, which is needed since the definition lists
+      ;; are completely changed.
+      (citre--code-map-refresh 'switch-page))))
 
 (defun citre-save-code-map (&optional project)
   "Save map to a file.
