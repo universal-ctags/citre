@@ -50,6 +50,7 @@
     (define-key map (kbd "M") 'citre-code-map-unmark-all)
     (define-key map (kbd "h") 'citre-code-map-hide)
     (define-key map (kbd "d") 'citre-code-map-delete)
+    (define-key map (kbd "k") 'citre-code-map-keep)
     (define-key map (kbd "S") 'citre-code-map-show-all)
     (define-key map [remap save-buffer] 'citre-save-code-map)
     (define-key map [remap find-file] 'citre-load-code-map)
@@ -743,12 +744,42 @@ delete them."
         (forward-line)))))
 
 (defun citre-code-map-keep ()
-  "Keep marked items.
-This means hide unmarked items in definition list, or remove
-unmarked items in symbol list or file list.
+  "Keep items selected by mark or active region.
+This means hide other items in a definition list, or delete other
+items in a symbol or file list.
 
-The remove operation can't be undone, so it will ask whether you
-really want to remove them.")
+The delete operation can't be undone, so it will ask whether you
+really want to delete them."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (let* ((pos-depth (nth 3 (citre--code-map-position)))
+         (pos-to-keep (or (citre--tabulated-list-selected-positions)
+                          (citre--tabulated-list-marked-positions)))
+         (number-of-items (length (citre--current-list-in-code-map))))
+    (when (= number-of-items (length pos-to-keep))
+      (pcase pos-depth
+        (2 (user-error "Nothing left to hide"))
+        (_ (user-error "Nothing left to delete"))))
+    (when (null pos-to-keep)
+      (user-error "Nothing selected"))
+    (when pos-to-keep
+      (pcase pos-depth
+        (2 (save-excursion
+             (goto-char (point-min))
+             (while (not (eobp))
+               (unless (memq (point) pos-to-keep)
+                 (citre--set-hide-state (tabulated-list-get-id) t))
+               (forward-line))))
+        (_ (when (y-or-n-p
+                  "This can't be undone.  Really delete unselected item(s)")
+             (save-excursion
+               (goto-char (point-min))
+               (while (not (eobp))
+                 (unless (memq (point) pos-to-keep)
+                   (citre--delete-item-in-code-map (tabulated-list-get-id)))
+                 (forward-line))))))
+      (citre--set-code-map-disk-state t)
+      (citre--code-map-refresh 'remove-item))))
 
 (defun citre-code-map-refresh ()
   "Refresh current item, or marked items if there are any.
@@ -776,6 +807,7 @@ When PROJECT is specified, save the code map of PROJECT."
       (citre--set-code-map-disk-state nil saveto project)
       (message "Code map of %s saved" project))))
 
+;; TODO: This should use current window.
 (defun citre-load-code-map ()
   "Load map from file."
   (interactive)
