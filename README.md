@@ -5,7 +5,7 @@ solution based on Universal Ctags, that make benefits from all the advanced
 features of Universal Ctags that's long overlooked in the Emacs world.
 
 Citre Map is a component of Citre. It gives you a map in the maze of code
-reading, that's aimed to support long code reading sessions of several hours or
+reading, which aims to support long code reading sessions of several hours or
 days.
 
 Currently this README only talks about Citre Map.
@@ -51,7 +51,7 @@ can go to places using it. It consists of 3 levels of lists:
 You add items to a code map by adding a symbol to it, then the file it belongs
 to goes into file list, and its definition locations go into definition list.
 
-You can browse the code map, add/delete/hide things in it, and save/read a code
+You can browse the code map, add/delete/hide things in it, and save/load a code
 map in the disk.
 
 ## Usage
@@ -59,9 +59,10 @@ map in the disk.
 ### Setup your project
 
 When enabling citre-mode, it automatically detects the root of your project by
-the VCS it uses, or denoter files like "makefile" in its root. Use
-`citre-show-project-root` to know if Citre did it right. If not, set
-`citre-project-root` in your `.dir-locals.el` manually.
+the VCS it uses, or denoter files like ".citre" or "makefile" in its root. Use
+`citre-show-project-root` to know if Citre did it right. If not, put a file
+with one of the names in `citre-project-denoter-files` in your project root, or
+set `citre-project-root` in your `.dir-locals.el` manually.
 
 If you have a `tags` file in the project root, Citre will use it. Set
 `citre-tags-file` to use a different tags file name. Notice that certain fields
@@ -93,32 +94,70 @@ Type `n`/`p` to go to the next/previous line.
 
 ### Modify the code map
 
+#### Mark/select
+
 You can type `m` (`citre-code-map-mark`) to mark/unmark any item in any list.
 You can do this in batch by selecting the items (i.e. put them in an active
 region) then type `m`. It will mark all the selected items, or unmark them if
 they are already marked.
 
-In a definition list, type `h` (`citre-code-map-hide`) to hide current item.
-When there's an active region, it hides all items in the region; Or when there
-are marked items, it hides them. Type `S` (`citre-code-map-show-all`) to show
-the hidden items.
+Type `M` (`citre-code-map-unmark-all`) to unmark all items.
 
-Here are the commands that will come in future:
+In a code map, when there are an active region, the items in it are considered
+to be selected; or when there are no active region, but some marks, the marked
+items are considered to be selected. We'll use "selected items" to refer to
+such items later.
 
-- `citre-code-map-remove`: Remove items in a symbol list or file list.
-- `citre-code-map-keep`: Keep marked items, and hide/remove the rest.
-- `citre-code-map-refresh`: read definitions of a symbol, or of all symbols in a
-  file. Use this when the code and tags file are updated. Notice that all the
-  hidden items will be shown, since Citre can't tell which are the "updated
-  version" of old tags.
+#### Hide/show items in definition lists
+
+In a definition list, type `h` (`citre-code-map-hide`) to hide selected items,
+or current item if there are no selected items.
+
+Type `S` (`citre-code-map-show-all`) to show the hidden items. They will be
+automatically marked so that you can unmark some of them, or mark more items,
+and hide all of them again. If you don't need this, type `M` to unmark all.
+
+Type `k` (`citre-code-map-keep`) to keep the selected items and hide all other
+items.
+
+#### Delete items in file/symbol lists
+
+In a file or symbol list, type `d` (`citre-code-map-delete`) to delete selected
+items, or current items if there are no selected items. This operation can't be
+undone so Citre will ask if you really want to delete them.
+
+Type `k` to keep the selected items and delete all others. Still, Citre will
+ask for your confirmation.
 
 ### Save and load the code map
 
-In the code map, use standard bindings of `save-buffer` (`C-x C-s` by default)
-or `find file` (`C-x C-f` by default) to save or load the code map. You can
-also call `citre-save-code-map` in any file in the project, or call
+In the code map, use standard key bindings of `save-buffer` (`C-x C-s` by
+default) or `find file` (`C-x C-f` by default) to save or load the code map.
+You can also call `citre-save-code-map` in any file in the project, or call
 `citre-load-code-map` to do this.
 
 Once you've saved the code map, or loaded it from the disk, then when exiting
 Emacs, Citre will detect if the code map is modified since then, and ask if you
 want to save it.
+
+### Update the code map
+
+The lines in definition lists are fetched from the files in real time. Changes
+in the file can mess it up, then you can't jump to the right definition
+locations.
+
+If this happens, you should update the tags file first, then type `U`
+(`citre-code-map-update`) in the code map to rescan definitions of all symbols
+and update the code map.
+
+Remember that the concept of code map really assumes the code is not changing
+(think about it, there's actually no way to tell whether a new definition
+location is the "updated version" of an old one), so all hidden definitions
+will be unhide.
+
+Currently, updating the code map can't handle situations where files in the
+file list is missing/renamed (don't worry too much, all symbols under it would
+still be preserved). If a symbol is renamed, Citre also won't know that. In the
+future, commands that deal with situations will be offered, but it's generally
+not suggested to use code map for a very long code reading session during which
+the code changes.
