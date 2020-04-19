@@ -772,7 +772,7 @@ really want to delete them."
                  (citre--set-hide-state (tabulated-list-get-id) t))
                (forward-line))))
         (_ (when (y-or-n-p
-                  "This can't be undone.  Really delete unselected item(s)")
+                  "This can't be undone.  Really delete unselected item(s)? ")
              (save-excursion
                (goto-char (point-min))
                (while (not (eobp))
