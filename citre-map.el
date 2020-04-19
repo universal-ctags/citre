@@ -94,7 +94,7 @@ The test is done using `equal'."
 
 (defvar citre--code-map-alist nil
   "Alist for code maps.
-The key is project path, value is its code map.  The code map is
+The key is a project path, value is its code map.  A code map is
 another nested alist with a structure like:
 
   (alist of:
@@ -107,11 +107,11 @@ sense.  See README for the user guide.")
 
 (defvar citre--code-map-position-alist nil
   "Alist for latest positions in code maps.
-The key is project path, value is the latest position in its code
-map.  The position means the state after your last
+The key is a project path, value is the latest position in its
+code map.  The position means the state after your last
 `citre-code-map-forward', `citre-code-map-backward', or opening
-the code map with commands like
-`citre-see-symbol-in-code-map'.  It is a list of:
+the code map with commands like `citre-see-symbol-in-code-map'.
+It is a list of:
 
   (file-name symbol definition-location current-depth)
 
@@ -123,15 +123,20 @@ The meaning of current-depth is:
 
 (defvar citre--code-map-disk-state-alist nil
   "Alist for the disk state of code maps.
-The key is project path, value is a cons pair.  The car is t or
-nil, indicating whether the code map has been modified since last
-save.  Cdr is the location on disk.")
+The key is a project path, value is a cons pair, whose car is t
+or nil, indicating whether the code map has been modified since
+last save, and cdr is the location on the disk.")
 
 (defmacro citre--get-in-code-map (&optional file symbol project)
-  "Return the place form of file list in code map in current project.
-If FILE is given, return the place form of the symbol list under it.
+  "Return the place form of a list in code map in current project.
+If no optional arguments is given, return the place form of the
+file list in current project.
 
-If SYMBOL is also given, return the place form of definition list under it.
+If FILE is given, return the place form of the symbol list under
+it.
+
+If SYMBOL is also given, return the place form of the definition
+list under it.
 
 If project root PROJECT is given, use that project instead.
 
@@ -149,7 +154,7 @@ its value is nil."
                   nil nil #'equal))))
 
 (defmacro citre--code-map-position (&optional project)
-  "Return the place form of code map position in current project.
+  "Return the place form of the code map position in current project.
 If project root PROJECT is given, use that project instead.
 
 Notice: Since this is a macro, the arguments are considered to be
@@ -161,7 +166,8 @@ its value is nil."
 
 (defun citre--current-list-in-code-map (&optional project)
   "Return the current list in code map in current project.
-\"Current list\" is determined by `citre--code-map-position-alist'.
+\"Current list\" is determined by
+`citre--code-map-position-alist'.
 
 If project root PROJECT is given, use that project instead."
   (let* ((project (or project (citre--project-root)))
@@ -173,19 +179,8 @@ If project root PROJECT is given, use that project instead."
       (_ (error
           "Current depth in code map position should be an integer in 0~3")))))
 
-(defun citre--get-current-item-in-code-map (&optional project)
-  "Get current item in code map in current project.
-If project root PROJECT is given, use that project instead."
-  (let* ((project (or project (citre--project-root)))
-         (pos (citre--code-map-position project))
-         (depth (nth 3 pos)))
-    (when (> depth 0)
-      (nth (1- depth) pos))))
-
 (defun citre--set-hide-state (record state)
-  "Set the hide state of RECORD in definition list to STATE.
-This uses `citre--code-map-position-alist' to know where is the
-record."
+  "Set the hide state of RECORD in current definition list to STATE."
   (let ((pos (citre--code-map-position)))
     (unless (= (nth 3 pos) 2)
       (error "Not browsing an definition list"))
@@ -199,7 +194,7 @@ record."
             state))))
 
 (defun citre--delete-item-in-code-map (item)
-  "Remove ITEM in the current list in code map."
+  "Remove ITEM in current list in code map."
   (let* ((pos (citre--code-map-position))
          (pos-depth (nth 3 pos)))
     (pcase pos-depth
@@ -211,9 +206,11 @@ record."
                           :key #'car :test #'equal)))
       (2 (error "Definitions can't be deleted")))))
 
-(defun citre--set-code-map-position (&optional filename symbol definition project)
+(defun citre--set-code-map-position (&optional filename symbol
+                                               definition project)
   "Set the code map position in current project.
-This is based on FILENAME, SYMBOL and DEFINITION.
+This modifies `citre--code-map-position-alist' based on FILENAME,
+SYMBOL and DEFINITION.
 
 If project root PROJECT is given, use that project instead."
   (let ((project (or project (citre--project-root))))
@@ -242,12 +239,12 @@ If project root PROJECT is given, use that project instead."
 See the docstring of `citre--code-map-disk-state-alist' to know
 their meaning.
 
-When a path PROJECT is given, set the state of the code map of
-PROJECT.
+When project root PROJECT is given, set the state of the code map
+of PROJECT.
 
 If called without LOCATION, this function will only have effect
 when LOCATION already exists in the disk state.  The typical
-usage is call with LOCATION after load/save a code map, and
+usage is to call it with LOCATION after load/save a code map, and
 without when changing its state in other situations."
   (let ((project (or project (citre--project-root))))
     (if location
@@ -266,8 +263,8 @@ without when changing its state in other situations."
               modified)))))
 
 (defun citre--get-code-map-disk-state (&optional project)
-  "Get the disk state of current project.
-When a path PROJECT is given, use that project instead."
+  "Get the disk state of the code map of current project.
+When project root PROJECT is given, use that project instead."
   (let ((project (or project (citre--project-root))))
     (alist-get project citre--code-map-disk-state-alist
                nil nil #'equal)))
@@ -330,10 +327,9 @@ of this function."
 
 (defun citre--tabulated-list-marked-positions (&optional beg end)
   "Return positions of marked items in a tabulated list buffer.
-The \"position of item\" means the beginning of its line.
-When BEG and/or END are specified, use them as inclusive
-boundaries of search.  That is, the lines at BEG and END are also
-checked."
+The \"position of item\" means the beginning of its line.  When
+BEG and/or END are specified, use them as inclusive boundaries of
+search.  That is, the lines at BEG and END are also checked."
   (let ((positions nil)
         (beg-limit (or beg (point-min)))
         (end-limit (or end (point-max))))
@@ -440,8 +436,8 @@ About the argument STYLE, see the docstring of
 `citre--code-map-refresh'."
   (cond
    ((eq style 'remove-item)
-    ;; Find the nearest item that's not to be removed, and restore its
-    ;; position.
+    ;; Find the nearest item that's not to be removed, and goto there before
+    ;; printing.
     (let ((pos (or (citre--find-position-near-region)
                    (citre--find-position-near-marked-items)
                    (citre--find-position-near-line))))
@@ -449,11 +445,11 @@ About the argument STYLE, see the docstring of
                      (tabulated-list-print 'remember-pos 'update))
         (tabulated-list-print nil 'update))))
    ((eq style 'add-item)
-    ;; When the added items are above the current line, some items will be push
-    ;; beyond the start of window.  In a code map, items can fit in one screen
-    ;; most of the time, so this can be confusing (where do my item goes?).  We
-    ;; try to scroll down to restore the original line at the start of window,
-    ;; but doesn't push current point below the end of window.
+    ;; When the added items are above the current line, some items will be
+    ;; pushed beyond the start of window.  In a code map, items can fit in one
+    ;; screen most of the time, so this can be confusing (where do my item
+    ;; goes?).  We try to scroll down to restore the original line at the start
+    ;; of window, but doesn't push current point below the end of window.
     (let ((window-start-linum-orig (line-number-at-pos (window-start)))
           (window-start-linum-new nil)
           (linum-in-window nil)
@@ -495,23 +491,21 @@ RECORD is the record of the definition."
                         (citre-get-field 'line record)))))
 
 (defun citre--code-map-refresh (&optional style)
-  "Refresh code map in current buffer.
+  "Refresh the code map in current buffer.
 This is based on the position information in
 `citre--code-map-position-alist'.
 
 STYLE determines how should we put the point and scroll the
 window.  Its value can be:
 
-  - remove-item: Use this if any item will be hidden/removed
-    after refresh.
-
-  - add-item: Use this if any item will be added after refresh.
-
-  - switch-page: Use this if the page will be switched after
-    refresh.
-
-  - nil: Don't use STYLE if we are on the same page and no fancy
-    things happen."
+- `remove-item': Use this if selected items or current item will
+  be hidden/removed after refresh, and this is the only change.
+- `add-item': Use this if some item(s) will be added after
+  refresh, and the current item is guaranteed to still exist.
+- `switch-page': Use this if the page will be switched after
+  refresh.
+- nil: Don't specify STYLE if we are on the same page and no
+  fancy things happen."
   (let* ((pos (citre--code-map-position))
          (pos-depth (nth 3 pos))
          (list (citre--current-list-in-code-map))
@@ -551,14 +545,14 @@ If project root PROJECT is given, use that project instead."
       (citre--code-map-refresh 'switch-page))))
 
 (defun citre--error-if-not-in-code-map ()
-  "Signal an error if not in a code map."
+  "Signal an error if not browsing a code map."
   (unless (derived-mode-p 'citre-code-map-mode)
     (user-error "This command is for code map only")))
 
 ;;;;; Commands
 
 (defun citre-see-symbol-in-code-map ()
-  "See the definition locations of symbol at point in code map.
+  "See the definition list of the symbol at point.
 If the symbol is not in the symbol list, add it to the list."
   (interactive)
   (let ((sym (thing-at-point 'symbol 'no-properties)))
@@ -578,7 +572,7 @@ If the symbol is not in the symbol list, add it to the list."
     (citre--open-code-map)))
 
 (defun citre-see-file-in-code-map ()
-  "See current file in code map."
+  "See the symbol list of current file."
   (interactive)
   (let ((file (citre--buffer-relative-file-name)))
     (unless (citre--key-in-alist file
@@ -603,7 +597,7 @@ This will restore the status when you leave the map."
 
 (defun citre-code-map-backward ()
   "Go \"back\" in the code map.
-This means to go from the definition list to the symbol list, and
+This means to go from the definition list to the symbol list, or
 further to the file list."
   (interactive)
   (citre--error-if-not-in-code-map)
@@ -632,7 +626,7 @@ definition."
                                         'other-window-noselect)))))
 
 (defun citre-code-map-open-file ()
-  "Open the current file in file list."
+  "Open the current file in a file list."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let ((pos-depth (nth 3 (citre--code-map-position))))
@@ -681,18 +675,8 @@ region.  This should be intuitive to use."
         (citre--tabulated-list-unmark))
       (forward-line))))
 
-;; TODO: refactor this like `citre-code-map-delete', so that a region that
-;; doesn't contain an item produces an empty "items to hide" list, so the disk
-;; state is not modified.
 (defun citre-code-map-hide ()
-  "Hide some of the definitions.
-If there's an active region, hide definitions in the region; If
-there are no active regions, but marked definitions, hide them.
-Otherwise hide current definition.
-
-An item is considered to be in the region if its beginning of
-line is inside, or at the beginning, but not at the end of the
-region.  This should be intuitive to use."
+  "Hide selected definitions, or current definition."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos-depth (nth 3 (citre--code-map-position)))
@@ -710,13 +694,10 @@ region.  This should be intuitive to use."
       (citre--code-map-refresh 'remove-item))))
 
 (defun citre-code-map-delete ()
-  "Delete some of the items in the current list.
-If there's an active region, delete items in the region; if there
-are no active regions, but marked items, delete them.  Otherwise
-delete current item.
+  "Delete selected items, or current item.
 
-This can't be undone, so it will ask whether you really want to
-delete them."
+This can only be used on symbols or files.  This operation can't
+be undone, so Citre will ask if you really want to delete them."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos-depth (nth 3 (citre--code-map-position)))
@@ -758,11 +739,11 @@ delete them."
         (forward-line)))))
 
 (defun citre-code-map-keep ()
-  "Keep items selected by mark or active region.
+  "Keep selected items.
 This means hide other items in a definition list, or delete other
 items in a symbol or file list.
 
-The delete operation can't be undone, so it will ask whether you
+The delete operation can't be undone, so Citre will ask if you
 really want to delete them."
   (interactive)
   (citre--error-if-not-in-code-map)
@@ -846,7 +827,7 @@ of an old one."
       (citre--code-map-refresh 'switch-page))))
 
 (defun citre-save-code-map (&optional project)
-  "Save map to a file.
+  "Save code map to a file.
 When PROJECT is specified, save the code map of PROJECT."
   (interactive)
   (let* ((project (or project (citre--project-root)))
@@ -868,7 +849,7 @@ When PROJECT is specified, save the code map of PROJECT."
 
 ;; TODO: This should use current window.
 (defun citre-load-code-map ()
-  "Load map from file."
+  "Load code map from file."
   (interactive)
   (let* ((file (cdr (citre--get-code-map-disk-state)))
          (dir (if file (file-name-directory file) (citre--project-root)))

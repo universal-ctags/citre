@@ -105,8 +105,12 @@ they are already marked.
 
 Type `M` (`citre-code-map-unmark-all`) to unmark all items.
 
+Items can also be selected by an active region, if its beginning of line is
+inside, or at the beginning, but not at the end of the region. This should be
+intuitive to use.
+
 In a code map, when there are an active region, the items in it are considered
-to be selected; or when there are no active region, but some marks, the marked
+to be selected; or when there is no active region, but some marks, the marked
 items are considered to be selected. We'll use "selected items" to refer to
 such items later.
 
@@ -136,7 +140,7 @@ ask for your confirmation.
 In the code map, use standard key bindings of `save-buffer` (`C-x C-s` by
 default) or `find file` (`C-x C-f` by default) to save or load the code map.
 You can also call `citre-save-code-map` in any file in the project, or call
-`citre-load-code-map` to do this.
+`citre-load-code-map` anywhere to load a code map.
 
 Once you've saved the code map, or loaded it from the disk, then when exiting
 Emacs, Citre will detect if the code map is modified since then, and ask if you
@@ -161,5 +165,5 @@ Currently, updating the code map can't handle situations where files in the
 file list is missing/renamed (don't worry too much, all symbols under it would
 still be preserved). If a symbol is renamed, Citre also won't know that. In the
 future, commands that deal with such situations will be offered, but it's
-generally not suggested to use code map for a very long code reading session
-during which the code changes.
+generally suggested to avoid using code map for a very long code reading
+session during which the code changes.
