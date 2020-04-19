@@ -295,36 +295,6 @@ by `citre--tabulated-list-marked-p'."
     (beginning-of-line)
     (get-text-property (point) 'citre-map-mark)))
 
-(defun citre--tabulated-list-marked-positions (&optional beg end)
-  "Check if there are any marked item in current buffer.
-This returns a cons pair.  Its car is a list of the beginning of
-line positions of all marked items, and cdr is a flag indicating
-whether all items are marked.
-
-When BEG and/or END are specified, use them as inclusive
-boundaries of search.  That is, the lines at BEG and END are also
-checked."
-  (let ((positions nil)
-        (beg-limit (or beg (point-min)))
-        (end-limit (or end (point-max)))
-        (all-flag t))
-    (save-excursion
-      (goto-char beg-limit)
-      (beginning-of-line)
-      (while (and (<= (point) end-limit) (not (eobp)))
-        (if (get-text-property (point) 'citre-map-mark)
-            (push (point) positions)
-          (setq all-flag nil))
-        (forward-line)))
-    (cons positions all-flag)))
-
-;;;;; Code map mode and its helpers
-
-(define-derived-mode citre-code-map-mode tabulated-list-mode
-  "Code map"
-  "Major mode for code map."
-  (setq tabulated-list-padding 2))
-
 (defun citre--clamp-region (beg end)
   "Shrink the region from BEG to END.
 BEG and END are two positions in the buffer.  A cons pair is
@@ -354,6 +324,49 @@ of this function."
       (setq result-end (point)))
     (when (and (not fail-flag) (<= result-beg result-end))
       (cons result-beg result-end))))
+
+(defun citre--tabulated-list-marked-positions (&optional beg end)
+  "Return positions of marked items in a tabulated list buffer.
+The \"position of item\" means the beginning of its line.
+When BEG and/or END are specified, use them as inclusive
+boundaries of search.  That is, the lines at BEG and END are also
+checked."
+  (let ((positions nil)
+        (beg-limit (or beg (point-min)))
+        (end-limit (or end (point-max))))
+    (save-excursion
+      (goto-char beg-limit)
+      (beginning-of-line)
+      (while (and (<= (point) end-limit) (not (eobp)))
+        (when (get-text-property (point) 'citre-map-mark)
+          (push (point) positions))
+        (forward-line)))
+    positions))
+
+(defun citre--tabulated-list-selected-positions ()
+  "Return positions of items selected by an active region.
+The \"position of item\" means the beginning of its line.
+
+An item is \"selected by an active region\" means the beginning
+of its line is in the \"clamped\" active region (including at its
+boundaries), which is done by `citre--clamp-region'."
+  (when (use-region-p)
+    (let* ((positions nil)
+           (region (citre--clamp-region (region-beginning) (region-end)))
+           (beg (car region))
+           (end (cdr region)))
+      (goto-char beg)
+      (while (<= (point) end)
+        (push (point) positions)
+        (forward-line))
+      positions)))
+
+;;;;; Code map mode and its helpers
+
+(define-derived-mode citre-code-map-mode tabulated-list-mode
+  "Code map"
+  "Major mode for code map."
+  (setq tabulated-list-padding 2))
 
 (defun citre--find-position-near-region ()
   "Find a position near region.
@@ -400,7 +413,7 @@ See `citre--tabulated-list-print' to know its use."
   "Find a position near this line.
 See `citre--tabulated-list-print' to know its use."
   (let ((pos nil))
-    (if (and (car (citre--tabulated-list-marked-positions))
+    (if (and (citre--tabulated-list-marked-positions)
              (not (citre--tabulated-list-marked-p)))
         (setq pos (point))
       (save-excursion
@@ -627,22 +640,16 @@ line is inside, or at the beginning, but not at the end of the
 region.  This should be intuitive to use."
   (interactive)
   (citre--error-if-not-in-code-map)
-  (if (region-active-p)
-      (let* ((region-to-mark
-              (citre--clamp-region (region-beginning) (region-end)))
-             (all-mark-p nil))
-        (when region-to-mark
-          (setq all-mark-p
-                (cdr (citre--tabulated-list-marked-positions
-                      (car region-to-mark)
-                      (cdr region-to-mark))))
-          (save-excursion
-            (goto-char (car region-to-mark))
-            (while (<= (point) (cdr region-to-mark))
-              (if all-mark-p
-                  (citre--tabulated-list-unmark)
-                (citre--tabulated-list-mark))
-              (forward-line)))))
+  (if (use-region-p)
+      (let* ((pos-in-region (citre--tabulated-list-selected-positions))
+             (marked-pos (citre--tabulated-list-marked-positions))
+             (region-all-marked-p (cl-subsetp pos-in-region marked-pos)))
+        (save-excursion
+          (dolist (pos pos-in-region)
+            (goto-char pos)
+            (if region-all-marked-p
+                (citre--tabulated-list-unmark)
+              (citre--tabulated-list-mark)))))
     (if (citre--tabulated-list-marked-p)
         (citre--tabulated-list-unmark)
       (citre--tabulated-list-mark))
@@ -674,28 +681,18 @@ region.  This should be intuitive to use."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos-depth (nth 3 (citre--code-map-position)))
-         (marked-pos nil))
+         (pos-to-hide (or (citre--tabulated-list-selected-positions)
+                          (citre--tabulated-list-marked-positions)
+                          (list (point)))))
     (when (< pos-depth 2)
       (user-error "Hide can only be used on definitions"))
-    (cond
-     ((region-active-p)
-      (let ((region-to-hide (citre--clamp-region (region-beginning)
-                                                 (region-end))))
-        (when region-to-hide
-          (save-excursion
-            (goto-char (car region-to-hide))
-            (while (<= (point) (cdr region-to-hide))
-              (citre--set-hide-state (tabulated-list-get-id) t)
-              (forward-line))))))
-     ((setq marked-pos (car (citre--tabulated-list-marked-positions)))
+    (when pos-to-hide
       (save-excursion
-        (dolist (pos marked-pos)
+        (dolist (pos pos-to-hide)
           (goto-char pos)
-          (citre--set-hide-state (tabulated-list-get-id) t))))
-     (t
-      (citre--set-hide-state (tabulated-list-get-id) t)))
-    (citre--set-code-map-disk-state t)
-    (citre--code-map-refresh 'remove-item)))
+          (citre--set-hide-state (tabulated-list-get-id) t)))
+      (citre--set-code-map-disk-state t)
+      (citre--code-map-refresh 'remove-item))))
 
 (defun citre-code-map-delete ()
   "Delete some of the items in the current list.
@@ -703,42 +700,22 @@ If there's an active region, delete items in the region; if there
 are no active regions, but marked items, delete them.  Otherwise
 delete current item.
 
-This operation can't be undone, so it will ask whether you really
-want to remove them."
+This can't be undone, so it will ask whether you really want to
+delete them."
   (interactive)
   (citre--error-if-not-in-code-map)
-  (let ((pos-depth (nth 3 (citre--code-map-position)))
-        (marked-pos nil)
-        (item-to-delete nil)
-        (total-item-number (length (citre--current-list-in-code-map))))
+  (let* ((pos-depth (nth 3 (citre--code-map-position)))
+         (pos-to-delete (or (citre--tabulated-list-selected-positions)
+                            (citre--tabulated-list-marked-positions)
+                            (list (point)))))
     (when (= pos-depth 2)
       (user-error "Only symbols or files can be removed"))
-    (cond
-     ((region-active-p)
-      (let ((region-to-delete (citre--clamp-region (region-beginning)
-                                                   (region-end))))
-        (when region-to-delete
-          (save-excursion
-            (goto-char (car region-to-delete))
-            (while (<= (point) (cdr region-to-delete))
-              (push (tabulated-list-get-id) item-to-delete)
-              (forward-line))))))
-     ((setq marked-pos (car (citre--tabulated-list-marked-positions)))
-      (save-excursion
-        (dolist (pos marked-pos)
-          (goto-char pos)
-          (push (tabulated-list-get-id) item-to-delete))))
-     (t
-      (push (tabulated-list-get-id) item-to-delete)))
-    (when (and item-to-delete
+    (when (and pos-to-delete
                (y-or-n-p "This can't be undone.  Really delete the item(s)? "))
-      (dolist (item item-to-delete)
-        (citre--delete-item-in-code-map item))
-      ;; When there's no symbol left, also delete the file.
-      (when (and (= total-item-number (length item-to-delete))
-                 (= pos-depth 1))
-        (citre-code-map-backward)
-        (citre--delete-item-in-code-map (nth 0 (citre--code-map-position))))
+      (save-excursion
+        (dolist (pos pos-to-delete)
+          (goto-char pos)
+          (citre--delete-item-in-code-map (tabulated-list-get-id))))
       (citre--set-code-map-disk-state t)
       (citre--code-map-refresh 'remove-item))))
 
