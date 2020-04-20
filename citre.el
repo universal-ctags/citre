@@ -651,7 +651,9 @@ and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
   (let ((tags-file (cl-some
                     (lambda (file)
-                      (let ((tags-file (expand-file-name file project)))
+                      (let ((tags-file (expand-file-name file
+                                                         (or project
+                                                             (citre--project-root)))))
                         (when (file-exists-p tags-file) tags-file)))
                     citre-tags-files)))
     (unless tags-file
