@@ -508,6 +508,8 @@ if project root PROJECT is non-nil, use that project instead."
                        :key #'car :test #'equal)
       (user-error "Citre mode not enabled for %s" project))
     (let* ((program (or citre-readtags-program "readtags"))
+           ;; Strip the text properties first so we can eval it in a backquote
+           ;; form later to get just the symbol itself.
            (symbol (substring-no-properties symbol))
            (case-sensitive (pcase citre-case-sensitivity
                              ('sensitive t)
@@ -522,6 +524,9 @@ if project root PROJECT is non-nil, use that project instead."
                  ('exact 'eq?)))
            (symbol-expr (if case-sensitive
                             symbol
+                          ;; Since SYMBOL is a string, when we format this list
+                          ;; with "%s" later, we automatically get double
+                          ;; quotes around SYMBOL.
                           `(downcase ,symbol)))
            (name-expr (if case-sensitive
                           '$name
