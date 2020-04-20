@@ -105,6 +105,18 @@ priority (i.e., if we find one, then the rest will be ignored)."
 
 ;;;;; Ctags command related options
 
+(defcustom citre-ctags-program nil
+  "The path to the ctags program.
+Set this if ctags is not in your PATH.  Citre requires ctags
+program provided by Universal Ctags."
+  :type 'string)
+
+(defcustom citre-readtags-program nil
+  "The path to the readtags program.
+Set this if readtags is not in your PATH.  Citre requires
+readtags program provided by Universal Ctags."
+  :type 'string)
+
 ;; TODO: this may be better replaced by a `citre-excluded-languages'.  We use
 ;; it to exclude uninterested languages like markup languages.
 (defcustom citre-enabled-languages
@@ -450,6 +462,9 @@ care about this."
   "Return the default ctags command for current project.
 If project root PROJECT is non-nil, use that project instead."
   (let ((project (or project (citre--project-root)))
+        (program (if citre-ctags-program
+                     (format "'%s'" citre-ctags-program)
+                   "ctags"))
         (excludes
          (concat "--exclude="
                  (string-join
@@ -470,10 +485,10 @@ If project root PROJECT is non-nil, use that project instead."
     (citre--wait-for-project-size project)
     (if (or (eq size 'large) (> size citre-project-size-threshold))
         (string-join
-         (list "ctags" excludes extra-excludes languages extra-args) " ")
-      (string-join (list "ctags" excludes languages extra-args) " "))))
+         (list program excludes extra-excludes languages extra-args) " ")
+      (string-join (list program excludes languages extra-args) " "))))
 
-;;;;; Fetch and parse ctags output
+;;;;; Fetch and parse ctags output.
 
 (defun citre--get-lines (symbol match file &optional project)
   "Get lines in tags file FILE that match SYMBOL.
@@ -492,7 +507,10 @@ if project root PROJECT is non-nil, use that project instead."
     (unless (cl-member project citre--project-info-alist
                        :key #'car :test #'equal)
       (user-error "Citre mode not enabled for %s" project))
-    (let* ((case-sensitive (pcase citre-case-sensitivity
+    (let* ((program (if citre-readtags-program
+                        (format "'%s'" citre-readtags-program)
+                      "readtags"))
+           (case-sensitive (pcase citre-case-sensitivity
                              ('sensitive t)
                              ('insensitive nil)
                              ('smart (if (eq match 'exact)
@@ -510,7 +528,7 @@ if project root PROJECT is non-nil, use that project instead."
                           "$name"
                         "(downcase $name)"))
            (expr (format "(%s %s %s)" op name-expr symbol-expr))
-           (command (format "readtags -t '%s' -Q '%s' -nel" file expr))
+           (command (format "%s -t '%s' -Q '%s' -nel" program file expr))
            (default-directory project))
       (split-string
        (shell-command-to-string command)
