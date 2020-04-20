@@ -103,7 +103,7 @@ You can do this in batch by selecting the items (i.e. put them in an active
 region) then type `m`. It will mark all the selected items, or unmark them if
 they are already marked.
 
-Type `M` (`citre-code-map-unmark-all`) to unmark all items.
+Type `u` (`citre-code-map-unmark-all`) to unmark all items.
 
 Items can also be selected by an active region, if its beginning of line is
 inside, or at the beginning, but not at the end of the region. This should be
@@ -148,25 +148,29 @@ want to save it.
 
 ### Update the code map
 
+The concept of code map really assumes the code is not changing. Think about
+it, it's actually hard to tell whether a new file/symbol/definition is the
+"updated version" of an old one, so it's hard to "update" a code map. Remember,
+it's generally suggested to avoid using code map for a very long code reading
+session during which the code changes.
+
+That said, Citre still offers some functionalities to deal with such
+situations.
+
 The lines in definition lists are fetched from the files in real time. Changes
 in the file can mess it up, then you can't jump to the right definition
-locations.
+locations. This will tell you that you need to update the code map. You should
+update the tags file first, then use the following commands to update the code
+map.
 
-If this happens, you should update the tags file first, then type `U`
-(`citre-code-map-update`) in the code map to rescan definitions of all symbols
-and update the code map.
+Type `U` (`citre-code-map-update`) in the code map to rescan definitions of all
+symbols and update them. All all hidden definitions will be unhide. Renamed
+files/symbols won't cause their "old versions" to be deleted in the code map.
 
-Remember that the concept of code map really assumes the code is not changing
-(think about it, there's actually no way to tell whether a new definition
-location is the "updated version" of an old one), so all hidden definitions
-will be unhide.
+To deal with renamed/missing files, type `M` (`citre-code-map-mark-missing`) in
+a file list to mark all missing files. Then you can type `d` to delete them, or
+`R` to replace the current one with a new file.
 
-Updating can't handle situations where files or symbols are renamed (again, we
-really don't know which is the "updated version"), so they will be preserved
-even if there's no such file, or the definitions of the symbol can't be found.
-Type `R` (`citre-code-map-replace-file`) in a file list to replace current file
-with its renamed version manually.
-
-Even you can deal with file changes in these ways, it's kind of awkward and
-inefficient. Remember it's generally suggested to avoid using code map for a
-very long code reading session during which the code changes.
+To deal with renamed/missing symbols, type `M` in a symbol list to mark all
+symbols that don't have definitions. Then you can type `d` to delete them, or
+open the file and use `citre-see-symbol-in-code-map` to add new symbols.

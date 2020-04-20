@@ -48,11 +48,12 @@
     (define-key map (kbd "b") 'citre-code-map-backward)
     (define-key map (kbd "o") 'citre-code-map-open-file)
     (define-key map (kbd "m") 'citre-code-map-mark)
-    (define-key map (kbd "M") 'citre-code-map-unmark-all)
+    (define-key map (kbd "u") 'citre-code-map-unmark-all)
     (define-key map (kbd "h") 'citre-code-map-hide)
     (define-key map (kbd "d") 'citre-code-map-delete)
     (define-key map (kbd "k") 'citre-code-map-keep)
     (define-key map (kbd "S") 'citre-code-map-show-all)
+    (define-key map (kbd "M") 'citre-code-map-mark-missing)
     (define-key map (kbd "R") 'citre-code-map-replace-file)
     (define-key map (kbd "U") 'citre-code-map-update)
     (define-key map [remap save-buffer] 'citre-save-code-map)
@@ -785,17 +786,6 @@ really want to delete them."
       (citre--set-code-map-disk-state t)
       (citre--code-map-refresh 'remove-item))))
 
-;; TODO: I once thought about handling missing files in this function, but it's
-;; very hard.  Let's do it this way: we don't care if the file is missing, but
-;; we offer a command `citre-code-map-mark-missings' to mark all missing files,
-;; then another command `citre-code-map-replace-item' to replace a file with
-;; another.
-
-;; It is generally hard to deal with changes.  We should also consider how to
-;; handle renamed symbols.  Here's one way: the mark missings command can also
-;; mark symbols that don't have definitions, and the replace command can modify
-;; a symbol and rescan its definitions.
-
 ;; In the future ctags will have the ability to handle a source tree, which
 ;; means it knows all external entities (all the imports/includes/dependencies
 ;; ) of a file.  So finding the definition of a symbol is not just match its
@@ -834,6 +824,32 @@ of an old one."
       ;; It does a complete refresh, which is needed since the definition lists
       ;; are completely changed.
       (citre--code-map-refresh 'switch-page))))
+
+(defun citre-code-map-mark-missing ()
+  "Mark missing items in a code map.
+This means missing files in a file list, or symbols that don't
+have definitions in a symbol list."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (let ((pos-depth (nth 3 (citre--code-map-position))))
+    (when (= pos-depth 2)
+      (user-error "Mark missing is only for files and symbols"))
+    (citre-code-map-unmark-all)
+    (pcase pos-depth
+      (0 (save-excursion
+           (goto-char (point-min))
+           (while (not (eobp))
+             (unless (file-exists-p (expand-file-name
+                                     (tabulated-list-get-id)
+                                     (citre--project-root)))
+               (citre--tabulated-list-mark))
+             (forward-line))))
+      (1 (save-excursion
+           (goto-char (point-min))
+           (while (not (eobp))
+             (unless (citre-get-records (tabulated-list-get-id) 'exact)
+               (citre--tabulated-list-mark))
+             (forward-line)))))))
 
 (defun citre-code-map-replace-file ()
   "Replace current file.
