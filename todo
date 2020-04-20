@@ -118,6 +118,15 @@
     `citre-common-dependency-alist` and the specified dependencies since they
     are for things in the project root.
 
+- imenu integration
+
+    Let ctags scan current file to generate imenu index. If the file is
+    modified, we could save it in a temp file first, but maybe this is a bit
+    overkill. Also, probably we don't want to generate a tags file, but it's
+    unclear how to pipe the ctags output to readtags. The "process
+    substitution" technique suggested below is one way to do this, but readtags
+    may be not guaranteed to read from a pipe in the future.
+
 # API
 
 - Rework the APIs so we can use readtags to do filtering based on any fields.
@@ -213,6 +222,13 @@
 
     Ref: https://github.com/universal-ctags/libreadtags/issues/17 and
     https://github.com/universal-ctags/ctags/pull/2459#issuecomment-597906216.
+
+  - We need a `citre-doctor`. It sees if the user is using universal ctags,
+    prints the current project root, and tags files in use.
+
+    If the user is using universal ctags, then we can look into the pseudo tags
+    and see if the output format is indeed u-ctags, and are the needed fields
+    presented in the tags files.
 
 # Selectrum integration
 
