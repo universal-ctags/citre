@@ -507,9 +507,10 @@ if project root PROJECT is non-nil, use that project instead."
     (unless (cl-member project citre--project-info-alist
                        :key #'car :test #'equal)
       (user-error "Citre mode not enabled for %s" project))
-    (let* ((program (if citre-readtags-program
-                        (format "'%s'" citre-readtags-program)
-                      "readtags"))
+    (let* ((program (or citre-readtags-program "readtags"))
+           ;; Strip the text properties first so we can eval it in a backquote
+           ;; form later to get just the symbol itself.
+           (symbol (substring-no-properties symbol))
            (case-sensitive (pcase citre-case-sensitivity
                              ('sensitive t)
                              ('insensitive nil)
@@ -518,17 +519,20 @@ if project root PROJECT is non-nil, use that project instead."
                                        (if (string= (downcase symbol) symbol)
                                            nil t)))))
            (op (pcase match
-                 ('prefix "prefix?")
-                 ('substring "substr?")
-                 ('exact "eq?")))
+                 ('prefix 'prefix?)
+                 ('substring 'substr?)
+                 ('exact 'eq?)))
            (symbol-expr (if case-sensitive
-                            (format "\"%s\"" symbol)
-                          (format "(downcase \"%s\")" symbol)))
+                            symbol
+                          ;; Since SYMBOL is a string, when we format this list
+                          ;; with "%s" later, we automatically get double
+                          ;; quotes around SYMBOL.
+                          `(downcase ,symbol)))
            (name-expr (if case-sensitive
-                          "$name"
-                        "(downcase $name)"))
-           (expr (format "(%s %s %s)" op name-expr symbol-expr))
-           (command (format "%s -t '%s' -Q '%s' -nel" program file expr))
+                          '$name
+                        '(downcase $name)))
+           (command (format "'%s' -t '%s' -Q '%S' -nel" program file
+                            `(,op ,name-expr ,symbol-expr)))
            (default-directory project))
       (split-string
        (shell-command-to-string command)
