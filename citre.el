@@ -377,8 +377,23 @@ MATCH is a symbol, which can be:
          (name-expr (if case-sensitive
                         '$name
                       '(downcase $name)))
-         (command (format "'%s' -t '%s' -Q '%S' -nel" program tagsfile
-                          `(,op ,name-expr ,symbol-expr))))
+         (command
+          (cond
+           ;; Use NAME action when possible.  In some situations the NAME
+           ;; action is faster then filtering using sexp, since it uses binary
+           ;; search in sorted tags files for case-sensitive searches.
+           ((and (eq match 'exact) case-sensitive)
+            (format "'%s' -t '%s' -ne - '%s'" program tagsfile symbol))
+           ((and (eq match 'exact) (not case-sensitive))
+            (format "'%s' -t '%s' -nei - '%s'" program tagsfile symbol))
+           ((and (eq op 'prefix?) case-sensitive)
+            (format "'%s' -t '%s' -nep - '%s'" program tagsfile symbol))
+           ((and (eq op 'prefix?) (not case-sensitive))
+            (format "'%s' -t '%s' -nepi - '%s'" program tagsfile symbol))
+           ;; If we can't use the NAME action, use sexp based filtering.
+           (t
+            (format "'%s' -t '%s' -Q '%S' -nel" program tagsfile
+                    `(,op ,name-expr ,symbol-expr))))))
     (split-string
      (shell-command-to-string command)
      "\n" t)))
