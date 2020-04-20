@@ -53,6 +53,7 @@
     (define-key map (kbd "d") 'citre-code-map-delete)
     (define-key map (kbd "k") 'citre-code-map-keep)
     (define-key map (kbd "S") 'citre-code-map-show-all)
+    (define-key map (kbd "R") 'citre-code-map-replace-file)
     (define-key map (kbd "U") 'citre-code-map-update)
     (define-key map [remap save-buffer] 'citre-save-code-map)
     (define-key map [remap find-file] 'citre-load-code-map)
@@ -480,6 +481,8 @@ About the argument STYLE, see the docstring of
 STR is the file name or symbol name."
   (list str (vector str)))
 
+;; TODO: If we extract a function in citre.el to convert from a record to a
+;; location string, this can be simplified.
 (defun citre--code-map-make-entry-definition (record)
   "Make entry for definition locations in the code map buffer.
 RECORD is the record of the definition."
@@ -677,6 +680,10 @@ region.  This should be intuitive to use."
         (citre--tabulated-list-unmark))
       (forward-line))))
 
+;; TODO: hide, delete, keep, update and replace file can all cause current
+;; location becomes invalid.  Some of them are handled, some actually doesn't
+;; cause any problem, but we should make it valid at any time to prevent
+;; possible errors.
 (defun citre-code-map-hide ()
   "Hide selected definitions, or current definition."
   (interactive)
@@ -827,6 +834,37 @@ of an old one."
       ;; It does a complete refresh, which is needed since the definition lists
       ;; are completely changed.
       (citre--code-map-refresh 'switch-page))))
+
+(defun citre-code-map-replace-file ()
+  "Replace current file.
+Use this when a file in file list doesn't exist due to changes of
+the code."
+  (interactive)
+  (citre--error-if-not-in-code-map)
+  (let* ((pos (citre--code-map-position))
+         (current-file (tabulated-list-get-id))
+         (last-browsed-file (nth 0 pos))
+         (pos-depth (nth 3 pos)))
+    (when (> pos-depth 0)
+      (user-error "Replace is only for files"))
+    (let ((file (citre--relative-path
+                 (expand-file-name
+                  (read-file-name "New file name: "
+                                  (file-name-directory
+                                   (expand-file-name current-file
+                                                     (citre--project-root)))
+                                  nil t)))))
+      (when (cl-member file (citre--current-list-in-code-map)
+                       :key #'car :test #'equal)
+        (user-error "Duplicated file found in current list"))
+      (setf (car (nth (cl-position current-file (citre--get-in-code-map)
+                                   :key #'car :test #'equal)
+                      (citre--get-in-code-map)))
+            file)
+      (when (equal last-browsed-file current-file)
+        (setf (car (citre--code-map-position)) file)))
+    (citre--set-code-map-disk-state t)
+    (citre--code-map-refresh)))
 
 (defun citre-save-code-map (&optional project)
   "Save code map to a file.

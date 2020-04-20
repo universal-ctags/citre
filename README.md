@@ -161,9 +161,12 @@ Remember that the concept of code map really assumes the code is not changing
 location is the "updated version" of an old one), so all hidden definitions
 will be unhide.
 
-Currently, updating the code map can't handle situations where files in the
-file list is missing/renamed (don't worry too much, all symbols under it would
-still be preserved). If a symbol is renamed, Citre also won't know that. In the
-future, commands that deal with such situations will be offered, but it's
-generally suggested to avoid using code map for a very long code reading
-session during which the code changes.
+Updating can't handle situations where files or symbols are renamed (again, we
+really don't know which is the "updated version"), so they will be preserved
+even if there's no such file, or the definitions of the symbol can't be found.
+Type `R` (`citre-code-map-replace-file`) in a file list to replace current file
+with its renamed version manually.
+
+Even you can deal with file changes in these ways, it's kind of awkward and
+inefficient. Remember it's generally suggested to avoid using code map for a
+very long code reading session during which the code changes.
