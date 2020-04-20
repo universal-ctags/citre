@@ -723,10 +723,12 @@ not affected by its surroundings."
   "Return PATH but relative to current project root.
 If PATH is not under the project, it's directly returned.  If
 project root PROJECT is specified, use that project instead."
-  (let* ((project (or project (citre--project-root))))
+  (let* ((project (when project (expand-file-name project)))
+         (project (or project (citre--project-root)))
+         (path (expand-file-name path)))
     (if (string-prefix-p project path)
         (file-relative-name path project)
-      project)))
+      path)))
 
 ;;;; Action: jump to definition (based on xref)
 
