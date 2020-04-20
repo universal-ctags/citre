@@ -121,7 +121,7 @@ or current item if there are no selected items.
 
 Type `S` (`citre-code-map-show-all`) to show the hidden items. They will be
 automatically marked so that you can unmark some of them, or mark more items,
-and hide all of them again. If you don't need this, type `M` to unmark all.
+and hide all of them again. If you don't need this, type `u` to unmark all.
 
 Type `k` (`citre-code-map-keep`) to keep the selected items and hide all other
 items.
