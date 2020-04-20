@@ -507,9 +507,7 @@ if project root PROJECT is non-nil, use that project instead."
     (unless (cl-member project citre--project-info-alist
                        :key #'car :test #'equal)
       (user-error "Citre mode not enabled for %s" project))
-    (let* ((program (if citre-readtags-program
-                        (format "'%s'" citre-readtags-program)
-                      "readtags"))
+    (let* ((program (or citre-readtags-program "readtags"))
            (symbol (substring-no-properties symbol))
            (case-sensitive (pcase citre-case-sensitivity
                              ('sensitive t)
@@ -528,7 +526,7 @@ if project root PROJECT is non-nil, use that project instead."
            (name-expr (if case-sensitive
                           '$name
                         '(downcase $name)))
-           (command (format "%s -t '%s' -Q '%S' -nel" program file
+           (command (format "'%s' -t '%s' -Q '%S' -nel" program file
                             `(,op ,name-expr ,symbol-expr)))
            (default-directory project))
       (split-string
