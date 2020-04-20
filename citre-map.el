@@ -681,25 +681,28 @@ region.  This should be intuitive to use."
         (citre--tabulated-list-unmark))
       (forward-line))))
 
-;; TODO: hide, delete, keep, update and replace file can all cause current
-;; location becomes invalid.  Some of them are handled, some actually doesn't
-;; cause any problem, but we should make it valid at any time to prevent
-;; possible errors.
 (defun citre-code-map-hide ()
   "Hide selected definitions, or current definition."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos-depth (nth 3 (citre--code-map-position)))
+         (current-record (nth 2 (citre--code-map-position)))
          (pos-to-hide (or (citre--tabulated-list-selected-positions)
                           (citre--tabulated-list-marked-positions)
-                          (list (point)))))
+                          (list (point))))
+         (hide-current-record-flag nil))
     (when (< pos-depth 2)
       (user-error "Hide can only be used on definitions"))
     (when pos-to-hide
       (save-excursion
         (dolist (pos pos-to-hide)
           (goto-char pos)
-          (citre--set-hide-state (tabulated-list-get-id) t)))
+          (let ((id (tabulated-list-get-id)))
+            (citre--set-hide-state id t)
+            (when (equal id current-record)
+              (setq hide-current-record-flag t)))))
+      (when hide-current-record-flag
+        (setf (nth 2 (citre--code-map-position)) nil))
       (citre--set-code-map-disk-state t)
       (citre--code-map-refresh 'remove-item))))
 
@@ -711,9 +714,14 @@ be undone, so Citre will ask if you really want to delete them."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos-depth (nth 3 (citre--code-map-position)))
+         ;; TODO: we must be precise on the word "current".  In the code,
+         ;; sometimes it refers to the thing in current line, and sometimes the
+         ;; current thing in `citre--code-map-position-alist'.
+         (current-item (nth pos-depth (citre--code-map-position)))
          (pos-to-delete (or (citre--tabulated-list-selected-positions)
                             (citre--tabulated-list-marked-positions)
-                            (list (point)))))
+                            (list (point))))
+         (delete-current-item-flag nil))
     (when (= pos-depth 2)
       (user-error "Only symbols or files can be removed"))
     (when (and pos-to-delete
@@ -721,7 +729,13 @@ be undone, so Citre will ask if you really want to delete them."
       (save-excursion
         (dolist (pos pos-to-delete)
           (goto-char pos)
-          (citre--delete-item-in-code-map (tabulated-list-get-id))))
+          (let ((id (tabulated-list-get-id)))
+            (citre--delete-item-in-code-map (tabulated-list-get-id))
+            (when (equal id current-item)
+              (setq delete-current-item-flag t)))))
+      (when delete-current-item-flag
+        (dolist (i (number-sequence pos-depth 2))
+          (setf (nth i (citre--code-map-position)) nil)))
       (citre--set-code-map-disk-state t)
       (citre--code-map-refresh 'remove-item))))
 
@@ -758,9 +772,11 @@ really want to delete them."
   (interactive)
   (citre--error-if-not-in-code-map)
   (let* ((pos-depth (nth 3 (citre--code-map-position)))
+         (current-item (nth pos-depth (citre--code-map-position)))
          (pos-to-keep (or (citre--tabulated-list-selected-positions)
                           (citre--tabulated-list-marked-positions)))
-         (number-of-items (length (citre--current-list-in-code-map))))
+         (number-of-items (length (citre--current-list-in-code-map)))
+         (remove-current-item-flag nil))
     (when (= number-of-items (length pos-to-keep))
       (pcase pos-depth
         (2 (user-error "Nothing left to hide"))
@@ -773,7 +789,10 @@ really want to delete them."
              (goto-char (point-min))
              (while (not (eobp))
                (unless (memq (point) pos-to-keep)
-                 (citre--set-hide-state (tabulated-list-get-id) t))
+                 (let ((id (tabulated-list-get-id)))
+                   (citre--set-hide-state (tabulated-list-get-id) t)
+                   (when (equal id current-item)
+                     (setq remove-current-item-flag t))))
                (forward-line))))
         (_ (when (y-or-n-p
                   "This can't be undone.  Really delete unselected item(s)? ")
@@ -781,8 +800,14 @@ really want to delete them."
                (goto-char (point-min))
                (while (not (eobp))
                  (unless (memq (point) pos-to-keep)
-                   (citre--delete-item-in-code-map (tabulated-list-get-id)))
+                   (let ((id (tabulated-list-get-id)))
+                     (citre--delete-item-in-code-map (tabulated-list-get-id))
+                     (when (equal id current-item)
+                       (setq remove-current-item-flag t))))
                  (forward-line))))))
+      (when remove-current-item-flag
+        (dolist (i (number-sequence pos-depth 2))
+          (setf (nth i (citre--code-map-position)) nil)))
       (citre--set-code-map-disk-state t)
       (citre--code-map-refresh 'remove-item))))
 
