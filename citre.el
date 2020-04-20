@@ -519,17 +519,17 @@ if project root PROJECT is non-nil, use that project instead."
                                        (if (string= (downcase symbol) symbol)
                                            nil t)))))
            (op (pcase match
-                 ('prefix "prefix?")
-                 ('substring "substr?")
-                 ('exact "eq?")))
+                 ('prefix 'prefix?)
+                 ('substring 'substr?)
+                 ('exact 'eq?)))
            (symbol-expr (if case-sensitive
-                            (format "\"%s\"" symbol)
-                          (format "(downcase \"%s\")" symbol)))
+                            symbol
+                          `(downcase ,symbol)))
            (name-expr (if case-sensitive
-                          "$name"
-                        "(downcase $name)"))
-           (expr (format "(%s %s %s)" op name-expr symbol-expr))
-           (command (format "%s -t '%s' -Q '%s' -nel" program file expr))
+                          '$name
+                        '(downcase $name)))
+           (command (format "%s -t '%s' -Q '%S' -nel" program file
+                            `(,op ,name-expr ,symbol-expr)))
            (default-directory project))
       (split-string
        (shell-command-to-string command)
