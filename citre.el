@@ -510,6 +510,7 @@ if project root PROJECT is non-nil, use that project instead."
     (let* ((program (if citre-readtags-program
                         (format "'%s'" citre-readtags-program)
                       "readtags"))
+           (symbol (substring-no-properties symbol))
            (case-sensitive (pcase citre-case-sensitivity
                              ('sensitive t)
                              ('insensitive nil)
