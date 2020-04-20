@@ -529,20 +529,22 @@ window.  Its value can be:
     (tabulated-list-init-header)
     (citre--code-map-print style)))
 
-(defun citre--open-code-map (&optional project)
+(defun citre--open-code-map (&optional project current-window)
   "Open code map for current project.
-If project root PROJECT is given, use that project instead."
+If project root PROJECT is given, use that project instead.  If
+CURRENT-WINDOW is non-nil, use current window."
   (let* ((project (or project (citre--project-root)))
          (map-buf-name (format "*Code map: %s*"
-                               (abbreviate-file-name project))))
-    (if (get-buffer map-buf-name)
-        (progn
-          (pop-to-buffer (get-buffer map-buf-name))
-          (citre--code-map-refresh 'switch-page))
-      (pop-to-buffer (generate-new-buffer map-buf-name))
+                               (abbreviate-file-name project)))
+         (map-buf-presented (get-buffer map-buf-name))
+         (map-buf (or map-buf-presented (generate-new-buffer map-buf-name))))
+    (if current-window
+        (switch-to-buffer map-buf)
+      (pop-to-buffer map-buf))
+    (unless map-buf-presented
       (citre-code-map-mode)
-      (setq citre-project-root project)
-      (citre--code-map-refresh 'switch-page))))
+      (setq citre-project-root project))
+    (citre--code-map-refresh 'switch-page)))
 
 (defun citre--error-if-not-in-code-map ()
   "Signal an error if not browsing a code map."
@@ -847,7 +849,6 @@ When PROJECT is specified, save the code map of PROJECT."
       (citre--set-code-map-disk-state nil saveto project)
       (message "Code map of %s saved" project))))
 
-;; TODO: This should use current window.
 (defun citre-load-code-map ()
   "Load code map from file."
   (interactive)
@@ -867,7 +868,7 @@ When PROJECT is specified, save the code map of PROJECT."
           (setf (citre--get-in-code-map nil nil project) (plist-get data :map))
           (setf (citre--code-map-position project) (plist-get data :position))
           (citre--set-code-map-disk-state nil readfrom project)
-          (citre--open-code-map project)
+          (citre--open-code-map project 'current-window)
           (message "Code map of %s loaded" project))))))
 
 ;;;; Setup
