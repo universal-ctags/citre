@@ -577,6 +577,13 @@ non-nil."
 
 ;;;;; Main APIs
 
+;; TODO: When format a nil field with "%s", it becomes "nil", which is not
+;; suitable for showing to the user.  Currently I don't know what's the best
+;; way to deal with this, but thinking from a tags file's perspective, since it
+;; never produce a field with only the field name but no value, there's no
+;; difference if we use nil or empty string to represent it, so it's good to
+;; directly use empty string in the records, or make `citre-get-field' not
+;; return nil.
 (defun citre-get-field (field record)
   "Get FIELD from RECORD.
 RECORD is an output from `citre--parse-line'.  FIELD is a symbol
@@ -596,12 +603,13 @@ that interactive commands should use, and ideally should only
 use."
   (cond
    ((eq field 'line)
-    (with-temp-buffer
-      (insert-file-contents (citre-get-field 'path record))
-      (goto-char (point-min))
-      (forward-line (1- (citre-get-field 'linum record)))
-      (string-trim (buffer-substring (line-beginning-position)
-                                     (line-end-position)))))
+    (when (file-exists-p (citre-get-field 'path record))
+      (with-temp-buffer
+        (insert-file-contents (citre-get-field 'path record))
+        (goto-char (point-min))
+        (forward-line (1- (citre-get-field 'linum record)))
+        (string-trim (buffer-substring (line-beginning-position)
+                                       (line-end-position))))))
    (t
     (let* ((n (pcase field
                 ('tag 0)
