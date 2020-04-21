@@ -1316,29 +1316,25 @@ vary, depending on whether font lock mode is enabled."
              (or (nth 4 (syntax-ppss pos))
                  (nth 3 (syntax-ppss pos))))))))
 
-(defun citre--search-backward-in-code (str &optional bound noerror count)
+(defun citre--search-backward-in-code (str &optional bound count)
   "Search backward from point for STR, and skip comments and strings.
-About the optional arguments BOUND, NOERROR and COUNT, see the
-docstring of `search-backward'.
+About the optional arguments BOUND and COUNT, see the docstring
+of `search-backward'.
 
 This function will return the point at the beginning of the first
 matched STR.  When the search fails, it won't signal an error,
 but return nil.  This is different from `search-backward'."
-  (let ((pos-orig (point))
-        (pos nil))
+  (let ((pos nil))
     (save-excursion
       (cl-loop
        while
-       (ignore-errors (progn
-                        (search-backward str bound noerror count)
-                        t))
+       (search-backward str bound t count)
        do
        (when (citre--pos-in-code-p)
          (setq pos (point))
          (cl-return))))
-    (if pos
-        (goto-char pos)
-      (goto-char pos-orig))))
+    (when pos
+      (goto-char pos))))
 
 ;; TODO: Current implementation (of this and the next function) assumes the
 ;; expression is balanced (since we use `up-list' and `forward-list'). We
