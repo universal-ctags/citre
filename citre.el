@@ -342,6 +342,64 @@ by auto completion."
 
 ;;;;; Filter and parse lines from tags file
 
+(defun citre--disable-single-quote-as-terminator (string)
+  ;; TIP: Help mode renders single quotes in docstrings as curly single quotes,
+  ;; and \\=' prevents that.  Eval this defun form and use `describe-function'
+  ;; to read this docstring.
+  "Disable the effect of single quotes as shell string terminators in STRING.
+This function assumes the situation where STRING is to be passed
+to `format' function like:
+
+  (shell-command (format \"... \\='%s\\='\" STRING))
+
+Assume the formatted \\='%s\\=' will be operated by the command
+as a string.  An attacker can pass an arbitrary command to the
+shell by putting single quotes in STRING like:
+
+  (let ((string \"arg\\='; rm -rf /\\='\"))
+    (shell-command (format \"... \\='%s\\='\" STRING)))
+
+Then \\='%s\\=' is formatted as:
+
+  \\='arg\\='; rm -rf /\\='\\='
+
+Now the command operates on \\='arg\\=' as a string, and the
+dangerous rm -rf / comes out of the string and be executed.
+
+To mitigate such attack, this function replaces all \\=' in
+STRING with \\='\"\\='\"\\=', which disables their meaning as
+string terminator.  You can use this like:
+
+  (let* ((string \"arg\\='; rm -rf /\\='\")
+         (string (citre--disable-single-quote-as-terminator string))))
+    (shell-command (format \"... \\='%s\\='\" STRING)))
+
+Then \\='%s\\=' is formatted as:
+
+  \\='arg\\='\"\\='\"'; rm -rf /\\='\"\\='\"\\='
+
+Now the rm -rf / doesn't come out of the string.
+
+This is for use in `citre--get-lines', where its SYMBOL and
+TAGSFILE argument are exactly in this situation.  Unintentional
+attack may happen when calling it in lisp programs, or in a major
+mode whose syntax definition allows symbols to have single quotes
+in them, and the user grab such a symbol and let Citre process
+it."
+  (replace-regexp-in-string "'" "'\"'\"'" string))
+
+(defun citre--format-shell-command (string &rest objects)
+  "Format OBJECTS to produce shell commands.
+STRING is the format string.  This prevents certain kind of
+command injection, by applying
+`citre--disable-single-quote-as-terminator' to the printed
+representation of each of OBJECTS first, see its docstring for
+details."
+  (apply #'format string
+         (mapcar #'citre--disable-single-quote-as-terminator
+                 (mapcar (lambda (object) (format "%s" object))
+                         objects))))
+
 (defun citre--get-lines (symbol match tagsfile)
   "Get lines in tags file TAGSFILE that match SYMBOL.
 This function returns a list of the lines.  SYMBOL is a string.
@@ -383,17 +441,22 @@ MATCH is a symbol, which can be:
            ;; action is faster then filtering using sexp, since it uses binary
            ;; search in sorted tags files for case-sensitive searches.
            ((and (eq match 'exact) case-sensitive)
-            (format "'%s' -t '%s' -ne - '%s'" program tagsfile symbol))
+            (citre--format-shell-command "'%s' -t '%s' -ne - '%s'"
+                                         program tagsfile symbol))
            ((and (eq match 'exact) (not case-sensitive))
-            (format "'%s' -t '%s' -nei - '%s'" program tagsfile symbol))
+            (citre--format-shell-command "'%s' -t '%s' -nei - '%s'"
+                                         program tagsfile symbol))
            ((and (eq op 'prefix?) case-sensitive)
-            (format "'%s' -t '%s' -nep - '%s'" program tagsfile symbol))
+            (citre--format-shell-command "'%s' -t '%s' -nep - '%s'"
+                                         program tagsfile symbol))
            ((and (eq op 'prefix?) (not case-sensitive))
-            (format "'%s' -t '%s' -nepi - '%s'" program tagsfile symbol))
+            (citre--format-shell-command "'%s' -t '%s' -nepi - '%s'"
+                                         program tagsfile symbol))
            ;; If we can't use the NAME action, use sexp based filtering.
            (t
-            (format "'%s' -t '%s' -Q '%S' -nel" program tagsfile
-                    `(,op ,name-expr ,symbol-expr))))))
+            (citre--format-shell-command "'%s' -t '%s' -Q '%S' -nel"
+                                         program tagsfile
+                                         `(,op ,name-expr ,symbol-expr))))))
     (split-string
      (shell-command-to-string command)
      "\n" t)))
