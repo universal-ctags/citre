@@ -145,7 +145,7 @@ If project root PROJECT is given, use that project instead.
 Notice: Since this is a macro, the arguments are considered to be
 non-nil as long as a form that is non-nil is presented, even when
 its value is nil."
-  (let* ((project (or project (citre--project-root))))
+  (let* ((project (or project '(citre--project-root))))
     (if file
         (if symbol
             `(alist-get ,symbol (citre--get-in-code-map ,file nil ,project)
@@ -162,7 +162,7 @@ If project root PROJECT is given, use that project instead.
 Notice: Since this is a macro, the arguments are considered to be
 non-nil as long as a form that is non-nil is presented, even when
 its value is nil."
-  (let ((project (or project (citre--project-root))))
+  (let ((project (or project '(citre--project-root))))
     `(alist-get ,project citre--code-map-position-alist
                 nil nil #'equal)))
 
