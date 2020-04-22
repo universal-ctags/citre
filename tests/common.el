@@ -22,4 +22,4 @@ FILE is a relative path against the test case directory.
 This is for use in the batch mode.  You should start Emacs with
 the working directory being a test case directory to ensure this
 work correctly."
-  (expand-file-name (concat default-directory f)))
+  (expand-file-name (concat default-directory file)))
