@@ -798,10 +798,11 @@ project root PROJECT is specified, use that project instead."
 
 (defun citre--subseq (seq interval)
   "Return the subsequence of SEQ in INTERVAL.
-INTERVAL is a cons pair, its car is the starting index, cdr is
-the ending index (not included).  Cdr can be smaller than car,
-then the result will go from the index car, to the end of SEQ,
-then back to the start of SEQ, and end before the index cdr."
+INTERVAL is a cons pair of non-negative integers.  Its car is the
+starting index, cdr is the ending index (not included).  Cdr can
+be smaller than car, then the result will go from the index car,
+to the end of SEQ, then back to the start of SEQ, and end before
+the index cdr."
   (let ((start (car interval))
         (end (cdr interval)))
     (if (<= start end)
@@ -875,7 +876,7 @@ line number.")
 (defvar-local citre-peek--displayed-locations-interval nil
   "The interval of displayed locations in `citre-peek--locations'.
 This is a cons pair, its car is the index of the first displayed
-location, and cdr is the index of the last one.")
+location, and cdr is the index of the last one plus one.")
 
 (defvar-local citre-peek--location-index nil
   "The index of current location in `citre-peek--locations'.")
@@ -993,13 +994,10 @@ N can be negative."
            (displayed-locs (citre--subseq
                             citre-peek--locations
                             citre-peek--displayed-locations-interval))
-           (displayed-loc-nums
-            (- (cdr citre-peek--displayed-locations-interval)
-               (car citre-peek--displayed-locations-interval)))
            (displayed-index
             (citre--index-in-interval citre-peek--location-index
                                       citre-peek--displayed-locations-interval
-                                      displayed-loc-nums)))
+                                      (length citre-peek--locations))))
       ;; Trim the location strings.
       (setq displayed-locs
             (mapcar #'citre--fit-line displayed-locs))
