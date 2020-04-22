@@ -425,6 +425,27 @@ non-nil."
 
 ;;;;; APIs
 
+;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
+(defun citre-get-records (symbol match tagsfile &optional project)
+  "Get records of tags in tags file TAGSFILE that match SYMBOL.
+MATCH is how should the tags match SYMBOL.  See the docstring of
+`citre--get-lines' for details.
+
+When relative path is used in TAGSFILE, it's expanded against
+PROJECT, or current project root if PROJECT is not specified.
+
+Each element in the returned value is a list containing the tag
+and some of its fields, which can be utilized by
+`citre-get-field'.
+
+This function uses `citre--get-lines' to get lines from tags
+file, and `citre--parse-line' to parse each line.  See their
+docstrings to get an idea of how this works.  `citre-get-records'
+and `citre-get-field' are the 2 main APIs that interactive
+commands should use, and ideally should only use."
+  (mapcar (lambda (line) (citre--parse-line line project))
+          (citre--get-lines symbol match tagsfile)))
+
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
 ;; way to deal with this, but thinking from a tags file's perspective, since it
@@ -466,27 +487,6 @@ use."
                 ('path 3)
                 ('linum 4))))
       (nth n record)))))
-
-;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
-(defun citre-get-records (symbol match tagsfile &optional project)
-  "Get records of tags in tags file TAGSFILE that match SYMBOL.
-MATCH is how should the tags match SYMBOL.  See the docstring of
-`citre--get-lines' for details.
-
-When relative path is used in TAGSFILE, it's expanded against
-PROJECT, or current project root if PROJECT is not specified.
-
-Each element in the returned value is a list containing the tag
-and some of its fields, which can be utilized by
-`citre-get-field'.
-
-This function uses `citre--get-lines' to get lines from tags
-file, and `citre--parse-line' to parse each line.  See their
-docstrings to get an idea of how this works.  `citre-get-records'
-and `citre-get-field' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre--parse-line line project))
-          (citre--get-lines symbol match tagsfile)))
 
 ;;;; Utils layer
 
