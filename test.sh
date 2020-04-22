@@ -28,7 +28,8 @@ for t in tests/*/test.el; do
 	  -f ert-run-tests-batch-and-exit; then
 	 error "testing is failed in $d"
      fi
-     )
+     exit 0
+     ) || exit 1
 done
 
 echo "OK"
