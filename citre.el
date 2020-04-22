@@ -984,6 +984,7 @@ N can be negative."
     (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
       (move-overlay citre-peek--ov overlay-pos overlay-pos))
     (let* ((loc (nth citre-peek--location-index citre-peek--locations))
+           (loc-numbers (length citre-peek--locations))
            (initial-newline (if (= (point-at-eol) (point-max))
                                 "\n" ""))
            (border (citre-peek--make-border))
@@ -994,10 +995,12 @@ N can be negative."
            (displayed-locs (citre--subseq
                             citre-peek--locations
                             citre-peek--displayed-locations-interval))
+           (count-info (format "(%s/%s)\n"
+                               (1+ citre-peek--location-index) loc-numbers))
            (displayed-index
             (citre--index-in-interval citre-peek--location-index
                                       citre-peek--displayed-locations-interval
-                                      (length citre-peek--locations))))
+                                      loc-numbers)))
       ;; Trim the location strings.
       (setq displayed-locs
             (mapcar #'citre--fit-line displayed-locs))
@@ -1012,10 +1015,12 @@ N can be negative."
             (setf (nth n displayed-locs)
                   (citre--add-face line
                                    (list :background citre-peek--bg-alt))))))
+      (citre--add-face count-info
+                       (list :background citre-peek--bg-alt))
       ;; And peek it!
       (overlay-put citre-peek--ov 'after-string
                    (concat initial-newline border file-content
-                           (string-join displayed-locs)
+                           (string-join displayed-locs) count-info
                            border)))))
 
 ;;;;; Commands
