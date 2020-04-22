@@ -456,6 +456,18 @@ care about this."
     (while (not (citre--get-project-info :size project))
       (sleep-for 0.05))))
 
+(defun citre--tags-file-path (&optional project)
+  "Find tags file in PROJECT and return its path.
+If PROJECT is not specified, use current project in buffer.  This
+looks up `citre-tags-files' to find the tags file needed."
+  (cl-some
+   (lambda (file)
+     (let ((tags-file (expand-file-name file
+                                        (or project
+                                            (citre--project-root)))))
+       (when (file-exists-p tags-file) tags-file)))
+   citre-tags-files))
+
 ;;;;; Ctags command
 
 (defun citre--default-ctags-command (&optional project)
@@ -490,8 +502,8 @@ If project root PROJECT is non-nil, use that project instead."
 
 ;;;;; Fetch and parse ctags output.
 
-(defun citre--get-lines (symbol match file &optional project)
-  "Get lines in tags file FILE that match SYMBOL.
+(defun citre--get-lines (symbol match tagsfile)
+  "Get lines in tags file TAGSFILE that match SYMBOL.
 This function returns a list of the lines.  SYMBOL is a string.
 MATCH is a symbol, which can be:
 
@@ -500,44 +512,38 @@ MATCH is a symbol, which can be:
 - `substring': Match all lines whose tags contain SYMBOL, case
   insensitively.
 - `exact': Match all lines whose tags are exactly SYMBOL, case
-  sensitively.
+  sensitively."
+  (let* ((program (or citre-readtags-program "readtags"))
+         ;; Strip the text properties first so we can eval it in a backquote
+         ;; form later to get just the symbol itself.
+         (symbol (substring-no-properties symbol))
+         (case-sensitive (pcase citre-case-sensitivity
+                           ('sensitive t)
+                           ('insensitive nil)
+                           ('smart (if (eq match 'exact)
+                                       t
+                                     (if (string= (downcase symbol) symbol)
+                                         nil t)))))
+         (op (pcase match
+               ('prefix 'prefix?)
+               ('substring 'substr?)
+               ('exact 'eq?)))
+         (symbol-expr (if case-sensitive
+                          symbol
+                        ;; Since SYMBOL is a string, when we format this list
+                        ;; with "%s" later, we automatically get double
+                        ;; quotes around SYMBOL.
+                        `(downcase ,symbol)))
+         (name-expr (if case-sensitive
+                        '$name
+                      '(downcase $name)))
+         (command (format "'%s' -t '%s' -Q '%S' -nel" program tagsfile
+                          `(,op ,name-expr ,symbol-expr))))
+    (split-string
+     (shell-command-to-string command)
+     "\n" t)))
 
-if project root PROJECT is non-nil, use that project instead."
-  (let ((project (or project (citre--project-root))))
-    (unless (cl-member project citre--project-info-alist
-                       :key #'car :test #'equal)
-      (user-error "Citre mode not enabled for %s" project))
-    (let* ((program (or citre-readtags-program "readtags"))
-           ;; Strip the text properties first so we can eval it in a backquote
-           ;; form later to get just the symbol itself.
-           (symbol (substring-no-properties symbol))
-           (case-sensitive (pcase citre-case-sensitivity
-                             ('sensitive t)
-                             ('insensitive nil)
-                             ('smart (if (eq match 'exact)
-                                         t
-                                       (if (string= (downcase symbol) symbol)
-                                           nil t)))))
-           (op (pcase match
-                 ('prefix 'prefix?)
-                 ('substring 'substr?)
-                 ('exact 'eq?)))
-           (symbol-expr (if case-sensitive
-                            symbol
-                          ;; Since SYMBOL is a string, when we format this list
-                          ;; with "%s" later, we automatically get double
-                          ;; quotes around SYMBOL.
-                          `(downcase ,symbol)))
-           (name-expr (if case-sensitive
-                          '$name
-                        '(downcase $name)))
-           (command (format "'%s' -t '%s' -Q '%S' -nel" program file
-                            `(,op ,name-expr ,symbol-expr)))
-           (default-directory project))
-      (split-string
-       (shell-command-to-string command)
-       "\n" t))))
-
+;; TODO: get rid of this PROJECT arg using pseudo tags.
 (defun citre--parse-line (line &optional project)
   "Parse a line from readtags output.
 LINE is the line to be parsed.  This returns a list consists of
@@ -623,47 +629,26 @@ use."
                 ('linum 4))))
       (nth n record)))))
 
-(defun citre-get-records (symbol match &optional project)
-  "Get records of tags in current project that match SYMBOL.
+;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
+(defun citre-get-records (symbol match tagsfile &optional project)
+  "Get records of tags in tags file TAGSFILE that match SYMBOL.
 MATCH is how should the tags match SYMBOL.  See the docstring of
-`citre--get-lines' for details.  If project root PROJECT is
-non-nil, use that project instead.
+`citre--get-lines' for details.
+
+When relative path is used in TAGSFILE, it's expanded against
+PROJECT, or current project root if PROJECT is not specified.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-field'.
-
-Normally, there's no need to set PROJECT, since current project
-will be used.  But there are situations where `citre-get-records'
-is called in a buffer which is not in the project.  For example,
-when getting records during a minibuffer session, or in some
-interactive UI that uses its own buffer.  In these situations,
-the project root needs to be provided.  The normal way is to call
-`citre--project-root', and let bound its returned value to a
-variable at the entry of the command, and before entering the
-interactive UI, so you can use it later:
-
-- For a simple UI, you can then pass it to `citre-get-records'.
-- For a complex UI that may call `citre-get-records' multiple
-  times, you can just set its `citre-project-root' to this
-  variable, so Citre will treat it as in the project.
 
 This function uses `citre--get-lines' to get lines from tags
 file, and `citre--parse-line' to parse each line.  See their
 docstrings to get an idea of how this works.  `citre-get-records'
 and `citre-get-field' are the 2 main APIs that interactive
 commands should use, and ideally should only use."
-  (let ((tags-file (cl-some
-                    (lambda (file)
-                      (let ((tags-file (expand-file-name file
-                                                         (or project
-                                                             (citre--project-root)))))
-                        (when (file-exists-p tags-file) tags-file)))
-                    citre-tags-files)))
-    (unless tags-file
-      (user-error "Tags file not found"))
-    (mapcar (lambda (line) (citre--parse-line line project))
-            (citre--get-lines symbol match tags-file project))))
+  (mapcar (lambda (line) (citre--parse-line line project))
+          (citre--get-lines symbol match tagsfile)))
 
 ;;;;; Helper functions
 
@@ -763,7 +748,7 @@ project root PROJECT is specified, use that project instead."
 (defun citre--xref-find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
   (cl-map 'list #'citre--make-xref-object
-          (citre-get-records symbol 'exact)))
+          (citre-get-records symbol 'exact (citre--tags-file-path))))
 
 (defun citre-xref-backend ()
   "Define the Citre backend for xref."
@@ -780,7 +765,8 @@ project root PROJECT is specified, use that project instead."
 (cl-defmethod xref-backend-identifier-completion-table
   ((_backend (eql citre)))
   "Return a function for xref to find all completions of a prefix."
-  (let ((project (citre--project-root)))
+  (let* ((project (citre--project-root))
+         (tagsfile (citre--tags-file-path project)))
     (lambda (str pred action)
       (let ((collection
              (cl-map 'list (apply-partially #'citre-get-field 'tag)
@@ -789,7 +775,7 @@ project root PROJECT is specified, use that project instead."
                      ;; knows nothing about the internal of a collection
                      ;; function, it will call this closure with an empty STR
                      ;; to get the whole collection anyway.
-                     (citre-get-records str 'prefix project))))
+                     (citre-get-records str 'prefix tagsfile project))))
         (complete-with-action action collection str pred)))))
 
 ;;;; Action: peek definition
@@ -1028,6 +1014,12 @@ N can be negative."
 (defun citre-peek ()
   "Peek the definition of the symbol at point."
   (interactive)
+  ;; TODO: You can actually use `citre-peek' without Citre mode, in principle.
+  ;; But the keymap used when peeking relies on Citre mode.  For now we'll
+  ;; prevent peeking without Citre mode enabled, but this restriction will be
+  ;; removed soon.
+  (unless citre-mode
+    (user-error "Citre mode not enabled"))
   ;; Quit existing peek sessions.
   (when (overlayp citre-peek--ov)
     (citre-peek-abort))
@@ -1126,12 +1118,16 @@ N can be negative."
 (defvar citre--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
 
-(defun citre-get-definition-locations (&optional symbol)
-  "Get locations of symbol at point, or SYMBOL if it's non-nil.
+(defun citre-get-definition-locations (&optional symbol tagsfile)
+  "Get locations from tags file TAGSFILE of symbol at point.
+If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
+not specified, find it automatically under current project root.
+
 The result is a list of strings, each string consists of relative
 file path and the line content, with text properties containing
 the kind, linum and absolute path of the tag."
   (let ((symbol (or symbol (thing-at-point 'symbol)))
+        (tagsfile (or tagsfile (citre--tags-file-path)))
         (location-str-generator
          (lambda (record)
            (citre--propertize
@@ -1145,8 +1141,9 @@ the kind, linum and absolute path of the tag."
     (unless symbol
       (user-error "No symbol at point"))
     (cl-map 'list location-str-generator
-            (citre-get-records symbol 'exact))))
+            (citre-get-records symbol 'exact tagsfile))))
 
+;; TODO: xref face for blinking should be used.
 (defun citre-recenter-and-blink ()
   "Recenter point and blink after point."
   (recenter)
@@ -1204,14 +1201,18 @@ definition that is currently peeked."
 (defvar-local citre-completion-in-region-function-orig nil
   "This stores the original `completion-in-region-function'.")
 
-(defun citre-get-completions (&optional symbol)
-  "Get completions of symbol at point, or SYMBOL if it's non-nil.
+(defun citre-get-completions (&optional symbol tagsfile)
+  "Get completions from TAGSFILE of symbol at point.
+If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
+not specified, fint it automatically under current project root.
+
 The result is a list of strings, each string is a tag name, with
 its text properties containing the kind and signature fields.
 
 It returns nil when the completion can't be done."
   ;; TODO: When inside a symbol, don't grab the part after point.
   (let ((symbol (or symbol (thing-at-point 'symbol)))
+        (tagsfile (or tagsfile (citre--tags-file-path)))
         (match (if citre-do-substring-completion
                    'substring 'prefix))
         (candidate-str-generator
@@ -1221,7 +1222,7 @@ It returns nil when the completion can't be done."
             record 'kind 'signature))))
     (when symbol
       (cl-map 'list candidate-str-generator
-              (citre-get-records symbol match)))))
+              (citre-get-records symbol match tagsfile)))))
 
 (defun citre-completion-in-region (start end collection &optional predicate)
   "A function replacing the default `completion-in-region-function'.
@@ -1471,18 +1472,16 @@ the appropriate function to call."
   "When in a function call, return a help string about the function.
 The help string consists of the function name and its signature,
 and can be used as eldoc message."
-  (let* ((func-name (citre--find-function-name))
-         (records (citre-get-records func-name 'exact))
-         (signature nil))
-    (cl-dolist (record records)
-      (setq signature (citre-get-field 'signature record))
-      (when signature (cl-return)))
+  (when-let* ((func-name (citre--find-function-name))
+              (records (citre-get-records func-name 'exact
+                                          (citre--tags-file-path))))
     (when func-name
       (concat
        (propertize func-name 'face 'font-lock-function-name-face)
        " "
-       (when signature
-         (propertize signature 'face 'italic))))))
+       (cl-dolist (record records)
+         (when-let ((signature (citre-get-field 'signature record)))
+           (cl-return signature)))))))
 
 ;;;; Misc commands
 
