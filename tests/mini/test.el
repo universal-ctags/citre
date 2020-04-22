@@ -1,14 +1,14 @@
 (ert-deftest test--get-lines ()
-  "Testing citre--get-lines"
+  "Testing `citre--get-lines'."
   (should (equal
-	   (with-me 
+	   (with-me
 	    (citre-mode 1)
 	    (citre--get-lines "z" 'exact default-tags default-directory))
 	   '("z	src/input.h	/^  float z;$/;\"	kind:member	line:18"
 	     "z	src/input.h	/^  int x, y, z;$/;\"	kind:member	line:9"))))
 
 (ert-deftest test-get-records ()
-  "Testing citre--get-records"
+  "Testing `citre--get-records'."
   (should (equal
 	   (with-me
 	    (setq citre-tags-files (cons default-tags citre-tags-files))

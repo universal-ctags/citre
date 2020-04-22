@@ -23,4 +23,4 @@ float area   (fpoint2d &p);
 float volume (ipoint3d *p);
 float volume (fpoint3d *p);
 
-#endif 
+#endif
