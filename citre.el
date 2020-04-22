@@ -50,7 +50,7 @@
   :prefix "citre-"
   :link '(url-link "https://github.com/AmaiKinono/citre"))
 
-;;;;; Project related options
+;;;;; Options: Project related
 
 (defcustom citre-project-denoter-files
   '(".citre" ".projectile" ".dumbjump")
@@ -103,7 +103,7 @@ priority (i.e., if we find one, then the rest will be ignored)."
 
 (make-variable-buffer-local 'citre-tags-files)
 
-;;;;; Ctags command related options
+;;;;; Options: Ctags command related
 
 (defcustom citre-ctags-program nil
   "The path to the ctags program.
@@ -207,7 +207,7 @@ own regex to support them."
   "Excluded patterns in default ctags command for large projects."
   :type '(repeat string))
 
-;;;;; Code navigation related options
+;;;;; Options: Code navigation related
 
 (defcustom citre-select-location-function
   #'citre-select-location-completing-read
@@ -272,7 +272,7 @@ the color of the dashes.")
      :background "#666666"))
   "Face used for the current location in the peek window.")
 
-;;;;; Eldoc & citre-peek-function related options
+;;;;; Options: Eldoc & citre-peek-function related
 
 (defcustom citre-find-function-name-limit 1500
   "The limit of chars that Citre goes back to find function name.
@@ -294,7 +294,7 @@ This is used in `citre-peek-function' and eldoc integration."
                             symbol (repeat symbol))
           :value-type function))
 
-;;;;; Auto-completion related options
+;;;;; Options: Auto-completion related
 
 (defcustom citre-do-substring-completion t
   "Whether do substring completion.
@@ -334,23 +334,184 @@ by auto completion."
                  (const :tag "Insensitive" insensitive)
                  (const :tag "Smart" smart)))
 
-;;;; Internals
+;;;; Core layer
+
+;; The core layer focuses on parsing tags files. Its main APIs
+;; `citre-get-records' and `citre-get-field' defines the only way that upper
+;; components should use to get informations from tags files.
+
+;;;;; Filter and parse lines from tags file
+
+(defun citre--get-lines (symbol match tagsfile)
+  "Get lines in tags file TAGSFILE that match SYMBOL.
+This function returns a list of the lines.  SYMBOL is a string.
+MATCH is a symbol, which can be:
+
+- `prefix': Match all lines whose tags begin with SYMBOL, case
+  insensitively
+- `substring': Match all lines whose tags contain SYMBOL, case
+  insensitively.
+- `exact': Match all lines whose tags are exactly SYMBOL, case
+  sensitively."
+  (let* ((program (or citre-readtags-program "readtags"))
+         ;; Strip the text properties first so we can eval it in a backquote
+         ;; form later to get just the symbol itself.
+         (symbol (substring-no-properties symbol))
+         (case-sensitive (pcase citre-case-sensitivity
+                           ('sensitive t)
+                           ('insensitive nil)
+                           ('smart (if (eq match 'exact)
+                                       t
+                                     (if (string= (downcase symbol) symbol)
+                                         nil t)))))
+         (op (pcase match
+               ('prefix 'prefix?)
+               ('substring 'substr?)
+               ('exact 'eq?)))
+         (symbol-expr (if case-sensitive
+                          symbol
+                        ;; Since SYMBOL is a string, when we format this list
+                        ;; with "%s" later, we automatically get double
+                        ;; quotes around SYMBOL.
+                        `(downcase ,symbol)))
+         (name-expr (if case-sensitive
+                        '$name
+                      '(downcase $name)))
+         (command (format "'%s' -t '%s' -Q '%S' -nel" program tagsfile
+                          `(,op ,name-expr ,symbol-expr))))
+    (split-string
+     (shell-command-to-string command)
+     "\n" t)))
+
+;; TODO: get rid of this PROJECT arg using pseudo tags.
+(defun citre--parse-line (line &optional project)
+  "Parse a line from readtags output.
+LINE is the line to be parsed.  This returns a list consists of
+the tag, its kind, signature, absolute path of the file and line
+number, which can be utilized by `citre-get-field'.
+
+If the file field in the line uses relative path, it's expanded
+to absolute path using current project root, or PROJECT if it's
+non-nil."
+  (let* ((project (or project (citre--project-root)))
+         (elts (split-string line "\t" t))
+         kind signature path linum
+         found-kind found-signature found-linum found-any)
+    ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
+    ;; absolute path. This is the desired behavior.
+    (setq path (expand-file-name (nth 1 elts) project))
+    (cl-dolist (elt (nthcdr 3 elts))
+      (setq found-any nil)
+      (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
+        (when (and (not found-any) (not found-kind)
+                   (string= (match-string 1 elt) "kind"))
+          (setq kind (match-string 2 elt))
+          (setq found-kind t)
+          (setq found-any t))
+        (when (and (not found-any) (not found-signature)
+                   (string= (match-string 1 elt) "signature"))
+          (setq signature (match-string 2 elt))
+          (setq found-signature t)
+          (setq found-any t))
+        (when (and (not found-any) (not found-linum)
+                   (string= (match-string 1 elt) "line"))
+          (setq linum (string-to-number (match-string 2 elt)))
+          (setq found-any t)))
+      (when (and found-kind found-signature found-linum)
+        (cl-return)))
+    (unless kind
+      (setq kind (nth 3 elts)))
+    (list (car elts) kind signature path linum)))
+
+;;;;; APIs
+
+;; TODO: When format a nil field with "%s", it becomes "nil", which is not
+;; suitable for showing to the user.  Currently I don't know what's the best
+;; way to deal with this, but thinking from a tags file's perspective, since it
+;; never produce a field with only the field name but no value, there's no
+;; difference if we use nil or empty string to represent it, so it's good to
+;; directly use empty string in the records, or make `citre-get-field' not
+;; return nil.
+(defun citre-get-field (field record)
+  "Get FIELD from RECORD.
+RECORD is an output from `citre--parse-line'.  FIELD is a symbol
+which can be:
+
+- `tag': The tag name, i.e. the symbol name.
+- `kind': The kind.  This tells if the symbol is a variable or
+  function, etc.
+- `signature': The signature of a callable symbol.
+- `path': The absolute path of the file containing the symbol.
+- `linum': The line number of the symbol in the file.
+- `line': The line containing the symbol.  Leading and trailing
+  whitespaces are trimmed.
+
+`citre-get-field' and `citre-get-records' are the 2 main APIs
+that interactive commands should use, and ideally should only
+use."
+  (cond
+   ((eq field 'line)
+    (when (file-exists-p (citre-get-field 'path record))
+      (with-temp-buffer
+        (insert-file-contents (citre-get-field 'path record))
+        (goto-char (point-min))
+        (forward-line (1- (citre-get-field 'linum record)))
+        (string-trim (buffer-substring (line-beginning-position)
+                                       (line-end-position))))))
+   (t
+    (let* ((n (pcase field
+                ('tag 0)
+                ('kind 1)
+                ('signature 2)
+                ('path 3)
+                ('linum 4))))
+      (nth n record)))))
+
+;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
+(defun citre-get-records (symbol match tagsfile &optional project)
+  "Get records of tags in tags file TAGSFILE that match SYMBOL.
+MATCH is how should the tags match SYMBOL.  See the docstring of
+`citre--get-lines' for details.
+
+When relative path is used in TAGSFILE, it's expanded against
+PROJECT, or current project root if PROJECT is not specified.
+
+Each element in the returned value is a list containing the tag
+and some of its fields, which can be utilized by
+`citre-get-field'.
+
+This function uses `citre--get-lines' to get lines from tags
+file, and `citre--parse-line' to parse each line.  See their
+docstrings to get an idea of how this works.  `citre-get-records'
+and `citre-get-field' are the 2 main APIs that interactive
+commands should use, and ideally should only use."
+  (mapcar (lambda (line) (citre--parse-line line project))
+          (citre--get-lines symbol match tagsfile)))
+
+;;;; Utils layer
+
+;; The utils layer provides utility functions that user tools could utilize.
 
 ;;;;; Misc
 
 ;; `define-minor-mode' actually defines this for us.  But since it's used in
 ;; the code before we define the minor mode, we need to define the variable
 ;; here to suppress the compiler warning.
+
+;; This could be get rid of. Only two things require this to be defined
+;; earlier: `citre--wait-for-project-size', which would become meaningless
+;; after u-ctags could handle source tree; and `citre-peek', we will make it
+;; work without enabling Citre mode.
 (defvar citre-mode nil
   "Non-nil if Citre mode is enabled.
 Use the command `citre-mode' to change this variable.")
 
-;;;;; Dealing with projects
+;;;;; Basic helpers
 
-(defvar citre--project-info-alist nil
-  "Alist for storing project info.
-The keys are the absolute paths of project roots, the values are
-plists containing the info of the projects.")
+;; These functions mainly serves as helper functions for utility functions
+;; themselves, but could also be used by user tools.
+
+;;;;;; Helpers: file & path related
 
 (defun citre--find-dir-with-denoters (file denoters)
   "Search up directory hierarchy from FILE for a denoter file.
@@ -362,6 +523,61 @@ such directory doesn't exist, nil will be returned."
     (let ((dir (locate-dominating-file file denoter)))
       (when dir
         (cl-return (file-name-directory (expand-file-name dir)))))))
+
+;;;;;; Helpers: text property related
+
+(defun citre--propertize (str record &rest fields)
+  "Propertize STR by FIELDS in RECORD.
+Added text properties are prefixed by \"citre-\".  For example,
+the `kind' field will be stored in the `citre-kind' property.
+
+Notice that this is destructive, which is different from
+`propertize'.  The propertized STR is returned."
+  (let ((len (length str)))
+    (dolist (field fields)
+      (put-text-property 0 len
+                         (intern (concat "citre-" (symbol-name field)))
+                         (citre-get-field field record)
+                         str))
+    str))
+
+(defun citre--get-property (str field)
+  "Get the text property corresponding to FIELD in STR.
+STR should be propertized by `citre--propertize' or
+`citre--put-property'.
+
+What it actually does is prefix the FIELD by `citre-', and get
+that text property."
+  (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
+
+(defun citre--put-property (str prop val)
+  "Set the text property corresponding to PROP in STR.
+The value is specified by VAL.  The text property added is
+prefixed by \"citre-\".  Propertized STR is returned."
+  (put-text-property 0 (length str)
+                     (intern (concat "citre-" (symbol-name prop)))
+                     val str)
+  str)
+
+(defun citre--add-face (str face)
+  "Add FACE to STR, and return it.
+This is mainly for displaying STR in an overlay.  For example, if
+FACE specifies background color, then STR will have that
+background color, with all other face attributes preserved.
+
+`default' face is appended to make sure the display in overlay is
+not affected by its surroundings."
+  (let ((len (length str)))
+    (add-face-text-property 0 len face nil str)
+    (add-face-text-property 0 len 'default 'append str)
+    str))
+
+;;;;; Utils: Project related
+
+(defvar citre--project-info-alist nil
+  "Alist for storing project info.
+The keys are the absolute paths of project roots, the values are
+plists containing the info of the projects.")
 
 (defun citre--project-root (&optional buffer)
   "Find the project root of current file.
@@ -456,6 +672,17 @@ care about this."
     (while (not (citre--get-project-info :size project))
       (sleep-for 0.05))))
 
+(defun citre--relative-path (path &optional project)
+  "Return PATH but relative to current project root.
+If PATH is not under the project, it's directly returned.  If
+project root PROJECT is specified, use that project instead."
+  (let* ((project (when project (expand-file-name project)))
+         (project (or project (citre--project-root)))
+         (path (expand-file-name path)))
+    (if (string-prefix-p project path)
+        (file-relative-name path project)
+      path)))
+
 (defun citre--tags-file-path (&optional project)
   "Find tags file in PROJECT and return its path.
 If PROJECT is not specified, use current project in buffer.  This
@@ -468,7 +695,7 @@ looks up `citre-tags-files' to find the tags file needed."
        (when (file-exists-p tags-file) tags-file)))
    citre-tags-files))
 
-;;;;; Ctags command
+;;;;; Utils: Tags generation & update
 
 (defun citre--default-ctags-command (&optional project)
   "Return the default ctags command for current project.
@@ -500,190 +727,59 @@ If project root PROJECT is non-nil, use that project instead."
          (list program excludes extra-excludes languages extra-args) " ")
       (string-join (list program excludes languages extra-args) " "))))
 
-;;;;; Fetch and parse ctags output.
+;;;;; Utils: Auto-completion related
 
-(defun citre--get-lines (symbol match tagsfile)
-  "Get lines in tags file TAGSFILE that match SYMBOL.
-This function returns a list of the lines.  SYMBOL is a string.
-MATCH is a symbol, which can be:
+(defun citre-get-completions (&optional symbol tagsfile)
+  "Get completions from TAGSFILE of symbol at point.
+If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
+not specified, fint it automatically under current project root.
 
-- `prefix': Match all lines whose tags begin with SYMBOL, case
-  insensitively
-- `substring': Match all lines whose tags contain SYMBOL, case
-  insensitively.
-- `exact': Match all lines whose tags are exactly SYMBOL, case
-  sensitively."
-  (let* ((program (or citre-readtags-program "readtags"))
-         ;; Strip the text properties first so we can eval it in a backquote
-         ;; form later to get just the symbol itself.
-         (symbol (substring-no-properties symbol))
-         (case-sensitive (pcase citre-case-sensitivity
-                           ('sensitive t)
-                           ('insensitive nil)
-                           ('smart (if (eq match 'exact)
-                                       t
-                                     (if (string= (downcase symbol) symbol)
-                                         nil t)))))
-         (op (pcase match
-               ('prefix 'prefix?)
-               ('substring 'substr?)
-               ('exact 'eq?)))
-         (symbol-expr (if case-sensitive
-                          symbol
-                        ;; Since SYMBOL is a string, when we format this list
-                        ;; with "%s" later, we automatically get double
-                        ;; quotes around SYMBOL.
-                        `(downcase ,symbol)))
-         (name-expr (if case-sensitive
-                        '$name
-                      '(downcase $name)))
-         (command (format "'%s' -t '%s' -Q '%S' -nel" program tagsfile
-                          `(,op ,name-expr ,symbol-expr))))
-    (split-string
-     (shell-command-to-string command)
-     "\n" t)))
+The result is a list of strings, each string is a tag name, with
+its text properties containing the kind and signature fields.
 
-;; TODO: get rid of this PROJECT arg using pseudo tags.
-(defun citre--parse-line (line &optional project)
-  "Parse a line from readtags output.
-LINE is the line to be parsed.  This returns a list consists of
-the tag, its kind, signature, absolute path of the file and line
-number, which can be utilized by `citre-get-field'.
+It returns nil when the completion can't be done."
+  ;; TODO: When inside a symbol, don't grab the part after point.
+  (let ((symbol (or symbol (thing-at-point 'symbol)))
+        (tagsfile (or tagsfile (citre--tags-file-path)))
+        (match (if citre-do-substring-completion
+                   'substring 'prefix))
+        (candidate-str-generator
+         (lambda (record)
+           (citre--propertize
+            (citre-get-field 'tag record)
+            record 'kind 'signature))))
+    (when symbol
+      (cl-map 'list candidate-str-generator
+              (citre-get-records symbol match tagsfile)))))
 
-If the file field in the line uses relative path, it's expanded
-to absolute path using current project root, or PROJECT if it's
-non-nil."
-  (let* ((project (or project (citre--project-root)))
-         (elts (split-string line "\t" t))
-         kind signature path linum
-         found-kind found-signature found-linum found-any)
-    ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
-    ;; absolute path. This is the desired behavior.
-    (setq path (expand-file-name (nth 1 elts) project))
-    (cl-dolist (elt (nthcdr 3 elts))
-      (setq found-any nil)
-      (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
-        (when (and (not found-any) (not found-kind)
-                   (string= (match-string 1 elt) "kind"))
-          (setq kind (match-string 2 elt))
-          (setq found-kind t)
-          (setq found-any t))
-        (when (and (not found-any) (not found-signature)
-                   (string= (match-string 1 elt) "signature"))
-          (setq signature (match-string 2 elt))
-          (setq found-signature t)
-          (setq found-any t))
-        (when (and (not found-any) (not found-linum)
-                   (string= (match-string 1 elt) "line"))
-          (setq linum (string-to-number (match-string 2 elt)))
-          (setq found-any t)))
-      (when (and found-kind found-signature found-linum)
-        (cl-return)))
-    (unless kind
-      (setq kind (nth 3 elts)))
-    (list (car elts) kind signature path linum)))
+;;;;; Utils: Finding definitions
 
-;;;; APIs
+(defun citre-get-definition-locations (&optional symbol tagsfile)
+  "Get locations from tags file TAGSFILE of symbol at point.
+If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
+not specified, find it automatically under current project root.
 
-;;;;; Main APIs
+The result is a list of strings, each string consists of relative
+file path and the line content, with text properties containing
+the kind, linum and absolute path of the tag."
+  (let ((symbol (or symbol (thing-at-point 'symbol)))
+        (tagsfile (or tagsfile (citre--tags-file-path)))
+        (location-str-generator
+         (lambda (record)
+           (citre--propertize
+            (concat (propertize
+                     (citre--relative-path
+                      (citre-get-field 'path record))
+                     'face 'warning)
+                    ": "
+                    (citre-get-field 'line record))
+            record 'kind 'linum 'path))))
+    (unless symbol
+      (user-error "No symbol at point"))
+    (cl-map 'list location-str-generator
+            (citre-get-records symbol 'exact tagsfile))))
 
-;; TODO: When format a nil field with "%s", it becomes "nil", which is not
-;; suitable for showing to the user.  Currently I don't know what's the best
-;; way to deal with this, but thinking from a tags file's perspective, since it
-;; never produce a field with only the field name but no value, there's no
-;; difference if we use nil or empty string to represent it, so it's good to
-;; directly use empty string in the records, or make `citre-get-field' not
-;; return nil.
-(defun citre-get-field (field record)
-  "Get FIELD from RECORD.
-RECORD is an output from `citre--parse-line'.  FIELD is a symbol
-which can be:
-
-- `tag': The tag name, i.e. the symbol name.
-- `kind': The kind.  This tells if the symbol is a variable or
-  function, etc.
-- `signature': The signature of a callable symbol.
-- `path': The absolute path of the file containing the symbol.
-- `linum': The line number of the symbol in the file.
-- `line': The line containing the symbol.  Leading and trailing
-  whitespaces are trimmed.
-
-`citre-get-field' and `citre-get-records' are the 2 main APIs
-that interactive commands should use, and ideally should only
-use."
-  (cond
-   ((eq field 'line)
-    (when (file-exists-p (citre-get-field 'path record))
-      (with-temp-buffer
-        (insert-file-contents (citre-get-field 'path record))
-        (goto-char (point-min))
-        (forward-line (1- (citre-get-field 'linum record)))
-        (string-trim (buffer-substring (line-beginning-position)
-                                       (line-end-position))))))
-   (t
-    (let* ((n (pcase field
-                ('tag 0)
-                ('kind 1)
-                ('signature 2)
-                ('path 3)
-                ('linum 4))))
-      (nth n record)))))
-
-;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
-(defun citre-get-records (symbol match tagsfile &optional project)
-  "Get records of tags in tags file TAGSFILE that match SYMBOL.
-MATCH is how should the tags match SYMBOL.  See the docstring of
-`citre--get-lines' for details.
-
-When relative path is used in TAGSFILE, it's expanded against
-PROJECT, or current project root if PROJECT is not specified.
-
-Each element in the returned value is a list containing the tag
-and some of its fields, which can be utilized by
-`citre-get-field'.
-
-This function uses `citre--get-lines' to get lines from tags
-file, and `citre--parse-line' to parse each line.  See their
-docstrings to get an idea of how this works.  `citre-get-records'
-and `citre-get-field' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre--parse-line line project))
-          (citre--get-lines symbol match tagsfile)))
-
-;;;;; Helper functions
-
-(defun citre--propertize (str record &rest fields)
-  "Propertize STR by FIELDS in RECORD.
-Added text properties are prefixed by \"citre-\".  For example,
-the `kind' field will be stored in the `citre-kind' property.
-
-Notice that this is destructive, which is different from
-`propertize'.  The propertized STR is returned."
-  (let ((len (length str)))
-    (dolist (field fields)
-      (put-text-property 0 len
-                         (intern (concat "citre-" (symbol-name field)))
-                         (citre-get-field field record)
-                         str))
-    str))
-
-(defun citre--get-property (str field)
-  "Get the text property corresponding to FIELD in STR.
-STR should be propertized by `citre--propertize' or
-`citre--put-property'.
-
-What it actually does is prefix the FIELD by `citre-', and get
-that text property."
-  (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
-
-(defun citre--put-property (str prop val)
-  "Set the text property corresponding to PROP in STR.
-The value is specified by VAL.  The text property added is
-prefixed by \"citre-\".  Propertized STR is returned."
-  (put-text-property 0 (length str)
-                     (intern (concat "citre-" (symbol-name prop)))
-                     val str)
-  str)
+;;;;; Utils: Jumping related
 
 (defun citre--open-file-and-goto-line (path linum &optional window)
   "Open file PATH and goto the line LINUM.
@@ -705,31 +801,20 @@ WINDOW can be:
     (when (eq window 'other-window-noselect)
       (pop-to-buffer buf))))
 
-(defun citre--add-face (str face)
-  "Add FACE to STR, and return it.
-This is mainly for displaying STR in an overlay.  For example, if
-FACE specifies background color, then STR will have that
-background color, with all other face attributes preserved.
+;; TODO: xref face for blinking should be used.
+(defun citre-recenter-and-blink ()
+  "Recenter point and blink after point.
+This is suitable to run after jumping to a location."
+  (recenter)
+  (pulse-momentary-highlight-region (point) (1+ (line-end-position))))
 
-`default' face is appended to make sure the display in overlay is
-not affected by its surroundings."
-  (let ((len (length str)))
-    (add-face-text-property 0 len face nil str)
-    (add-face-text-property 0 len 'default 'append str)
-    str))
+;;;; Tools layer
 
-(defun citre--relative-path (path &optional project)
-  "Return PATH but relative to current project root.
-If PATH is not under the project, it's directly returned.  If
-project root PROJECT is specified, use that project instead."
-  (let* ((project (when project (expand-file-name project)))
-         (project (or project (citre--project-root)))
-         (path (expand-file-name path)))
-    (if (string-prefix-p project path)
-        (file-relative-name path project)
-      path)))
+;; The tools layer provides tools that's used directly by the user.  This layer
+;; could use all functions offerd by the utils layer, but only the two APIs
+;; offerd by the core layer.
 
-;;;; Action: jump to definition (based on xref)
+;;;;; Tool: jump to definition (based on xref)
 
 (declare-function xref-make "xref" (summary location))
 (declare-function xref-make-file-location "xref" (file line column))
@@ -778,9 +863,9 @@ project root PROJECT is specified, use that project instead."
                      (citre-get-records str 'prefix tagsfile project))))
         (complete-with-action action collection str pred)))))
 
-;;;; Action: peek definition
+;;;;; Tool: peek definition
 
-;;;;; Helpers
+;;;;;; Helpers
 
 (defun citre--subseq (seq interval)
   "Return the subsequence of SEQ in INTERVAL.
@@ -848,7 +933,7 @@ and 1.0 which is the influence of C1 on the result."
             (round (+ (* x alpha) (* y (- 1 alpha)))))
           (color-values c1) (color-values c2))))
 
-;;;;; Internals
+;;;;;; Internals
 
 (defvar-local citre-peek--ov nil
   "Current overlay used for peeking.")
@@ -1009,7 +1094,7 @@ N can be negative."
                            (string-join displayed-locs) count-info
                            border)))))
 
-;;;;; Commands
+;;;;;; Commands
 
 (defun citre-peek ()
   "Peek the definition of the symbol at point."
@@ -1111,43 +1196,12 @@ N can be negative."
         (cl-delete 'citre-mode minor-mode-overriding-map-alist :key #'car))
   (remove-hook 'post-command-hook #'citre-peek--post-command-function 'local))
 
-;;;; Action: jump to definition
+;;;;; Tool: jump to definition (by `citre-jump')
 
-;;;;; Internals
+;;;;;; Internals
 
 (defvar citre--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
-
-(defun citre-get-definition-locations (&optional symbol tagsfile)
-  "Get locations from tags file TAGSFILE of symbol at point.
-If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
-not specified, find it automatically under current project root.
-
-The result is a list of strings, each string consists of relative
-file path and the line content, with text properties containing
-the kind, linum and absolute path of the tag."
-  (let ((symbol (or symbol (thing-at-point 'symbol)))
-        (tagsfile (or tagsfile (citre--tags-file-path)))
-        (location-str-generator
-         (lambda (record)
-           (citre--propertize
-            (concat (propertize
-                     (citre--relative-path
-                      (citre-get-field 'path record))
-                     'face 'warning)
-                    ": "
-                    (citre-get-field 'line record))
-            record 'kind 'linum 'path))))
-    (unless symbol
-      (user-error "No symbol at point"))
-    (cl-map 'list location-str-generator
-            (citre-get-records symbol 'exact tagsfile))))
-
-;; TODO: xref face for blinking should be used.
-(defun citre-recenter-and-blink ()
-  "Recenter point and blink after point."
-  (recenter)
-  (pulse-momentary-highlight-region (point) (1+ (line-end-position))))
 
 (defun citre-select-location-completing-read (locations)
   "Select an element in LOCATIONS.
@@ -1157,7 +1211,7 @@ This uses the `completing-read' interface.  See
     (1 (car locations))
     (_ (completing-read "location: " locations nil t))))
 
-;;;;; Commands
+;;;;;; Commands
 
 (defun citre-jump ()
   "Jump to the definition of the symbol at point.
@@ -1194,35 +1248,10 @@ definition that is currently peeked."
       (set-marker marker nil)
       (run-hooks 'citre-after-jump-hook))))
 
-;;;; Action: auto completion
-
-;;;;; Internals
+;;;;; Tool: auto completion (based on `completion-at-point')
 
 (defvar-local citre-completion-in-region-function-orig nil
   "This stores the original `completion-in-region-function'.")
-
-(defun citre-get-completions (&optional symbol tagsfile)
-  "Get completions from TAGSFILE of symbol at point.
-If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
-not specified, fint it automatically under current project root.
-
-The result is a list of strings, each string is a tag name, with
-its text properties containing the kind and signature fields.
-
-It returns nil when the completion can't be done."
-  ;; TODO: When inside a symbol, don't grab the part after point.
-  (let ((symbol (or symbol (thing-at-point 'symbol)))
-        (tagsfile (or tagsfile (citre--tags-file-path)))
-        (match (if citre-do-substring-completion
-                   'substring 'prefix))
-        (candidate-str-generator
-         (lambda (record)
-           (citre--propertize
-            (citre-get-field 'tag record)
-            record 'kind 'signature))))
-    (when symbol
-      (cl-map 'list candidate-str-generator
-              (citre-get-records symbol match tagsfile)))))
 
 (defun citre-completion-in-region (start end collection &optional predicate)
   "A function replacing the default `completion-in-region-function'.
@@ -1256,8 +1285,6 @@ completion framework), this falls back to the default
       (when completion
         (delete-region start end)
         (insert (substring-no-properties completion))))))
-
-;;;;; Commands
 
 (defun citre-completion-at-point ()
   "Function used for `completion-at-point-functions'."
@@ -1294,7 +1321,7 @@ completion framework), this falls back to the default
           ;; :exclusive 'no
           )))
 
-;;;; Action: eldoc
+;;;;; Tool: eldoc integration
 
 (defun citre--pos-in-code-p (&optional pos)
   "Non-nil if position POS is in code.
@@ -1483,7 +1510,7 @@ and can be used as eldoc message."
          (when-let ((signature (citre-get-field 'signature record)))
            (cl-return signature)))))))
 
-;;;; Misc commands
+;;;;; Tool: misc commands
 
 (defun citre-show-project-root ()
   "Show the project root of current buffer.
@@ -1494,7 +1521,7 @@ correctly."
       (message (citre--project-root))
     (user-error "Buffer is not in a project")))
 
-;;;; Citre mode
+;;;;; Tool: Citre mode
 
 ;;;###autoload
 (define-minor-mode citre-mode
