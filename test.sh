@@ -26,7 +26,7 @@ for t in tests/*/test.el; do
     (cd $d
      if ! $EMACS -batch -l ert $preload_options -l ../common.el -l ./test.el \
 	  -f ert-run-tests-batch-and-exit; then
-	 error "testing is failed in $d"
+	 error "test in $d failed"
      fi
      exit 0
      ) || exit 1
