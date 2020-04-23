@@ -1,21 +1,5 @@
 # User option
 
--  An user option for case sensitivity.
-
-   We want "smart case fold", i.e. when doing prefix/substring match, if the
-   input chars are all downcase, do case insensitive search, otherwise do case
-   sensitive search.
-
-   We should offer an user option (`citre-smart-case-fold`) to choose from
-   "smart case fold" (`t`) and "always case sensitive" (`nil`).
-
-   When doing "exact match", we should always do case sensitive search.
-
-- An user option for enabling different features.
-
-  We should have a set of local variables to let the user decide which features
-  to enable.
-
 - Tags generation recipe system
 
   Through such system, people can specify target name, target path (`nil` means
@@ -41,14 +25,6 @@
 
 # Functionality
 
-- Eldoc integration
-
-  Now I only have a vague idea. Maybe we can assume in non-lisp languages, we
-  call callable symbols like `symbol(arg1, arg2)` (notice the arg themselves
-  can also be in this form). We can parse backward from point, and see if the
-  symbol before `(` has `font-lock-function-name-face`. If so, we fetch the
-  "signature" field of it and show it.
-
 - Auto completion for "dot patterns"
 
   We should come up with our own "symbol-at-point" function. By calling it we
@@ -66,19 +42,10 @@
   ctags. We want a sort algorithm just like prescient.el, plus when required,
   put the candidates with certain field contents before others.
 
-- A new jump to definition interface
-
-  Now we already have many flavors of "jump to definition":
-
-  - When you are coding and want to quickly see the docstring/definition of the
-    function: use `citre-peek`.
-  - When you want to read the definition in depth or modify it: xref or
-    `citre-jump`. What's neat about `citre-jump` is you can jump when you are
-    peeking.
-
-  But we still need to come up with an interface for people who read complex
-  source code for hours. I haven't noticed this requirement before, but there
-  are people who need this. Let's see what will Mr. Yamato will say about this.
+  I'm not sure if we want to only keep tags with certain field values, or put
+  them before others. Since we actually don't know the AST, there's chance we
+  guessed the completely wrong type of "dot pattern" and give the wrong
+  results. So I think it's better to keep other tags as well.
 
 - Jump to definition from a dependency that's not in the root of current
 
@@ -120,22 +87,12 @@
 
 - imenu integration
 
-    Let ctags scan current file to generate imenu index. If the file is
-    modified, we could save it in a temp file first, but maybe this is a bit
-    overkill. Also, probably we don't want to generate a tags file, but it's
-    unclear how to pipe the ctags output to readtags. The "process
-    substitution" technique suggested below is one way to do this, but readtags
-    may be not guaranteed to read from a pipe in the future.
-
-# API
-
-- Rework the APIs so we can use readtags to do filtering based on any fields.
-
-  I'm not sure if we want to only keep tags with certain field values, or put
-  them before others (using the sort algorithm above). Since we actually don't
-  know the AST, there's chance we guessed the completely wrong type of "dot
-  pattern" and give the wrong results. So I think it's better to keep other
-  tags as well.
+  Let ctags scan current file to generate imenu index. If the file is modified,
+  we could save it in a temp file first, but maybe this is a bit overkill.
+  Also, probably we don't want to generate a tags file, but it's unclear how to
+  pipe the ctags output to readtags. The "process substitution" technique
+  suggested below is one way to do this, but readtags may be not guaranteed to
+  read from a pipe in the future.
 
   readtags can't read tags from stdin, one way I found is to use named pipe, it
   functions like a file but is a pipe. Bash and some other shells can do
@@ -158,7 +115,6 @@
 
   We could put them in one line, and that's pretty much a poor man's process
   substitution.
-
 # Misc
 
   - See where do the dependencies live in popular package/virtualenv managers,
@@ -168,9 +124,6 @@
     are the usual names.
 
   - Add more faces.
-
-  - When calling `citre-jump` without symbol at point, ask for user input to
-    search for symbols.
 
   - Signal an error when the needed fields are not presented.
 
@@ -202,10 +155,6 @@
     create a procedure to write project information if it's not presented (it
     will be fast since we don't need the size), then use it in all the
     interactive commands, so they can be used when `citre-mode` is not enabled.
-
-    The keybindings in citre-peek is based on overriding the keybindings of
-    `citre-mode`. We should create its own minor mode and handle keybindings
-    using it.
 
     And now there are 3 things that needs citre-mode: capf, xref, eldoc. For
     the first two, we could create our own `citre-xref-find-definition` and
