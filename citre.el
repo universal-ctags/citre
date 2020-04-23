@@ -1599,7 +1599,7 @@ correctly."
 ;;;###autoload
 (define-minor-mode citre-mode
   "Ctags IDE on the True Editor"
-  :lighter " citre"
+  :lighter " Citre"
   (cond
    ((not (buffer-file-name))
     (setq citre-mode nil)
