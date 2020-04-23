@@ -905,7 +905,8 @@ WINDOW can be:
   "Recenter point and blink after point.
 This is suitable to run after jumping to a location."
   (recenter)
-  (pulse-momentary-highlight-region (point) (1+ (line-end-position))))
+  (pulse-momentary-highlight-region (point) (1+ (line-end-position))
+                                    'next-error))
 
 ;;;; Tools layer
 
