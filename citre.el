@@ -576,10 +576,9 @@ use."
 ;; the code before we define the minor mode, we need to define the variable
 ;; here to suppress the compiler warning.
 
-;; This could be get rid of. Only two things require this to be defined
-;; earlier: `citre--wait-for-project-size', which would become meaningless
-;; after u-ctags could handle source tree; and `citre-peek', we will make it
-;; work without enabling Citre mode.
+;; This could be get rid of. The only thing require this to be defined earlier
+;; is `citre--wait-for-project-size', which would become meaningless after
+;; u-ctags could handle source tree.
 (defvar citre-mode nil
   "Non-nil if Citre mode is enabled.
 Use the command `citre-mode' to change this variable.")
@@ -1013,6 +1012,10 @@ and 1.0 which is the influence of C1 on the result."
 
 ;;;;;; Internals
 
+(define-minor-mode citre-peek-mode
+  "Mode for `citre-peek'."
+  :keymap citre-peek-keymap)
+
 (defvar-local citre-peek--ov nil
   "Current overlay used for peeking.")
 
@@ -1177,12 +1180,6 @@ N can be negative."
 (defun citre-peek ()
   "Peek the definition of the symbol at point."
   (interactive)
-  ;; TODO: You can actually use `citre-peek' without Citre mode, in principle.
-  ;; But the keymap used when peeking relies on Citre mode.  For now we'll
-  ;; prevent peeking without Citre mode enabled, but this restriction will be
-  ;; removed soon.
-  (unless citre-mode
-    (user-error "Citre mode not enabled"))
   ;; Quit existing peek sessions.
   (when (overlayp citre-peek--ov)
     (citre-peek-abort))
@@ -1198,8 +1195,7 @@ N can be negative."
                          (find-buffer-visiting
                           (citre--get-property loc 'path))))
   ;; Setup environment for peeking.
-  (setf (alist-get 'citre-mode minor-mode-overriding-map-alist)
-        citre-peek-keymap)
+  (citre-peek-mode)
   (setq citre-peek--ov (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
   (setq citre-peek--displayed-locations-interval
         (cons 0 (min citre-peek-locations-height
@@ -1270,8 +1266,7 @@ N can be negative."
   (setq citre-peek--location-index nil)
   (setq citre-peek--bg nil)
   (setq citre-peek--bg-alt nil)
-  (setq minor-mode-overriding-map-alist
-        (cl-delete 'citre-mode minor-mode-overriding-map-alist :key #'car))
+  (citre-peek-mode -1)
   (remove-hook 'post-command-hook #'citre-peek--post-command-function 'local))
 
 ;;;;; Tool: jump to definition (by `citre-jump')
