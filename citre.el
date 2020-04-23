@@ -207,6 +207,26 @@ own regex to support them."
   "Excluded patterns in default ctags command for large projects."
   :type '(repeat string))
 
+;;;;; Options: Enabled tools
+
+(defcustom citre-enable-xref-integration t
+  "Enable xref integration."
+  :type 'boolean)
+
+(make-variable-buffer-local 'citre-enable-xref-integration)
+
+(defcustom citre-enable-capf-integration t
+  "Enable auto-completion by `completion-at-point'."
+  :type 'boolean)
+
+(make-variable-buffer-local 'citre-enable-capf-integration)
+
+(defcustom citre-enable-eldoc-integration t
+  "Enable Eldoc integration."
+  :type 'boolean)
+
+(make-variable-buffer-local 'citre-enable-eldoc-integration)
+
 ;;;;; Options: Code navigation related
 
 (defcustom citre-select-location-function
@@ -314,8 +334,10 @@ non-nil, *and* add `substring' to `completion-styles' (for Emacs
   #'citre-completion-in-region
   "The function used for `completion-in-region-function'.
 This is called by `completion-at-point' in buffers where Citre
-mode is enabled."
-  :type 'function)
+mode is enabled, and offers an alternative UI for completion.
+
+When nil, don't modify `completion-in-region-function'."
+  :type '(choice function (const :tag "Default" nil)))
 
 (defcustom citre-case-sensitivity 'smart
   "Case sensitivity of auto-completion.  Can be:
@@ -1324,7 +1346,9 @@ definition that is currently peeked."
 ;;;;; Tool: auto completion (based on `completion-at-point')
 
 (defvar-local citre-completion-in-region-function-orig nil
-  "This stores the original `completion-in-region-function'.")
+  "This stores the original `completion-in-region-function'.
+This is only set when `completion-in-region-function' is
+originally buffer-local.")
 
 (defun citre-completion-in-region (start end collection &optional predicate)
   "A function replacing the default `completion-in-region-function'.
@@ -1600,11 +1624,16 @@ correctly."
 (define-minor-mode citre-mode
   "Ctags IDE on the True Editor"
   :lighter " Citre"
+  ;; TODO: At this time I don't know clealy if Citre mode needs to work in a
+  ;; file.  If not, we could remove this, then for example you can set
+  ;; `citre-project-root' in *scratch* buffer and test somethings in it.  Maybe
+  ;; some users would want to do this.
   (cond
    ((not (buffer-file-name))
     (setq citre-mode nil)
     (user-error "Can't enable citre mode: buffer is not visiting a file"))
    (citre-mode
+    ;; Register project informations.
     (unless (cl-member (citre--project-root)
                        citre--project-info-alist
                        :key #'car :test #'equal)
@@ -1612,17 +1641,24 @@ correctly."
                        citre--project-info-alist nil nil #'equal)
             '(:size nil :tags-recipe nil :tags-use nil)))
     (citre--write-project-size)
-    (require 'xref)
-    (add-hook 'xref-backend-functions #'citre-xref-backend nil t)
-    (add-hook 'completion-at-point-functions
-              #'citre-completion-at-point nil t)
-    (when (local-variable-p completion-in-region-function)
-      (setq citre-completion-in-region-function-orig
-            completion-in-region-function))
-    (set (make-local-variable 'completion-in-region-function)
-         #'citre-completion-in-region)
-    (add-function :before-until (local 'eldoc-documentation-function)
-                  #'citre-eldoc-function))
+    ;; Xref integration.
+    (when citre-enable-xref-integration
+      (add-hook 'xref-backend-functions #'citre-xref-backend nil t))
+    ;; Capf integration.
+    (when citre-enable-capf-integration
+      (add-hook 'completion-at-point-functions
+                #'citre-completion-at-point nil t)
+      ;; Set `completion-in-region-function'.
+      (when citre-completion-in-region-function
+        (when (local-variable-p 'completion-in-region-function)
+          (setq citre-completion-in-region-function-orig
+                completion-in-region-function))
+        (set (make-local-variable 'completion-in-region-function)
+             citre-completion-in-region-function)))
+    ;; Eldoc integration.
+    (when citre-enable-eldoc-integration
+      (add-function :before-until (local 'eldoc-documentation-function)
+                    #'citre-eldoc-function)))
    (t
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
