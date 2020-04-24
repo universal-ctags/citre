@@ -483,23 +483,29 @@ MATCH is a symbol, which can be:
      (shell-command-to-string command)
      "\n" t)))
 
-;; TODO: get rid of this PROJECT arg using pseudo tags.
-(defun citre--parse-line (line &optional project)
+(defun citre--parse-line (line &optional cwd)
   "Parse a line from readtags output.
 LINE is the line to be parsed.  This returns a list consists of
 the tag, its kind, signature, absolute path of the file and line
 number, which can be utilized by `citre-get-field'.
 
-If the file field in the line uses relative path, it's expanded
-to absolute path using current project root, or PROJECT if it's
-non-nil."
-  (let* ((project (or project (citre--project-root)))
-         (elts (split-string line "\t" t))
+If the file field in the line uses relative path, which happens
+when the tags file is generated using -R option, CWD (the current
+working directory of ctags when generating it) must be provided,
+then it's expanded to absolute path using CWD.  Or an error will
+be throwed."
+  (let* ((elts (split-string line "\t" t))
          kind signature path linum
          found-kind found-signature found-linum found-any)
     ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
     ;; absolute path. This is the desired behavior.
-    (setq path (expand-file-name (nth 1 elts) project))
+    (setq path
+          (let ((path-orig (nth 1 elts)))
+            (if (file-name-absolute-p path-orig)
+                (nth 1 elts)
+              (if cwd
+                  (expand-file-name (nth 1 elts) cwd)
+                (error "LINE uses relative path, but CWD is not provided")))))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -525,8 +531,23 @@ non-nil."
 
 ;;;;; APIs
 
-;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
-(defun citre-get-records (symbol match tagsfile &optional project)
+(defun citre-get-pseudo-tag (name tagsfile)
+  "Read the value of pseudo tag NAME in tags file TAGSFILE.
+NAME should not start with \"!_\".  Run
+
+  $ ctags --list-pseudo-tags
+
+to know the valid NAMEs."
+  (let* ((program (or citre-readtags-program "readtags"))
+         (name (concat "!_" name))
+         (line (shell-command-to-string
+                (citre--format-shell-command
+                 "'%s' -t '%s' -Q '(eq? \"%s\" $name)' -D"
+                 program tagsfile name)))
+         (value (nth 1 (split-string line "\t" t))))
+    value))
+
+(defun citre-get-records (symbol match tagsfile)
   "Get records of tags in tags file TAGSFILE that match SYMBOL.
 MATCH is how should the tags match SYMBOL.  See the docstring of
 `citre--get-lines' for details.
@@ -540,11 +561,18 @@ and some of its fields, which can be utilized by
 
 This function uses `citre--get-lines' to get lines from tags
 file, and `citre--parse-line' to parse each line.  See their
-docstrings to get an idea of how this works.  `citre-get-records'
-and `citre-get-field' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre--parse-line line project))
-          (citre--get-lines symbol match tagsfile)))
+docstrings to get an idea of how this works."
+  (let ((cwd (citre-get-pseudo-tag "TAG_PROC_CWD" tagsfile)))
+    (condition-case err
+        (mapcar (lambda (line) (citre--parse-line line cwd))
+                (citre--get-lines symbol match tagsfile))
+      (error
+       (if (and (stringp (car (cdr err)))
+                (string= (car (cdr err))
+                         "LINE uses relative path, but CWD is not provided"))
+           (user-error "Pseudo tag TAG_PROC_CWD not found.  \
+Regenerate %s with it enabled" tagsfile)
+         (signal (car err) (cdr err)))))))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
@@ -565,11 +593,7 @@ which can be:
 - `path': The absolute path of the file containing the symbol.
 - `linum': The line number of the symbol in the file.
 - `line': The line containing the symbol.  Leading and trailing
-  whitespaces are trimmed.
-
-`citre-get-field' and `citre-get-records' are the 2 main APIs
-that interactive commands should use, and ideally should only
-use."
+  whitespaces are trimmed."
   (cond
    ((eq field 'line)
     (when (file-exists-p (citre-get-field 'path record))
