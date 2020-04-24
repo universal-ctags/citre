@@ -362,6 +362,12 @@ by auto completion."
 ;; `citre-get-records' and `citre-get-field' defines the only way that upper
 ;; components should use to get informations from tags files.
 
+;;;;; Define error symbols used by Citre
+
+;; `citre-error' should only be used in the core layer.  Currently only
+;; `citre-get-field' signals it, and it's required to be handled by its caller.
+(define-error 'citre-error "Unhandled error in Citre occurs")
+
 ;;;;; Filter and parse lines from tags file
 
 (defun citre--disable-single-quote-as-terminator (string)
@@ -484,22 +490,16 @@ MATCH is a symbol, which can be:
      "\n" t)))
 
 ;; TODO: get rid of this PROJECT arg using pseudo tags.
-(defun citre--parse-line (line &optional project)
+(defun citre--parse-line (line)
   "Parse a line from readtags output.
 LINE is the line to be parsed.  This returns a list consists of
 the tag, its kind, signature, absolute path of the file and line
-number, which can be utilized by `citre-get-field'.
-
-If the file field in the line uses relative path, it's expanded
-to absolute path using current project root, or PROJECT if it's
-non-nil."
-  (let* ((project (or project (citre--project-root)))
-         (elts (split-string line "\t" t))
-         kind signature path linum
+number, which can be utilized by `citre-get-field'."
+  (let* ((elts (split-string line "\t" t))
+         kind signature linum
          found-kind found-signature found-linum found-any)
     ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
     ;; absolute path. This is the desired behavior.
-    (setq path (expand-file-name (nth 1 elts) project))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -521,18 +521,30 @@ non-nil."
         (cl-return)))
     (unless kind
       (setq kind (nth 3 elts)))
-    (list (car elts) kind signature path linum)))
+    (list (car elts) kind signature (nth 1 elts) linum)))
 
 ;;;;; APIs
 
-;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
-(defun citre-get-records (symbol match tagsfile &optional project)
+(defun citre-get-pseudo-tag (name tagsfile)
+  "Read the value of pseudo tag NAME in tags file TAGSFILE.
+NAME should not start with \"!_\".  Run
+
+  $ ctags --list-pseudo-tags
+
+to know the valid NAMEs."
+  (let* ((program (or citre-readtags-program "readtags"))
+         (name (concat "!_" name))
+         (line (shell-command-to-string
+                (citre--format-shell-command
+                 "'%s' -t '%s' -Q '(eq? \"%s\" $name)' -D"
+                 program tagsfile name)))
+         (value (nth 1 (split-string line "\t" t))))
+    value))
+
+(defun citre-get-records (symbol match tagsfile)
   "Get records of tags in tags file TAGSFILE that match SYMBOL.
 MATCH is how should the tags match SYMBOL.  See the docstring of
 `citre--get-lines' for details.
-
-When relative path is used in TAGSFILE, it's expanded against
-PROJECT, or current project root if PROJECT is not specified.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
@@ -540,10 +552,8 @@ and some of its fields, which can be utilized by
 
 This function uses `citre--get-lines' to get lines from tags
 file, and `citre--parse-line' to parse each line.  See their
-docstrings to get an idea of how this works.  `citre-get-records'
-and `citre-get-field' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre--parse-line line project))
+docstrings to get an idea of how this works."
+  (mapcar (lambda (line) (citre--parse-line line))
           (citre--get-lines symbol match tagsfile)))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
@@ -553,7 +563,7 @@ commands should use, and ideally should only use."
 ;; difference if we use nil or empty string to represent it, so it's good to
 ;; directly use empty string in the records, or make `citre-get-field' not
 ;; return nil.
-(defun citre-get-field (field record)
+(defun citre-get-field (field record &optional cwd)
   "Get FIELD from RECORD.
 RECORD is an output from `citre--parse-line'.  FIELD is a symbol
 which can be:
@@ -562,23 +572,47 @@ which can be:
 - `kind': The kind.  This tells if the symbol is a variable or
   function, etc.
 - `signature': The signature of a callable symbol.
-- `path': The absolute path of the file containing the symbol.
+- `path': The path of the file containing the symbol, as recorded
+  by the tags file that RECORD is from.
+- `abspath': The absolute path of the file containing the symbol.
+  When `path' is relative (which happens when the tags file is
+  generated using -R option), this expands it using CWD.  CWD
+  should be the current working directory of ctags when
+  generating the tags file, which can be get from the
+  TAG_PROC_CWD pseudo tag in the tags file.
 - `linum': The line number of the symbol in the file.
 - `line': The line containing the symbol.  Leading and trailing
-  whitespaces are trimmed.
+  whitespaces are trimmed.  When `path' is relative, this
+  requires CWD to be presented.
 
-`citre-get-field' and `citre-get-records' are the 2 main APIs
-that interactive commands should use, and ideally should only
-use."
+This function signals the `citre-error' error, with the data
+being a symbol:
+
+- `cwd-is-nil': The tags file uses relative path, and CWD is nil.
+  Happens only when FIELD is `abspath' or `line'.
+- `file-not-exist': The file containing the symbol doesn't exist.
+  Happens only when FIELD is `line'.
+
+When these error may happen, they must be handled by the caller.
+In other situations, when FIELD can't be get, this returns nil."
   (cond
+   ((eq field 'abspath)
+    (let ((path (citre-get-field 'path record)))
+      (if (file-name-absolute-p path)
+          path
+        (if cwd
+            (expand-file-name path cwd)
+          (signal 'citre-error 'cwd-is-nil)))))
    ((eq field 'line)
-    (when (file-exists-p (citre-get-field 'path record))
-      (with-temp-buffer
-        (insert-file-contents (citre-get-field 'path record))
-        (goto-char (point-min))
-        (forward-line (1- (citre-get-field 'linum record)))
-        (string-trim (buffer-substring (line-beginning-position)
-                                       (line-end-position))))))
+    (let ((abspath (citre-get-field 'abspath record cwd)))
+      (if (file-exists-p abspath)
+          (with-temp-buffer
+            (insert-file-contents abspath)
+            (goto-char (point-min))
+            (forward-line (1- (citre-get-field 'linum record)))
+            (string-trim (buffer-substring (line-beginning-position)
+                                           (line-end-position))))
+        (signal 'citre-error 'file-not-exist))))
    (t
     (let* ((n (pcase field
                 ('tag 0)
@@ -861,18 +895,37 @@ not specified, find it automatically under current project root.
 The result is a list of strings, each string consists of relative
 file path and the line content, with text properties containing
 the kind, linum and absolute path of the tag."
-  (let ((symbol (or symbol (thing-at-point 'symbol)))
-        (tagsfile (or tagsfile (citre--tags-file-path)))
-        (location-str-generator
-         (lambda (record)
-           (citre--propertize
-            (concat (propertize
-                     (citre--relative-path
-                      (citre-get-field 'path record))
-                     'face 'warning)
-                    ": "
-                    (citre-get-field 'line record))
-            record 'kind 'linum 'path))))
+  (let* ((symbol (or symbol (thing-at-point 'symbol)))
+         (tagsfile (or tagsfile (citre--tags-file-path)))
+         (cwd (citre-get-pseudo-tag "TAG_PROC_CWD" tagsfile))
+         (location-str-generator
+          (lambda (record)
+            (citre--propertize
+             (concat (propertize
+                      ;; Notice we want path relative to the project root, while
+                      ;; `path' field gives path relative to the cwd of ctags
+                      ;; command, so it can't be directly used.
+                      (citre--relative-path
+                       (condition-case err
+                           (citre-get-field 'abspath record cwd)
+                         (citre-error
+                          (error "Pseudo tag TAG_PROC_CWD not found.  \
+Regenerate %s with it enabled" tagsfile))
+                         (error
+                          (signal (car err) (cdr err)))))
+                      'face 'warning)
+                     ": "
+                     (condition-case err
+                         (citre-get-field 'line record)
+                       (citre-error
+                        (pcase (cdr err)
+                          (cwd-is-nil
+                           (error "Pseudo tag TAG_PROC_CWD not found.  \
+Regenerate %s with it enabled" tagsfile))
+                          (file-not-exist
+                           (error "Path in tags file not exist.  \
+Update tags file %s" tagsfile))))))
+             record 'kind 'linum 'path))))
     (unless symbol
       (user-error "No symbol at point"))
     (cl-map 'list location-str-generator
