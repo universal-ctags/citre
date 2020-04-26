@@ -410,17 +410,28 @@ in them, and the user grab such a symbol and let Citre process
 it."
   (replace-regexp-in-string "'" "'\"'\"'" string))
 
-(defun citre--format-shell-command (string &rest objects)
-  "Format OBJECTS to produce shell commands.
-STRING is the format string.  This prevents certain kind of
-command injection, by applying
-`citre--disable-single-quote-as-terminator' to the printed
-representation of each of OBJECTS first, see its docstring for
-details."
-  (apply #'format string
-         (mapcar #'citre--disable-single-quote-as-terminator
-                 (mapcar (lambda (object) (format "%s" object))
-                         objects))))
+(defun citre--build-shell-command (&rest args)
+  "Build a shell command from ARGS.
+Each element of ARGS could be a string, symbol or list.  For
+strings, this formats them using \"%s\"; for symbols and lists,
+this formats them using \"%S\". Then, each of them is wrapped in
+single quotes, and concatenated with a space between each of
+them.
+
+Before wrapping in single quotes,
+`citre--disable-single-quote-as-terminator' is applied to each of
+them to prevent certain kinds of shell injection.  See its
+docstring for details.
+
+This function is not for building shell commands in general, but
+only for Citre's own use, especially for building readtags
+commands."
+  (apply #'concat
+         (mapcar (lambda (elt)
+                   (format "'%s' "
+                           (citre--disable-single-quote-as-terminator
+                            (format (if (stringp elt) "%s" "%S") elt))))
+                 args)))
 
 (defun citre--tags-file-use-absolute-path-p (tagsfile)
   "Detect if file paths in tags file TAGSFILE are absolute.
@@ -430,9 +441,10 @@ inspecting the first line of regular tags."
     (error "%s doesn't exist" tagsfile))
   (let* ((program (or citre-readtags-program "readtags"))
          (line (shell-command-to-string
-                (citre--format-shell-command
-                 "'%s' -t '%s' -l | head -1"
-                 program tagsfile)))
+                (concat
+                 (citre--build-shell-command
+                  program "-t" tagsfile "-l")
+                 " | head -1")))
          (path (nth 1 (split-string line "\t" t))))
     (file-name-absolute-p path)))
 
@@ -514,26 +526,45 @@ The meaning of the optional arguments are:
 - FILTER-SEXP: Should be nil or a list.  A list means filter
   the tags with `filter-sexp' using -Q option.  This list should
   consists of symbols, strings, and/or similar lists."
-  (let* ((program (or citre-readtags-program "readtags"))
+  (let* ((parts nil)
          ;; Strip the text properties first so we can eval it in a backquote
          ;; form later to get just the symbol itself.
          (name (when name (substring-no-properties name)))
          (match (or match 'exact))
-         (action (if name (format "- '%s'" name) "-l"))
-         (filter-sexp (if filter-sexp (format "-Q '%S'" filter-sexp) ""))
          (extras (concat
                   "-ne"
                   (pcase match
                     ('exact "")
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
-                  (if case-sensitive "" "i")))
-         (command
-          (format "'%s' -t '%s' %s %s %s"
-                  program tagsfile filter-sexp extras action)))
-    (split-string
-     (shell-command-to-string command)
-     "\n" t)))
+                  (if case-sensitive "" "i"))))
+    ;; Program name
+    (push (or citre-readtags-program "readtags") parts)
+    ;; Read from this tags file
+    (push "-t" parts)
+    (push tagsfile parts)
+    ;; Filter expression
+    (when filter-sexp
+      (push "-Q" parts)
+      (push filter-sexp parts))
+    ;; Extra arguments
+    (push extras parts)
+    ;; Action
+    (if name
+        (progn (push "-" parts)
+               (push name parts))
+      (push "-l" parts))
+    (let ((result (split-string
+                   (shell-command-to-string
+                    (apply #'citre--build-shell-command (nreverse parts)))
+                   "\n" t)))
+      ;; It's hard to know the exit code of a command, which means we have to
+      ;; build our own solution on atomic process functions like
+      ;; `make-process'. Rather, we just see if the first line in the output
+      ;; contains a tab.  If it's not, then it must be an error information.
+      (if (string-match "\t" (car result))
+          result
+        (error (string-join result "\n"))))))
 
 (defun citre--parse-line (line &optional tagsfile)
   "Parse a line from readtags output.
@@ -590,9 +621,8 @@ to know the valid NAMEs."
   (let* ((program (or citre-readtags-program "readtags"))
          (name (concat "!_" name))
          (line (shell-command-to-string
-                (citre--format-shell-command
-                 "'%s' -t '%s' -Q '(eq? \"%s\" $name)' -D"
-                 program tagsfile name)))
+                (citre--build-shell-command
+                 program "-t" tagsfile "-Q" `(eq? ,name $name) "-D")))
          (value (nth 1 (split-string line "\t" t))))
     value))
 
