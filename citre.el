@@ -475,20 +475,21 @@ return it."
   (unless (file-exists-p tagsfile)
     (error "%s doesn't exist" tagsfile))
   (or
-   (car (cl-member tagsfile citre--tags-file-info-alist
-                   :key #'car :test #'equal))
+   (cdr (cl-find tagsfile citre--tags-file-info-alist
+                 :key #'car :test #'equal))
+
    (let ((cwd nil))
      (cond
       ((citre--tags-file-use-absolute-path-p tagsfile)
        (setf (alist-get tagsfile citre--tags-file-info-alist
                         nil nil #'equal)
              nil)
-       (list tagsfile))
+       nil)
       ((setq cwd (citre-get-pseudo-tag "TAG_PROC_CWD" tagsfile))
        (setf (alist-get tagsfile citre--tags-file-info-alist
                         nil nil #'equal)
              cwd)
-       (cons tagsfile cwd))
+       cwd)
       (t
        (error "%s uses relative path, but TAG_PROC_CWD pseudo tag \
 is not presented" tagsfile))))))
@@ -534,18 +535,17 @@ The meaning of the optional arguments are:
      (shell-command-to-string command)
      "\n" t)))
 
-(defun citre--parse-line (line &optional tagsfile-info)
+(defun citre--parse-line (line &optional tagsfile)
   "Parse a line from readtags output.
-LINE is the line to be parsed.  TAGSFILE-INFO is the additional
-info of the tags file containing LINE.  Such TAGSFILE-INFO should
-be get using `citre--tags-file-info'.
+LINE is the line to be parsed.  TAGSFILE is the canonical path to
+the tags file.
 
 This returns a list consists of the tag, its kind, signature,
 canonical path of the file and line number, which can be utilized
 by `citre-get-field'.
 
 If the file field in the line uses relative path, it's expanded
-to canonical path using the information in TAGSFILE-INFO."
+to canonical path using the TAG_PROC_CWD pseudo tag in TAGSFILE."
   (let* ((elts (split-string line "\t" t))
          kind signature path linum
          found-kind found-signature found-linum found-any)
@@ -553,7 +553,8 @@ to canonical path using the information in TAGSFILE-INFO."
     ;; absolute path, and when PATH is relative, TAGSFILE-INFO is guaranteed
     ;; (by `citre--tags-file-info') to containing the base path.  So we don't
     ;; need to check here.
-    (setq path (expand-file-name (nth 1 elts) (cdr tagsfile-info)))
+    (setq path (expand-file-name (nth 1 elts)
+                                 (citre--tags-file-info tagsfile)))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -638,7 +639,7 @@ commands should use, and ideally should only use."
       (_
        (error "Unexpected value of MATCH")))
     (mapcar (lambda (line)
-              (citre--parse-line line (citre--tags-file-info tagsfile)))
+              (citre--parse-line line tagsfile))
             lines)))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
