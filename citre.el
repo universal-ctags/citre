@@ -720,11 +720,11 @@ and some of its fields, which can be utilized by
       ((or 'exact 'prefix)
        (citre--readtags-get-records tagsfile name match case-sensitive))
       ('substring
-       (let ((op 'substr?)
-             (tag-name-expr (if case-sensitive '$name '(downcase $name)))
+       (let ((tag-name-expr (if case-sensitive '$name '(downcase $name)))
              (query-name-expr (if case-sensitive name (downcase name))))
-         (citre--readtags-get-records tagsfile nil nil nil
-                                      `(,op ,tag-name-expr ,query-name-expr))))
+         (citre--readtags-get-records
+          tagsfile nil nil nil
+          `(substr? ,tag-name-expr ,query-name-expr))))
       (_
        (error "Unexpected value of MATCH")))))
 
