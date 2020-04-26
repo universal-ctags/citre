@@ -358,9 +358,10 @@ by auto completion."
 
 ;;;; Core layer
 
-;; The core layer focuses on parsing tags files. The functions in the APIs
-;; section defines the only way that upper components should use to get
-;; informations from tags files.
+;; The core layer focuses on parsing tags files. The upper components should
+;; use the functions in the readtags APIs section to get information from tags
+;; files. But for `citre--readtags-get-lines', it's better to use its wrapper
+;; `citre-get-lines' instead, since it's argument is more human friendly.
 
 ;;;;; Basic Helpers
 
@@ -448,7 +449,7 @@ inspecting the first line of regular tags."
          (path (nth 1 (split-string line "\t" t))))
     (file-name-absolute-p path)))
 
-;;;;; Readtags interface
+;;;;; Internals
 
 (defvar citre--tags-file-info-alist nil
   "Alist for storing informations about tags file.
@@ -497,7 +498,7 @@ return it."
                         nil nil #'equal)
              nil)
        nil)
-      ((setq cwd (citre-get-pseudo-tag "TAG_PROC_CWD" tagsfile))
+      ((setq cwd (citre-readtags-get-pseudo-tag "TAG_PROC_CWD" tagsfile))
        (setf (alist-get tagsfile citre--tags-file-info-alist
                         nil nil #'equal)
              cwd)
@@ -506,8 +507,6 @@ return it."
        (error "%s uses relative path, but TAG_PROC_CWD pseudo tag \
 is not presented" tagsfile))))))
 
-;; TODO: Now we have nested format for building shell commands.  I don't know
-;; how to deal with quotes escaping for now.
 (defun citre--readtags-get-lines
     (tagsfile &optional name match case-sensitive filter-sexp)
   ;; TODO: Be more precise on `filter-sexp' once we decide how to format our
@@ -515,8 +514,8 @@ is not presented" tagsfile))))))
   "Get lines in tags file TAGSFILE using readtags.
 The meaning of the optional arguments are:
 
-- NAME: When presented, use the NAME action.  Otherwise use the
-  -l action.
+- NAME: If this is an non-empty string, use the NAME action.
+  Otherwise use the -l action.
 - MATCH: Nil or `exact' means performing exact matching in the
   NAME action, `prefix' means performing prefix matching in the
   NAME action.
@@ -550,10 +549,11 @@ The meaning of the optional arguments are:
     ;; Extra arguments
     (push extras parts)
     ;; Action
-    (if name
-        (progn (push "-" parts)
-               (push name parts))
-      (push "-l" parts))
+    (if (or (null name)
+            (string-empty-p name))
+        (push "-l" parts)
+      (push "-" parts)
+      (push name parts))
     (let ((result (split-string
                    (shell-command-to-string
                     (apply #'citre--build-shell-command (nreverse parts)))
@@ -566,17 +566,18 @@ The meaning of the optional arguments are:
           result
         (error (string-join result "\n"))))))
 
-(defun citre--parse-line (line &optional tagsfile)
+(defun citre--readtags-parse-line (line &optional tagsfile-info)
   "Parse a line from readtags output.
-LINE is the line to be parsed.  TAGSFILE is the canonical path to
-the tags file.
+LINE is the line to be parsed.  TAGSFILE-INFO is the additional
+info of the tags file containing LINE.  Such TAGSFILE-INFO should
+be get using `citre--tags-file-info'.
 
 This returns a list consists of the tag, its kind, signature,
 canonical path of the file and line number, which can be utilized
 by `citre-get-field'.
 
 If the file field in the line uses relative path, it's expanded
-to canonical path using the TAG_PROC_CWD pseudo tag in TAGSFILE."
+to canonical path using the information in TAGSFILE-INFO"
   (let* ((elts (split-string line "\t" t))
          kind signature path linum
          found-kind found-signature found-linum found-any)
@@ -584,8 +585,7 @@ to canonical path using the TAG_PROC_CWD pseudo tag in TAGSFILE."
     ;; absolute path, and when PATH is relative, TAGSFILE-INFO is guaranteed
     ;; (by `citre--tags-file-info') to containing the base path.  So we don't
     ;; need to check here.
-    (setq path (expand-file-name (nth 1 elts)
-                                 (citre--tags-file-info tagsfile)))
+    (setq path (expand-file-name (nth 1 elts) tagsfile-info))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -609,9 +609,9 @@ to canonical path using the TAG_PROC_CWD pseudo tag in TAGSFILE."
       (setq kind (nth 3 elts)))
     (list (car elts) kind signature path linum)))
 
-;;;;; APIs
+;;;;; Readtags APIs
 
-(defun citre-get-pseudo-tag (name tagsfile)
+(defun citre-readtags-get-pseudo-tag (name tagsfile)
   "Read the value of pseudo tag NAME in tags file TAGSFILE.
 NAME should not start with \"!_\".  Run
 
@@ -626,51 +626,28 @@ to know the valid NAMEs."
          (value (nth 1 (split-string line "\t" t))))
     value))
 
-;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
-(defun citre-get-records (name match tagsfile)
-  "Get records of tags in tags file TAGSFILE that match NAME.
-TAGSFILE is the canonical path of the tags file.  MATCH is how
-should the tags match NAME.  See the docstring of
-`citre--get-lines' for details.
+(defun citre--readtags-get-records
+    (tagsfile &optional name match case-sensitive filter-sexp)
+  "Get records of tags in tags file TAGSFILE based on the arguments.
 
-When relative path is used in TAGSFILE, it's expanded against
-PROJECT, or current project root if PROJECT is not specified.
+TAGSFILE is the canonical path of tags file.  About the meaning
+of NAME, MATCH, CASE-SENSITIVE, FILTER-SEXP, see the docstring of
+`citre--readtags-get-lines'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-field'.
 
-This function uses `citre--get-lines' to get lines from tags
-file, and `citre--parse-line' to parse each line.  See their
-docstrings to get an idea of how this works.  `citre-get-records'
-and `citre-get-field' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
-  (let* ((case-sensitive (pcase citre-case-sensitivity
-                           ('sensitive t)
-                           ('insensitive nil)
-                           ('smart (if (eq match 'exact)
-                                       t
-                                     (if (string= (downcase name) name)
-                                         nil t)))))
-
-         (lines nil))
-    (pcase match
-      ((or 'exact 'prefix)
-       (setq lines
-             (citre--readtags-get-lines tagsfile name match case-sensitive)))
-      ('substring
-       (let ((op 'substr?)
-             (tag-name-expr (if case-sensitive '$name '(downcase $name)))
-             (query-name-expr (if case-sensitive name
-                                `(downcase ,(substring-no-properties name)))))
-         (setq lines
-               (citre--readtags-get-lines tagsfile nil nil nil
-                                          `(,op ,tag-name-expr ,query-name-expr)))))
-      (_
-       (error "Unexpected value of MATCH")))
+This function uses `citre--readtags-get-lines' to get lines from
+tags file, and `citre--readtags-parse-line' to parse each line.
+Tags file can contain ambiguous informations.  To ascertain them,
+`citre--tags-file-info' is utilized.  See their docstrings to get
+an idea of how this works."
+  (let ((info (citre--tags-file-info tagsfile)))
     (mapcar (lambda (line)
-              (citre--parse-line line tagsfile))
-            lines)))
+              (citre--readtags-parse-line line info))
+            (citre--readtags-get-lines
+             tagsfile name match case-sensitive filter-sexp))))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
@@ -714,6 +691,42 @@ use."
                 ('linum 4)
                 (_ (error "Unexpected FIELD argument")))))
       (nth n record)))))
+
+;;;;; API wrappers for Citre
+
+(defun citre-get-records (name match tagsfile)
+  "Get records of tags in tags file TAGSFILE that match NAME.
+TAGSFILE is the canonical path of the tags file.  MATCH is how
+should the tags match NAME, which can be:
+
+- `prefix': Match all lines whose tags begin with SYMBOL, case
+  insensitively
+- `substring': Match all lines whose tags contain SYMBOL, case
+  insensitively.
+- `exact': Match all lines whose tags are exactly SYMBOL, case
+  sensitively.
+
+Each element in the returned value is a list containing the tag
+and some of its fields, which can be utilized by
+`citre-get-field'."
+  (let* ((case-sensitive (pcase citre-case-sensitivity
+                           ('sensitive t)
+                           ('insensitive nil)
+                           ('smart (if (eq match 'exact)
+                                       t
+                                     (if (string= (downcase name) name)
+                                         nil t))))))
+    (pcase match
+      ((or 'exact 'prefix)
+       (citre--readtags-get-records tagsfile name match case-sensitive))
+      ('substring
+       (let ((op 'substr?)
+             (tag-name-expr (if case-sensitive '$name '(downcase $name)))
+             (query-name-expr (if case-sensitive name (downcase name))))
+         (citre--readtags-get-records tagsfile nil nil nil
+                                      `(,op ,tag-name-expr ,query-name-expr))))
+      (_
+       (error "Unexpected value of MATCH")))))
 
 ;;;; Utils layer
 
