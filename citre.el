@@ -564,7 +564,7 @@ The meaning of the optional arguments are:
       ;; contains a tab.  If it's not, then it must be an error information.
       (if (string-match "\t" (car result))
           result
-        (error (string-join result "\n"))))))
+        (error "Readtags: %s" (string-join result "\n"))))))
 
 (defun citre--readtags-parse-line (line &optional tagsfile-info)
   "Parse a line from readtags output.
