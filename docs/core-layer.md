@@ -6,13 +6,13 @@ information from tags files.
 The basis of this layer is a readtags abstraction layer. Readtags is a
 program for filtering, sorting, and printing tags from tags files. On
 top of this, there are some wrappers around the APIs offered by the
-readtags abstraction layer, which transform human friendly inputs to
+readtags abstraction layer, which transforms human-friendly inputs to
 readtags API calls.
 
 ## Concepts of readtags
 
 The following is a brief introduction to the key concepts of readtags.
-Run `$ readtags -h` to learn more about it.
+Run `$ readtags -h` to learn more.
 
 The basic filtering and printing is done using **"actions"**. `-l`
 action lists all regular tags:
@@ -48,8 +48,8 @@ not utilized by Citre for now.
 
 Tags file can offer *ambiguous information*. For example, when
 generating the tags file with `$ ctags -R`, the file fields use relative
-path to the current working directory. When jumping to definition, how
-do we know where does them actually point to? This is the ambiguity of
+path to the current working directory. When jumping to definitions, how
+do we know where do they actually point to? This shows the ambiguity of
 information offered by tags files.
 
 To ascertain such ambiguous information, we need *additional
@@ -103,7 +103,7 @@ The records generated can be utilized by `citre-get-field`, to extract
 all kinds of information offered by them.
 
 Another API is `citre-readtags-get-pseudo-tag`, which gets the value of
-specific pseudo tag in a tags file. This is mainly used by
+a specific pseudo tag in a tags file. This is mainly used by
 `citre--tags-file-info`, but upper components may want to use it too.
 
 `citre-readtags-get-records` has two problems:
@@ -112,13 +112,13 @@ specific pseudo tag in a tags file. This is mainly used by
   friendly.
 - Additional information may be needed for the filter expression. For
   example, I want to filter tags from `/home/me/citre/citre.el"`, but
-  how do I know if the tags use relative or absolute path? So I have to
+  how do I know if the tags use relative or absolute paths? So I have to
   call `citre--tags-file-info` beforehand to get this piece of
   information, then I can build the right filter expression.
 
 `citre-get-records` is a wrapper around `citre-readtags-get-records`, to
-overcome these inconvenience. It transforms human friendly arguments to
-`citre-readtags-get-records` calls, and whenever the need emerges in
+overcome these inconvenience. It transforms human-friendly arguments to
+`citre-readtags-get-records` calls, and whenever the need emerges in the
 future, it will also take care of getting the additional information
 needed. In general, it's recommended for upper components to use
 `citre-get-records` instead of `citre-readtags-get-records`.
@@ -142,7 +142,7 @@ expressions, and let's call them "target expressions".
 
 The rule is simple: For strings in target expressions, you use strings
 in source expressions; for anything else in target expressions, you use
-symbols in source expressions. This is also in the docstring of
+symbols in source expressions. This is also said in the docstring of
 `citre--readtags-get-lines`. See this:
 
 ``` elisp
