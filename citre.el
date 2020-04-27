@@ -555,17 +555,17 @@ The meaning of the optional arguments are:
         (push "-l" parts)
       (push "-" parts)
       (push name parts))
-    (let ((result (split-string
-                   (shell-command-to-string
-                    (apply #'citre--build-shell-command (nreverse parts)))
-                   "\n" t)))
-      ;; It's hard to know the exit code of a command, which means we have to
-      ;; build our own solution on atomic process functions like
-      ;; `make-process'. Rather, we just see if the first line in the output
-      ;; contains a tab.  If it's not, then it must be an error information.
-      (if (string-match "\t" (car result))
-          result
-        (error "Readtags: %s" (string-join result "\n"))))))
+    (let* ((result (split-string
+                    (shell-command-to-string
+                     (concat
+                      (apply #'citre--build-shell-command (nreverse parts))
+                      "; echo $?"))
+                    "\n" t))
+           (status (car (last result)))
+           (output (cl-subseq result 0 -1)))
+      (if (string= status "0")
+          output
+        (error "Readtags: %s" (string-join output "\n"))))))
 
 (defun citre--readtags-parse-line (line &optional tagsfile-info)
   "Parse a line from readtags output.
