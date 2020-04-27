@@ -435,28 +435,33 @@ commands."
            args)
    " "))
 
+;; TODO: Enhance the error handling here.  It's not easy, all the technique I
+;; found to get the exit status before the pipe is not POSIX-compatible.
 (defun citre--tags-file-use-absolute-path-p (tagsfile)
   "Detect if file paths in tags file TAGSFILE are absolute.
 TAGSFILE is the path to the tags file.  This is done by
 inspecting the first line of regular tags."
-  (unless (file-exists-p tagsfile)
-    (error "%s doesn't exist" tagsfile))
   (let* ((program (or citre-readtags-program "readtags"))
          (line (shell-command-to-string
                 (concat
                  (citre--build-shell-command
                   program "-t" tagsfile "-l")
-                 " | head -1")))
-         (path (nth 1 (split-string line "\t" t))))
-    (file-name-absolute-p path)))
+                 " | head -1"))))
+    (cond
+     ((string-empty-p line)
+      (error "Invalid tags file"))
+     ((not (string-match "\t" line))
+      (error "Readtags: %s" (string-trim line)))
+     (t
+      (file-name-absolute-p (nth 1 (split-string line "\t" t)))))))
 
 ;;;;; Internals
 
 (defvar citre--tags-file-info-alist nil
   "Alist for storing informations about tags file.
-Since some informations offerd by tags files may be ambiguous, we
-use this variable to store additional informations to ascertain
-them.
+Since some informations offered by tags files may be ambiguous,
+we use this variable to store additional informations to
+ascertain them.
 
 Its keys are absolute paths of tags files, values are the
 corresponding informations.  Currently the value is the current
@@ -510,8 +515,6 @@ is not presented" tagsfile))))))
 
 (defun citre--readtags-get-lines
     (tagsfile &optional name match case-sensitive filter-sexp)
-  ;; TODO: Be more precise on `filter-sexp' once we decide how to format our
-  ;; shell commands.
   "Get lines in tags file TAGSFILE using readtags.
 The meaning of the optional arguments are:
 
@@ -523,13 +526,19 @@ The meaning of the optional arguments are:
 - CASE-SENSITIVE: Nil means performing case-insensitive
   matching in the NAME action, non-nil means performing
   case-sensitive matching in the NAME action.
-- FILTER-SEXP: Should be nil or a list.  A list means filter
-  the tags with `filter-sexp' using -Q option.  This list should
-  consists of symbols, strings, and/or similar lists."
+- FILTER-SEXP: Should be nil, or a postprocessor expression.
+  Non-nil means filtering the tags with it using -Q option.
+  Please see the requirements of postprocessor expressions below.
+
+Requirements of postprocessor expressions:
+
+- Should be a symbol, or a list containing
+  symbols/strings/similar lists.
+- Use strings for strings, symbols for
+  operators/variables/anything else.
+- Use `true' for `#t', `false' for `#f', and `nil' or `()'
+  for `()'."
   (let* ((parts nil)
-         ;; Strip the text properties first so we can eval it in a backquote
-         ;; form later to get just the symbol itself.
-         (name (when name (substring-no-properties name)))
          (match (or match 'exact))
          (extras (concat
                   "-ne"
@@ -559,7 +568,9 @@ The meaning of the optional arguments are:
                     (shell-command-to-string
                      (concat
                       (apply #'citre--build-shell-command (nreverse parts))
-                      "; echo $?"))
+                      ;; In case the output of readtags is not terminated by
+                      ;; newline, we add an extra one.
+                      "; printf \"\n$?\n\""))
                     "\n" t))
            (status (car (last result)))
            (output (cl-subseq result 0 -1)))
@@ -621,11 +632,19 @@ NAME should not start with \"!_\".  Run
 to know the valid NAMEs."
   (let* ((program (or citre-readtags-program "readtags"))
          (name (concat "!_" name))
-         (line (shell-command-to-string
-                (citre--build-shell-command
-                 program "-t" tagsfile "-Q" `(eq? ,name $name) "-D")))
-         (value (nth 1 (split-string line "\t" t))))
-    value))
+         (result (split-string
+                  (shell-command-to-string
+                   (concat
+                    (citre--build-shell-command
+                     program "-t" tagsfile "-Q" `(eq? ,name $name) "-D")
+                    "; printf \"\n$?\n\""))
+                  "\n" t))
+         (status (car (last result)))
+         (output (car (cl-subseq result 0 -1))))
+    (if (string= status "0")
+        (when output
+          (nth 1 (split-string output "\t" t)))
+      (error "Readtags: %s" output))))
 
 (defun citre-readtags-get-records
     (tagsfile &optional name match case-sensitive filter-sexp)
@@ -659,8 +678,8 @@ an idea of how this works."
 ;; return nil.
 (defun citre-get-field (field record)
   "Get FIELD from RECORD.
-RECORD is an output from `citre--parse-line'.  FIELD is a symbol
-which can be:
+RECORD is an output from `citre--readtags-parse-line'.  FIELD is
+a symbol which can be:
 
 - `tag': The tag name, i.e. the symbol name.
 - `kind': The kind.  This tells if the symbol is a variable or
@@ -669,11 +688,7 @@ which can be:
 - `path': The absolute path of the file containing the symbol.
 - `linum': The line number of the symbol in the file.
 - `line': The line containing the symbol.  Leading and trailing
-  whitespaces are trimmed.
-
-`citre-get-field' and `citre-get-records' are the 2 main APIs
-that interactive commands should use, and ideally should only
-use."
+  whitespaces are trimmed."
   (cond
    ((eq field 'line)
     (when (file-exists-p (citre-get-field 'path record))
@@ -693,7 +708,7 @@ use."
                 (_ (error "Unexpected FIELD argument")))))
       (nth n record)))))
 
-;;;;; API wrappers for Citre
+;;;;; Readtags API wrappers
 
 (defun citre-get-records (name match tagsfile)
   "Get records of tags in tags file TAGSFILE that match NAME.
@@ -1052,8 +1067,8 @@ This is suitable to run after jumping to a location."
 ;;;; Tools layer
 
 ;; The tools layer provides tools that's used directly by the user.  This layer
-;; could use all functions offerd by the utils layer, but only the two APIs
-;; offerd by the core layer.
+;; could use all functions offered by the utils layer, but only the two APIs
+;; offered by the core layer.
 
 ;;;;; Tool: jump to definition (based on xref)
 
