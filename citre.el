@@ -427,12 +427,13 @@ docstring for details.
 This function is not for building shell commands in general, but
 only for Citre's own use, especially for building readtags
 commands."
-  (apply #'concat
-         (mapcar (lambda (elt)
-                   (format "'%s' "
-                           (citre--disable-single-quote-as-terminator
-                            (format (if (stringp elt) "%s" "%S") elt))))
-                 args)))
+  (string-join
+   (mapcar (lambda (elt)
+             (format "'%s'"
+                     (citre--disable-single-quote-as-terminator
+                      (format (if (stringp elt) "%s" "%S") elt))))
+           args)
+   " "))
 
 (defun citre--tags-file-use-absolute-path-p (tagsfile)
   "Detect if file paths in tags file TAGSFILE are absolute.
