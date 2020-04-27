@@ -627,7 +627,7 @@ to know the valid NAMEs."
          (value (nth 1 (split-string line "\t" t))))
     value))
 
-(defun citre--readtags-get-records
+(defun citre-readtags-get-records
     (tagsfile &optional name match case-sensitive filter-sexp)
   "Get records of tags in tags file TAGSFILE based on the arguments.
 
@@ -719,11 +719,11 @@ and some of its fields, which can be utilized by
                                          nil t))))))
     (pcase match
       ((or 'exact 'prefix)
-       (citre--readtags-get-records tagsfile name match case-sensitive))
+       (citre-readtags-get-records tagsfile name match case-sensitive))
       ('substring
        (let ((tag-name-expr (if case-sensitive '$name '(downcase $name)))
              (query-name-expr (if case-sensitive name (downcase name))))
-         (citre--readtags-get-records
+         (citre-readtags-get-records
           tagsfile nil nil nil
           `(substr? ,tag-name-expr ,query-name-expr))))
       (_
