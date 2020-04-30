@@ -494,9 +494,8 @@ return it."
   (unless (file-exists-p tagsfile)
     (error "%s doesn't exist" tagsfile))
   (or
-   (cdr (cl-find tagsfile citre--tags-file-info-alist
-                 :key #'car :test #'equal))
-
+   (when-let ((pair (assoc tagsfile citre--tags-file-info-alist #'equal)))
+     (cdr pair))
    (let ((cwd nil))
      (cond
       ((citre--tags-file-use-absolute-path-p tagsfile)
