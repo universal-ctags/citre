@@ -358,11 +358,12 @@ by auto completion."
 
 ;;;; Core layer
 
-;; The core layer focuses on parsing tags files. Its main APIs
-;; `citre-get-records' and `citre-get-field' defines the only way that upper
-;; components should use to get informations from tags files.
+;; The core layer focuses on parsing tags files. The upper components should
+;; use the functions in the readtags APIs section to get information from tags
+;; files. But for `citre--readtags-get-lines', it's better to use its wrapper
+;; `citre-get-lines' instead, since it's argument is more human friendly.
 
-;;;;; Filter and parse lines from tags file
+;;;;; Basic Helpers
 
 (defun citre--disable-single-quote-as-terminator (string)
   ;; TIP: Help mode renders single quotes in docstrings as curly single quotes,
@@ -410,96 +411,192 @@ in them, and the user grab such a symbol and let Citre process
 it."
   (replace-regexp-in-string "'" "'\"'\"'" string))
 
-(defun citre--format-shell-command (string &rest objects)
-  "Format OBJECTS to produce shell commands.
-STRING is the format string.  This prevents certain kind of
-command injection, by applying
-`citre--disable-single-quote-as-terminator' to the printed
-representation of each of OBJECTS first, see its docstring for
-details."
-  (apply #'format string
-         (mapcar #'citre--disable-single-quote-as-terminator
-                 (mapcar (lambda (object) (format "%s" object))
-                         objects))))
+(defun citre--build-shell-command (&rest args)
+  "Build a shell command from ARGS.
+Each element of ARGS could be a string, symbol or list.  For
+strings, this formats them using \"%s\"; for symbols and lists,
+this formats them using \"%S\". Then, each of them is wrapped in
+single quotes, and concatenated with a space between each of
+them.
 
-(defun citre--get-lines (symbol match tagsfile)
-  "Get lines in tags file TAGSFILE that match SYMBOL.
-This function returns a list of the lines.  SYMBOL is a string.
-MATCH is a symbol, which can be:
+Before wrapping in single quotes,
+`citre--disable-single-quote-as-terminator' is applied to each of
+them to prevent certain kinds of shell injection.  See its
+docstring for details.
 
-- `prefix': Match all lines whose tags begin with SYMBOL, case
-  insensitively
-- `substring': Match all lines whose tags contain SYMBOL, case
-  insensitively.
-- `exact': Match all lines whose tags are exactly SYMBOL, case
-  sensitively."
+This function is not for building shell commands in general, but
+only for Citre's own use, especially for building readtags
+commands."
+  (string-join
+   (mapcar (lambda (elt)
+             (format "'%s'"
+                     (citre--disable-single-quote-as-terminator
+                      (format (if (stringp elt) "%s" "%S") elt))))
+           args)
+   " "))
+
+;; TODO: Enhance the error handling here.  It's not easy, all the technique I
+;; found to get the exit status before the pipe is not POSIX-compatible.
+(defun citre--tags-file-use-absolute-path-p (tagsfile)
+  "Detect if file paths in tags file TAGSFILE are absolute.
+TAGSFILE is the path to the tags file.  This is done by
+inspecting the first line of regular tags."
   (let* ((program (or citre-readtags-program "readtags"))
-         ;; Strip the text properties first so we can eval it in a backquote
-         ;; form later to get just the symbol itself.
-         (symbol (substring-no-properties symbol))
-         (case-sensitive (pcase citre-case-sensitivity
-                           ('sensitive t)
-                           ('insensitive nil)
-                           ('smart (if (eq match 'exact)
-                                       t
-                                     (if (string= (downcase symbol) symbol)
-                                         nil t)))))
-         (op (pcase match
-               ('prefix 'prefix?)
-               ('substring 'substr?)
-               ('exact 'eq?)))
-         (symbol-expr (if case-sensitive
-                          symbol
-                        ;; Since SYMBOL is a string, when we format this list
-                        ;; with "%s" later, we automatically get double
-                        ;; quotes around SYMBOL.
-                        `(downcase ,symbol)))
-         (name-expr (if case-sensitive
-                        '$name
-                      '(downcase $name)))
-         (command
-          (cond
-           ;; Use NAME action when possible.  In some situations the NAME
-           ;; action is faster then filtering using sexp, since it uses binary
-           ;; search in sorted tags files for case-sensitive searches.
-           ((and (eq match 'exact) case-sensitive)
-            (citre--format-shell-command "'%s' -t '%s' -ne - '%s'"
-                                         program tagsfile symbol))
-           ((and (eq match 'exact) (not case-sensitive))
-            (citre--format-shell-command "'%s' -t '%s' -nei - '%s'"
-                                         program tagsfile symbol))
-           ((and (eq op 'prefix?) case-sensitive)
-            (citre--format-shell-command "'%s' -t '%s' -nep - '%s'"
-                                         program tagsfile symbol))
-           ((and (eq op 'prefix?) (not case-sensitive))
-            (citre--format-shell-command "'%s' -t '%s' -nepi - '%s'"
-                                         program tagsfile symbol))
-           ;; If we can't use the NAME action, use sexp based filtering.
-           (t
-            (citre--format-shell-command "'%s' -t '%s' -Q '%S' -nel"
-                                         program tagsfile
-                                         `(,op ,name-expr ,symbol-expr))))))
-    (split-string
-     (shell-command-to-string command)
-     "\n" t)))
+         (line (shell-command-to-string
+                (concat
+                 (citre--build-shell-command
+                  program "-t" tagsfile "-l")
+                 " | head -1"))))
+    (cond
+     ((string-empty-p line)
+      (error "Invalid tags file"))
+     ((not (string-match "\t" line))
+      (error "Readtags: %s" (string-trim line)))
+     (t
+      (file-name-absolute-p (nth 1 (split-string line "\t" t)))))))
 
-;; TODO: get rid of this PROJECT arg using pseudo tags.
-(defun citre--parse-line (line &optional project)
+;;;;; Internals
+
+(defvar citre--tags-file-info-alist nil
+  "Alist for storing informations about tags file.
+Since some informations offered by tags files may be ambiguous,
+we use this variable to store additional informations to
+ascertain them.
+
+Its keys are absolute paths of tags files, values are the
+corresponding informations.  Currently the value is the current
+working directory when generating the tags file, and is only
+presented when relative paths are used in the tags file.")
+
+;; TODO: In many situations, we require the file path is not only absolute
+;; (i.e., `file-name-absolute-p' returns t), but also "canonical" (i.e., AND it
+;; doesn't start with "~"). We should make this definition clear in the
+;; documentations for developers, and make the requirement clear in all the
+;; docstrings.
+
+;; TODO: Think about how to deal with tags file update (or is it necessary).
+;; Most of the time, the tags file is updated using a same command, and if
+;; that's not the case, chances are this function throws an error, and the user
+;; updated the tags file using the right command.  In this situation, the info
+;; of tags file didn't goes into `citre--tags-file-info-alist', so there will
+;; be no problem.
+(defun citre--tags-file-info (tagsfile)
+  "Return the info of tags file TAGSFILE.
+TAGSFILE is the canonical path to the tags file, and the return
+value are additional informations of it.  This return value is a
+valid value in `citre--tags-file-info-alist', see its docstring
+for details.
+
+When the info of TAGSFILE is presented in
+`citre--tags-file-info-alist', it's directly returned, or this
+function will write it to `citre--tags-file-info-alist', then
+return it."
+  (unless (file-exists-p tagsfile)
+    (error "%s doesn't exist" tagsfile))
+  (or
+   (when-let ((pair (assoc tagsfile citre--tags-file-info-alist #'equal)))
+     (cdr pair))
+   (let ((cwd nil))
+     (cond
+      ((citre--tags-file-use-absolute-path-p tagsfile)
+       (setf (alist-get tagsfile citre--tags-file-info-alist
+                        nil nil #'equal)
+             nil)
+       nil)
+      ((setq cwd (citre-readtags-get-pseudo-tag "TAG_PROC_CWD" tagsfile))
+       (setf (alist-get tagsfile citre--tags-file-info-alist
+                        nil nil #'equal)
+             cwd)
+       cwd)
+      (t
+       (error "%s uses relative path, but TAG_PROC_CWD pseudo tag \
+is not presented" tagsfile))))))
+
+(defun citre--readtags-get-lines
+    (tagsfile &optional name match case-sensitive filter-sexp)
+  "Get lines in tags file TAGSFILE using readtags.
+The meaning of the optional arguments are:
+
+- NAME: If this is an non-empty string, use the NAME action.
+  Otherwise use the -l action.
+- MATCH: Nil or `exact' means performing exact matching in the
+  NAME action, `prefix' means performing prefix matching in the
+  NAME action.
+- CASE-SENSITIVE: Nil means performing case-insensitive
+  matching in the NAME action, non-nil means performing
+  case-sensitive matching in the NAME action.
+- FILTER-SEXP: Should be nil, or a postprocessor expression.
+  Non-nil means filtering the tags with it using -Q option.
+  Please see the requirements of postprocessor expressions below.
+
+Requirements of postprocessor expressions:
+
+- Should be a symbol, or a list containing
+  symbols/strings/similar lists.
+- Use strings for strings, symbols for
+  operators/variables/anything else.
+- Use `true' for `#t', `false' for `#f', and `nil' or `()'
+  for `()'."
+  (let* ((parts nil)
+         (match (or match 'exact))
+         (extras (concat
+                  "-ne"
+                  (pcase match
+                    ('exact "")
+                    ('prefix "p")
+                    (_ (error "Unexpected value of MATCH")))
+                  (if case-sensitive "" "i"))))
+    ;; Program name
+    (push (or citre-readtags-program "readtags") parts)
+    ;; Read from this tags file
+    (push "-t" parts)
+    (push tagsfile parts)
+    ;; Filter expression
+    (when filter-sexp
+      (push "-Q" parts)
+      (push filter-sexp parts))
+    ;; Extra arguments
+    (push extras parts)
+    ;; Action
+    (if (or (null name)
+            (string-empty-p name))
+        (push "-l" parts)
+      (push "-" parts)
+      (push name parts))
+    (let* ((result (split-string
+                    (shell-command-to-string
+                     (concat
+                      (apply #'citre--build-shell-command (nreverse parts))
+                      ;; In case the output of readtags is not terminated by
+                      ;; newline, we add an extra one.
+                      "; printf \"\n$?\n\""))
+                    "\n" t))
+           (status (car (last result)))
+           (output (cl-subseq result 0 -1)))
+      (if (string= status "0")
+          output
+        (error "Readtags: %s" (string-join output "\n"))))))
+
+(defun citre--readtags-parse-line (line &optional tagsfile-info)
   "Parse a line from readtags output.
-LINE is the line to be parsed.  This returns a list consists of
-the tag, its kind, signature, absolute path of the file and line
-number, which can be utilized by `citre-get-field'.
+LINE is the line to be parsed.  TAGSFILE-INFO is the additional
+info of the tags file containing LINE.  Such TAGSFILE-INFO should
+be get using `citre--tags-file-info'.
+
+This returns a list consists of the tag, its kind, signature,
+canonical path of the file and line number, which can be utilized
+by `citre-get-field'.
 
 If the file field in the line uses relative path, it's expanded
-to absolute path using current project root, or PROJECT if it's
-non-nil."
-  (let* ((project (or project (citre--project-root)))
-         (elts (split-string line "\t" t))
+to canonical path using the information in TAGSFILE-INFO"
+  (let* ((elts (split-string line "\t" t))
          kind signature path linum
          found-kind found-signature found-linum found-any)
     ;; NOTE: `expand-file-name' will return PATH directly when PATH is an
-    ;; absolute path. This is the desired behavior.
-    (setq path (expand-file-name (nth 1 elts) project))
+    ;; absolute path, and when PATH is relative, TAGSFILE-INFO is guaranteed
+    ;; (by `citre--tags-file-info') to containing the base path.  So we don't
+    ;; need to check here.
+    (setq path (expand-file-name (nth 1 elts) tagsfile-info))
     (cl-dolist (elt (nthcdr 3 elts))
       (setq found-any nil)
       (when (string-match "^\\([^:]+\\):\\(.*\\)" elt)
@@ -523,28 +620,53 @@ non-nil."
       (setq kind (nth 3 elts)))
     (list (car elts) kind signature path linum)))
 
-;;;;; APIs
+;;;;; Readtags APIs
 
-;; TODO: get rid of this PROJECT when `citre--parse-line' doesn't rely on it.
-(defun citre-get-records (symbol match tagsfile &optional project)
-  "Get records of tags in tags file TAGSFILE that match SYMBOL.
-MATCH is how should the tags match SYMBOL.  See the docstring of
-`citre--get-lines' for details.
+(defun citre-readtags-get-pseudo-tag (name tagsfile)
+  "Read the value of pseudo tag NAME in tags file TAGSFILE.
+NAME should not start with \"!_\".  Run
 
-When relative path is used in TAGSFILE, it's expanded against
-PROJECT, or current project root if PROJECT is not specified.
+  $ ctags --list-pseudo-tags
+
+to know the valid NAMEs."
+  (let* ((program (or citre-readtags-program "readtags"))
+         (name (concat "!_" name))
+         (result (split-string
+                  (shell-command-to-string
+                   (concat
+                    (citre--build-shell-command
+                     program "-t" tagsfile "-Q" `(eq? ,name $name) "-D")
+                    "; printf \"\n$?\n\""))
+                  "\n" t))
+         (status (car (last result)))
+         (output (car (cl-subseq result 0 -1))))
+    (if (string= status "0")
+        (when output
+          (nth 1 (split-string output "\t" t)))
+      (error "Readtags: %s" output))))
+
+(defun citre-readtags-get-records
+    (tagsfile &optional name match case-sensitive filter-sexp)
+  "Get records of tags in tags file TAGSFILE based on the arguments.
+
+TAGSFILE is the canonical path of tags file.  About the meaning
+of NAME, MATCH, CASE-SENSITIVE, FILTER-SEXP, see the docstring of
+`citre--readtags-get-lines'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-field'.
 
-This function uses `citre--get-lines' to get lines from tags
-file, and `citre--parse-line' to parse each line.  See their
-docstrings to get an idea of how this works.  `citre-get-records'
-and `citre-get-field' are the 2 main APIs that interactive
-commands should use, and ideally should only use."
-  (mapcar (lambda (line) (citre--parse-line line project))
-          (citre--get-lines symbol match tagsfile)))
+This function uses `citre--readtags-get-lines' to get lines from
+tags file, and `citre--readtags-parse-line' to parse each line.
+Tags file can contain ambiguous informations.  To ascertain them,
+`citre--tags-file-info' is utilized.  See their docstrings to get
+an idea of how this works."
+  (let ((info (citre--tags-file-info tagsfile)))
+    (mapcar (lambda (line)
+              (citre--readtags-parse-line line info))
+            (citre--readtags-get-lines
+             tagsfile name match case-sensitive filter-sexp))))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
@@ -555,8 +677,8 @@ commands should use, and ideally should only use."
 ;; return nil.
 (defun citre-get-field (field record)
   "Get FIELD from RECORD.
-RECORD is an output from `citre--parse-line'.  FIELD is a symbol
-which can be:
+RECORD is an output from `citre--readtags-parse-line'.  FIELD is
+a symbol which can be:
 
 - `tag': The tag name, i.e. the symbol name.
 - `kind': The kind.  This tells if the symbol is a variable or
@@ -565,11 +687,7 @@ which can be:
 - `path': The absolute path of the file containing the symbol.
 - `linum': The line number of the symbol in the file.
 - `line': The line containing the symbol.  Leading and trailing
-  whitespaces are trimmed.
-
-`citre-get-field' and `citre-get-records' are the 2 main APIs
-that interactive commands should use, and ideally should only
-use."
+  whitespaces are trimmed."
   (cond
    ((eq field 'line)
     (when (file-exists-p (citre-get-field 'path record))
@@ -585,8 +703,45 @@ use."
                 ('kind 1)
                 ('signature 2)
                 ('path 3)
-                ('linum 4))))
+                ('linum 4)
+                (_ (error "Unexpected FIELD argument")))))
       (nth n record)))))
+
+;;;;; Readtags API wrappers
+
+(defun citre-get-records (name match tagsfile)
+  "Get records of tags in tags file TAGSFILE that match NAME.
+TAGSFILE is the canonical path of the tags file.  MATCH is how
+should the tags match NAME, which can be:
+
+- `prefix': Match all lines whose tags begin with SYMBOL, case
+  insensitively
+- `substring': Match all lines whose tags contain SYMBOL, case
+  insensitively.
+- `exact': Match all lines whose tags are exactly SYMBOL, case
+  sensitively.
+
+Each element in the returned value is a list containing the tag
+and some of its fields, which can be utilized by
+`citre-get-field'."
+  (let* ((case-sensitive (pcase citre-case-sensitivity
+                           ('sensitive t)
+                           ('insensitive nil)
+                           ('smart (if (eq match 'exact)
+                                       t
+                                     (if (string= (downcase name) name)
+                                         nil t))))))
+    (pcase match
+      ((or 'exact 'prefix)
+       (citre-readtags-get-records tagsfile name match case-sensitive))
+      ('substring
+       (let ((tag-name-expr (if case-sensitive '$name '(downcase $name)))
+             (query-name-expr (if case-sensitive name (downcase name))))
+         (citre-readtags-get-records
+          tagsfile nil nil nil
+          `(substr? ,tag-name-expr ,query-name-expr))))
+      (_
+       (error "Unexpected value of MATCH")))))
 
 ;;;; Utils layer
 
@@ -911,8 +1066,8 @@ This is suitable to run after jumping to a location."
 ;;;; Tools layer
 
 ;; The tools layer provides tools that's used directly by the user.  This layer
-;; could use all functions offerd by the utils layer, but only the two APIs
-;; offerd by the core layer.
+;; could use all functions offered by the utils layer, but only the two APIs
+;; offered by the core layer.
 
 ;;;;; Tool: jump to definition (based on xref)
 
@@ -960,7 +1115,7 @@ This is suitable to run after jumping to a location."
                      ;; knows nothing about the internal of a collection
                      ;; function, it will call this closure with an empty STR
                      ;; to get the whole collection anyway.
-                     (citre-get-records str 'prefix tagsfile project))))
+                     (citre-get-records str 'prefix tagsfile))))
         (complete-with-action action collection str pred)))))
 
 ;;;;; Tool: peek definition
