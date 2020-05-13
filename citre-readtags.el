@@ -245,8 +245,8 @@ When KINDS is nil, all kinds of info are updated."
 ;;;; Internals: Tags file filtering & parsing
 
 (defvar citre-readtags--extension-fields-alist
-  '(("abspath" . (("input")
-                  (path))))
+  '((abspath . ((input)
+                (path))))
   "Alist of extension fields and their dependencies.
 Its keys are extension fields offered by Citre, values are lists
 of two elements:
@@ -310,24 +310,24 @@ zero.
 The return value is a list of cons pairs, the cars of which are
 field names, cdrs are the values."
   (pcase nth
-    (0 `(("name" . ,field)))
-    (1 `(("input" . ,field)))
-    (2 `(("pattern" . ,field)))
-    (3 `(("kind" . ,(cdr (citre-readtags--split-at-1st-colon field)))))
+    (0 `((name . ,field)))
+    (1 `((input . ,field)))
+    (2 `((pattern . ,field)))
+    (3 `((kind . ,(cdr (citre-readtags--split-at-1st-colon field)))))
     (_
      (let ((parts (citre-readtags--split-at-1st-colon field)))
        (pcase (car parts)
          ("line"
-          `(("line" . ,(string-to-number (cdr parts)))))
+          `((line . ,(string-to-number (cdr parts)))))
          ("scope"
           (let ((value (citre-readtags--split-at-1st-colon (cdr parts))))
-            `(("scope-kind" . ,(car value))
-              ("scope-name" . ,(cdr value)))))
+            `((scope-kind . ,(car value))
+              (scope-name . ,(cdr value)))))
          ((or "class" "struct")
-          `(("scope-kind" . ,(car parts))
-            ("scope-name" . ,(cdr parts))))
+          `((scope-kind . ,(car parts))
+            (scope-name . ,(cdr parts))))
          (_
-          `((,(car parts) . ,(cdr parts)))))))))
+          `((,(intern (car parts)) . ,(cdr parts)))))))))
 
 (defun citre-readtags--get-ext-field
     (dep-record field tagsfile-info)
@@ -341,23 +341,22 @@ info of the tags file."
 2. Regenerate the tags file with path in the command")
         (no-input-field-error "\"input\" field not found in DEP-RECORD"))
     (pcase field
-      ("abspath"
+      ('abspath
        (let ((value (citre-readtags--tags-file-info tagsfile-info 'path 'value)))
          (cond
           ((null (car value))
-           (or (gethash "input" dep-record)
+           (or (gethash 'input dep-record)
                (error no-input-field-error)))
           (t
            (let ((cwd (or (cdr value)
                           (error no-cwd-error)))
-                 (input (or (gethash "input" dep-record)
+                 (input (or (gethash 'input dep-record)
                             (error no-input-field-error))))
              (expand-file-name input cwd))))))
       (_ (error "Invalid FIELD")))))
 
 ;; TODO: offer "kind-full" extension field.
 ;; TODO: should we split the "lists" in LINE by comma?
-;; TODO: would it be faster if we use symbols as keys?
 (defun citre-readtags--parse-line (line &optional tagsfile-info
                                         require optional exclude
                                         require-ext optional-ext
@@ -399,8 +398,8 @@ mentioned above, we still have:
 - OPTIONAL and EXCLUDE shouldn't intersect.
 - OPTIONAL and EXCLUDE should not be used together."
   (let* ((elts (split-string line "\t" t))
-         (record (make-hash-table :test #'equal))
-         (dep-record (make-hash-table :test #'equal))
+         (record (make-hash-table :test #'eq))
+         (dep-record (make-hash-table :test #'eq))
          (parse-all-field (or exclude parse-all-field))
          (require-num (length require))
          (require-counter 0)
@@ -416,11 +415,11 @@ mentioned above, we still have:
           (dolist (result results)
             (let* ((field (car result))
                    (value (cdr result))
-                   (in-require (member field require))
-                   (in-optional (member field optional))
-                   (in-exclude (member field exclude))
-                   (in-require-ext-dep (member field require-ext-dep))
-                   (in-optional-ext-dep (member field optional-ext-dep)))
+                   (in-require (memq field require))
+                   (in-optional (memq field optional))
+                   (in-exclude (memq field exclude))
+                   (in-require-ext-dep (memq field require-ext-dep))
+                   (in-optional-ext-dep (memq field optional-ext-dep)))
               (when (or in-require in-optional
                         (and parse-all-field (null in-exclude)))
                 (puthash field value record)
@@ -443,15 +442,14 @@ mentioned above, we still have:
     (when (or (< require-counter require-num)
               (< require-ext-dep-counter require-ext-dep-num))
       (error "Fields not found in tags file: %s"
-             (string-join (cl-union
-                           (cl-set-difference require
-                                              (hash-table-keys record)
-                                              :test #'equal)
-                           (cl-set-difference require-ext-dep
-                                              (hash-table-keys dep-record)
-                                              :test #'equal)
-                           :test #'equal)
-                          ", ")))
+             (string-join
+              (mapcar #'symbol-name
+                      (cl-union
+                       (cl-set-difference require
+                                          (hash-table-keys record))
+                       (cl-set-difference require-ext-dep
+                                          (hash-table-keys dep-record))))
+              ", ")))
     (dolist (field require-ext)
       (puthash field
                (citre-readtags--get-ext-field dep-record field tagsfile-info)
@@ -575,28 +573,23 @@ To use an extension field, it must appear in REQUIRE or OPTIONAL."
                               citre-readtags--extension-fields-alist
                               nil nil #'equal))))
          (ext-fields (mapcar #'car citre-readtags--extension-fields-alist))
-         (require-ext (cl-intersection require ext-fields :test #'equal))
-         (optional-ext (cl-intersection optional ext-fields :test #'equal))
+         (require-ext (cl-intersection require ext-fields))
+         (optional-ext (cl-intersection optional ext-fields))
          (require-ext-dep (cl-delete-duplicates
                            (apply #'append
-                                  (mapcar find-field-depends require-ext))
-                           :test #'equal))
+                                  (mapcar find-field-depends require-ext))))
          (optional-ext-dep (cl-delete-duplicates
                            (apply #'append
-                                  (mapcar find-field-depends optional-ext))
-                           :test #'equal))
+                                  (mapcar find-field-depends optional-ext))))
          (require (cl-delete-duplicates
-                   (cl-set-difference require ext-fields :test #'equal)
-                   :test #'equal))
+                   (cl-set-difference require ext-fields)))
          (optional (cl-delete-duplicates
-                    (cl-set-difference optional ext-fields :test #'equal)
-                    :test #'equal))
-         (exclude (cl-delete-duplicates exclude :test #'equal))
+                    (cl-set-difference optional ext-fields)))
+         (exclude (cl-delete-duplicates exclude))
          (kinds (cl-delete-duplicates
                 (apply #'append
                        (mapcar find-info-depends
-                               (append require-ext optional-ext)))
-                :test #'equal))
+                               (append require-ext optional-ext)))))
          (info (apply #'citre-readtags--get-tags-file-info
                       tagsfile kinds)))
     (when (cl-intersection exclude ext-fields)
@@ -638,9 +631,9 @@ FIELD can also be:
 When FIELD is one of these values, the result is calculated in
 real time, rather than get from the record."
   (pcase field
-    ("line-content"
-     (when-let ((path (gethash "abspath" record))
-                (line (gethash "line" record)))
+    ('line-content
+     (when-let ((path (gethash abspath record))
+                (line (gethash line record)))
        (when (file-exists-p path)
          (with-temp-buffer
            (insert-file-contents path)
