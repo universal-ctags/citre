@@ -402,8 +402,8 @@ mentioned above, we still have:
 - OPTIONAL and EXCLUDE shouldn't intersect.
 - OPTIONAL and EXCLUDE should not be used together."
   (let* ((elts (split-string line "\t" t))
-         (record (make-hash-table :test #'eq))
-         (dep-record (make-hash-table :test #'eq))
+         (record (make-hash-table :test #'eq :size 20))
+         (dep-record (make-hash-table :test #'eq :size 2))
          (parse-all-field (or exclude parse-all-field))
          (require-num (length require))
          (require-counter 0)
@@ -636,8 +636,8 @@ When FIELD is one of these values, the result is calculated in
 real time, rather than get from the record."
   (pcase field
     ('line-content
-     (when-let ((path (gethash abspath record))
-                (line (gethash line record)))
+     (when-let ((path (gethash 'abspath record))
+                (line (gethash 'line record)))
        (when (file-exists-p path)
          (with-temp-buffer
            (insert-file-contents path)
