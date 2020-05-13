@@ -315,21 +315,23 @@ field names, cdrs are the values."
     (2 `((pattern . ,field)))
     (3 `((kind . ,(cdr (citre-readtags--split-at-1st-colon field)))))
     (_
-     (let ((parts (citre-readtags--split-at-1st-colon field)))
-       (pcase (car parts)
+     (let* ((parts (citre-readtags--split-at-1st-colon field))
+            (field-name (car parts))
+            (field-value (cdr parts)))
+       (pcase field-name
          ("line"
-          `((line . ,(string-to-number (cdr parts)))))
+          `((line . ,(string-to-number field-value))))
          ("end"
-          `((end . ,(string-to-number (cdr parts)))))
+          `((end . ,(string-to-number field-value))))
          ("scope"
-          (let ((value (citre-readtags--split-at-1st-colon (cdr parts))))
+          (let ((value (citre-readtags--split-at-1st-colon field-value)))
             `((scope-kind . ,(car value))
               (scope-name . ,(cdr value)))))
          ((or "class" "struct")
-          `((scope-kind . ,(car parts))
-            (scope-name . ,(cdr parts))))
+          `((scope-kind . ,field-name)
+            (scope-name . ,field-value)))
          (_
-          `((,(intern (car parts)) . ,(cdr parts)))))))))
+          `((,(intern field-name) . ,field-value))))))))
 
 (defun citre-readtags--get-ext-field
     (dep-record field tagsfile-info)
@@ -532,7 +534,7 @@ key arguments:
   other fields will be recorded.
 
 OPTIONAL and REQUIRE should not be used together.  When both
-OPTIONAL and REQUIRE are not presented, then only the fields in
+OPTIONAL and EXCLUDE are not presented, then only the fields in
 REQUIRE are parsed, unless PARSE-ALL-FIELD is non-nil.
 
 Valid field names are strings. Please notice these field names:
