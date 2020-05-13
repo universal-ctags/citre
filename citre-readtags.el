@@ -167,17 +167,16 @@ ascertain them.
 This alist looks like:
 
   (alist of:
-   tags file -> list of \"kinds of info\":
-                ((time field . value field)
-                 ...))
+   tags file -> hash table of additional info:
+                (info kind -> (time field . value field)))
 
 The time fields are the last update time of its corresponding
-kind of info, in the style of (current-time).  The value fields
-in order are:
+kind of info, in the style of (current-time).  Kinds of info and
+their corresponding value fields are:
 
-- path: A cons pair.  Its car is t when relative paths are used
-  in the tags file, and cdr is the current working directory when
-  generating the tags file.")
+- `path': The value field is a cons pair.  Its car is t when
+  relative paths are used in the tags file, and cdr is the
+  current working directory when generating the tags file.")
 
 (defmacro citre-readtags--tags-file-info (info kind &optional field)
   "Return the place form of KIND in INFO.
@@ -186,10 +185,7 @@ For possible values of KIND, see
 `citre-readtags--get-tags-file-info'.  FIELD could be `time' or
 `value' to return the time field or value field in KIND.  When
 nil, the whole kind of info is returned."
-  (let* ((n `(pcase ,kind
-               ('path 0)
-               (_ (error "Invalid KIND"))))
-         (form `(nth ,n ,info)))
+  (let ((form `(gethash ,kind ,info)))
     `(pcase ,field
        ('time (car ,form))
        ('value (cdr ,form))
@@ -230,12 +226,12 @@ When KINDS is nil, all kinds of info are updated."
     (cl-symbol-macrolet ((info (alist-get tagsfile
                                           citre-readtags--tags-file-info-alist
                                           nil nil #'equal)))
-      ;; NOTE: hard coded things here
-      (unless (eq (length info) 1)
-        (setf info '((nil . nil))))
+      (unless info
+        (setf info (make-hash-table :test #'eq :size 5)))
       (dolist (kind kinds)
         (unless (equal recent-modification
                        (citre-readtags--tags-file-info info kind 'time))
+          (setf (citre-readtags--tags-file-info info kind) '(nil . nil))
           (setf (citre-readtags--tags-file-info info kind 'time)
                 recent-modification)
           (setf (citre-readtags--tags-file-info info kind 'value)
