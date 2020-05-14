@@ -129,6 +129,53 @@ If STRING doesn't contain a colon, it will be (nil . STRING)."
               (substring string (1+ sep)))
       (cons nil string))))
 
+(defun citre-readtags--string-match-all (regexp string &optional start)
+  "Find all occurences of REGEXP in STRING.
+The return value is a list of their indexes, or nil.  If START is
+non-nil, start search at that index in STRING.
+
+This function internally calls `string-match'."
+  (let ((result nil)
+        (start (or start 0))
+        (idx nil))
+    (while (setq idx (string-match regexp string start))
+      (push idx result)
+      (setq start (1+ idx)))
+    (nreverse result)))
+
+(defun citre-readtags--string-match-all-escaping-backslash
+    (string &optional start)
+  "Find all occurence of escaping backslashes in STRING.
+If START is non-nil, start search at that index in STRING.
+
+This assumes the only escape sequence containing a second
+backslash is \"\\\\\"."
+  (let ((result nil)
+        (start (or start 0))
+        (idx nil))
+    (while (setq idx (string-match "\\\\" string start))
+      (push idx result)
+      ;; NOTE: This may cause an "args out of range" error, but only on string
+      ;; containing invalid trailing backslashes.  We don't check it for
+      ;; performance.
+      (setq start (cl-incf idx 2)))
+    (nreverse result)))
+
+(defun citre-readtags--count-string-match (regexp string &optional start end)
+  "Count occurences of REGEXP in STRING.
+If START is non-nil, start search at that index in STRING.  If
+END is non-nil, end search before that index in STRING.
+
+This function internally calls `string-match'."
+  (let ((result 0)
+        (start (or start 0))
+        (idx nil))
+    (while (and (setq idx (string-match regexp string start))
+                (or (null end) (< idx end)))
+      (cl-incf result)
+      (setq start (1+ idx)))
+    result))
+
 ;;;; Internals: Additional information handling
 
 ;; TODO: Enhance the error handling here.  It's not easy, all the technique I
@@ -259,7 +306,7 @@ CASE-SENSITIVE and FILTER-SEXP."
   (let* ((parts nil)
          (match (or match 'exact))
          (extras (concat
-                  "-ne"
+                  "-Ene"
                   (pcase match
                     ('exact "")
                     ('prefix "p")
@@ -297,6 +344,36 @@ CASE-SENSITIVE and FILTER-SEXP."
           output
         (error "Readtags: %s" (string-join output "\n"))))))
 
+(defun citre-readtags--read-field-value (value)
+  "Translate escaped sequences in VALUE.
+See man tags(5) to know about the escaped sequences.  VALUE
+should be the values of fields in a tags file."
+  (if-let ((backslash-idx (citre-readtags--string-match-all-escaping-backslash
+                           value)))
+      (let ((last 0)
+            (i nil)
+            (parts nil))
+        (while (setq i (pop backslash-idx))
+          (push (substring value last i) parts)
+          (let ((char (aref value (1+ i))))
+            (pcase char
+              (?x (progn
+                    (setq last (+ 4 i))
+                    (push (char-to-string (string-to-number
+                                           (substring value (+ 2 i) (+ 4 i))
+                                           16))
+                          parts)))
+              (_ (progn
+                   (setq last (+ 2 i))
+                   (push (pcase char
+                           (?t "\t") (?r "\r") (?n "\n") (?\\ "\\")
+                           (?a "\a") (?b "\b") (?v "\v") (?f "\f")
+                           (_ (error "Invalid escape sequence")))
+                         parts))))))
+        (push (substring value last) parts)
+        (apply #'concat (nreverse parts)))
+    value))
+
 (defun citre-readtags--parse-field (field nth)
   "Parse FIELD from a line in readtags output.
 FIELD is a string from the line, separated with other fields by
@@ -306,14 +383,15 @@ zero.
 The return value is a list of cons pairs, the cars of which are
 field names, cdrs are the values."
   (pcase nth
-    (0 `((name . ,field)))
-    (1 `((input . ,field)))
+    (0 `((name . ,(citre-readtags--read-field-value field))))
+    (1 `((input . ,(citre-readtags--read-field-value field))))
     (2 `((pattern . ,field)))
-    (3 `((kind . ,(cdr (citre-readtags--split-at-1st-colon field)))))
+    (3 `((kind . ,(citre-readtags--read-field-value
+                   (cdr (citre-readtags--split-at-1st-colon field))))))
     (_
      (let* ((parts (citre-readtags--split-at-1st-colon field))
             (field-name (car parts))
-            (field-value (cdr parts)))
+            (field-value (citre-readtags--read-field-value (cdr parts))))
        (pcase field-name
          ("line"
           `((line . ,(string-to-number field-value))))
@@ -328,6 +406,49 @@ field names, cdrs are the values."
             (scope-name . ,field-value)))
          (_
           `((,(intern field-name) . ,field-value))))))))
+
+(defun citre-readtags--split-tags-line (line)
+  "Split LINE from a tags file into fields."
+  (let* ((tab-idx (citre-readtags--string-match-all "\t" line))
+         ;; This is the tab before the pattern
+         (start (nth 1 tab-idx))
+         (end nil)
+         (pattern-delimiter nil)
+         (delimiters-in-pattern 0)
+         (tabs-in-pattern 0)
+         (result nil))
+    (setq pattern-delimiter
+          (pcase (aref line (1+ start))
+            ;; Make sure there are an even number of backslashes before a
+            ;; delimiter, so we won't match escaped slashes or question marks.
+            ((or ?/ (guard (string-match "^[0-9]+;/"
+                                         (substring line (1+ start)))))
+             ;; We always start the search on a tab, so no need to deal with
+             ;; the situation where it starts with a slash.  A regexp which
+             ;; deals with this would be \\([^\\\\]\\|^\\)\\(\\\\\\\\\\)*/
+             "[^\\\\]\\(\\\\\\\\\\)*/")
+            ((or ?? (guard (string-match "^[0-9]+;?"
+                                         (substring line (1+ start)))))
+             "[^\\\\]\\(\\\\\\\\\\)*?")
+            (_ (error "Invalid pattern field"))))
+    (cl-dolist (end (nthcdr 2 tab-idx))
+      (cl-incf delimiters-in-pattern
+               (citre-readtags--count-string-match pattern-delimiter
+                                                   (substring line start end)))
+      (if (eq (% delimiters-in-pattern 2) 0)
+          (cl-return)
+        (cl-incf tabs-in-pattern)
+        (setq start end)))
+    ;; We make `tab-idx' include all tabs that's not in the pattern, and also
+    ;; the length of `line'. This makes it easier to split the whole line.
+    (setq tab-idx (nconc (list (car tab-idx) (cadr tab-idx))
+                         (nthcdr (+ 2 tabs-in-pattern) tab-idx)
+                         (list (length line))))
+    (setq start 0)
+    (while (setq end (pop tab-idx))
+      (push (substring line start end) result)
+      (setq start (1+ end)))
+    (nreverse result)))
 
 (defun citre-readtags--get-ext-field
     (dep-record field tagsfile-info)
@@ -397,7 +518,7 @@ mentioned above, we still have:
 - REQUIRE and EXCLUDE shouldn't intersect.
 - OPTIONAL and EXCLUDE shouldn't intersect.
 - OPTIONAL and EXCLUDE should not be used together."
-  (let* ((elts (split-string line "\t" t))
+  (let* ((elts (citre-readtags--split-tags-line line))
          (record (make-hash-table :test #'eq :size 20))
          (dep-record (make-hash-table :test #'eq :size 2))
          (parse-all-field (or exclude parse-all-field))
