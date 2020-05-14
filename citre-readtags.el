@@ -393,10 +393,6 @@ field names, cdrs are the values."
             (field-name (car parts))
             (field-value (citre-readtags--read-field-value (cdr parts))))
        (pcase field-name
-         ("line"
-          `((line . ,(string-to-number field-value))))
-         ("end"
-          `((end . ,(string-to-number field-value))))
          ("scope"
           (let ((value (citre-readtags--split-at-1st-colon field-value)))
             `((scope-kind . ,(car value))
@@ -662,7 +658,6 @@ Valid field names are strings. Please notice these field names:
 
 Citre treats some fields specially:
 
-- \"line\" and \"end\": Their values are converted to integers.
 - \"scope\": It's splitted into 2 fields: \"scope-kind\" and
   \"scope-name\".  It's recommended to generate tags file with
   --fields=+Z, or this field will not be prefixed by \"scope:\"
@@ -740,8 +735,8 @@ RECORD is an output from `citre--readtags-parse-line'.  FIELD can
 be all valid normal and extension fields, see
 `citre-readtags--parse-line'.
 
-When FIELD is \"line\", an integer is returned, instead of a
-string.
+When FIELD is `line' or `end', an integer is returned, instead of
+a string.
 
 FIELD can also be:
 
@@ -762,6 +757,7 @@ real time, rather than get from the record."
            (when (eq (forward-line (1- line)) 0)
              (string-trim (buffer-substring (line-beginning-position)
                                             (line-end-position))))))))
+    ((or 'line 'end) (string-to-number (gethash field record)))
     (_ (gethash field record))))
 
 (provide 'citre-readtags)
