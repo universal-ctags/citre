@@ -402,11 +402,11 @@ field names, cdrs are the values."
 
 ;;;;; Extension fields
 
-(defvar citre-readtags--extension-fields-alist
-  '((abspath . ((input)
-                (path)))
-    (ext-lang . ((language input)
-                 nil)))
+(defvar citre-readtags--ext-fields-dependency-alist
+  '((ext-abspath . ((input)
+                    (path)))
+    (ext-lang    . ((language input)
+                    nil)))
   "Alist of extension fields and their dependencies.
 Its keys are extension fields offered by Citre, values are lists
 of two elements:
@@ -414,6 +414,73 @@ of two elements:
 - A list of (normal) fields the the extension field depends on.
 - A list of kinds of additional info of tags file that the
   extension field depends on.")
+
+(defvar citre-readtags--ext-fields-method-table
+  #s(hash-table
+     test eq
+     data
+     (ext-abspath
+      citre-readtags--get-ext-abspath
+      ext-lang
+      citre-readtags--get-ext-lang))
+  "Hash table of extension fields and the methods to get them.
+Its keys are extension fields offered by Citre, values are
+functions that returns the value of the extension field.  The
+arguments of the functions are:
+
+- DEP-RECORD: A hash table containing the fields that the
+  extension field depends on.
+- TAGSFILE-INFO: The additional info of the tags file.  See
+  `citre-readtags--tags-file-info' to know how to make use of
+  it.
+
+If the extension field can't be calculated, the functions should
+signal an error, rather than return nil.
+
+The needed DEP-RECORD and TAGSFILE-INFO are specified by
+`citre-readtags--ext-fields-dependency-alist'.
+`citre-readtags--get-ext-field' takes care to pass the needed
+arguments to the functions.")
+
+;; TODO: put this logic into a table
+(defun citre-readtags--get-ext-field
+    (dep-record field tagsfile-info)
+  "Calculate the value of extension field FIELD.
+DEP-RECORD is a hash table containing the fields that FIELD
+depends on, it's generated and passed by
+`citre-readtags--parse-line'.  TAGSFILE-INFO is the additional
+info of the tags file."
+  (if-let ((method (gethash field citre-readtags--ext-fields-method-table)))
+        (funcall method dep-record tagsfile-info)
+      (error "Invalid FIELD")))
+
+;;;;;; ext-abspath
+
+(defun citre-readtags--get-ext-abspath (dep-record tagsfile-info)
+  "Return the absolute path of the input file.
+This needs the `input' field to be presented in DEP-RECORD, and
+if it's value is a relative path, `path' info in TAGSFILE-INFO is
+used.  If the `path' info doesn't contain the current working
+directory when generating the tags file, an error will be
+signaled."
+  (let ((path-info (citre-readtags--tags-file-info tagsfile-info
+                                                   'path 'value))
+        (no-cwd-error "Can't get absolute path.  You can:\n\
+1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
+2. Regenerate the tags file using absolute paths in the command")
+        (no-input-field-error "\"input\" field not found in DEP-RECORD"))
+    (cond
+     ((null (car path-info))
+      (or (gethash 'input dep-record)
+          (error no-input-field-error)))
+     (t
+      (let ((cwd (or (cdr path-info)
+                     (error no-cwd-error)))
+            (input (or (gethash 'input dep-record)
+                       (error no-input-field-error))))
+        (expand-file-name input cwd))))))
+
+;;;;;; ext-lang
 
 (defvar citre-readtags--lang-extension-table
   #s(hash-table
@@ -566,44 +633,23 @@ File extension (or the file name, if it doesn't have an
 extension) are downcased first, then used as the key to lookup in
 this table.")
 
-;; TODO: put this logic into a table
-(defun citre-readtags--get-ext-field
-    (dep-record field tagsfile-info)
-  "Calculate the value of extension field FIELD.
-DEP-RECORD is a hash table containing the fields that FIELD
-depends on, it's generated and passed by
-`citre-readtags--parse-line'.  TAGSFILE-INFO is the additional
-info of the tags file."
-  (let ((no-cwd-error "Can't get absolute paths.  You can:\n\
-1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
-2. Regenerate the tags file using absolute paths in the command")
-        (no-input-field-error "\"input\" field not found in DEP-RECORD"))
-    (pcase field
-      ('abspath
-       (let ((value (citre-readtags--tags-file-info tagsfile-info 'path 'value)))
-         (cond
-          ((null (car value))
-           (or (gethash 'input dep-record)
-               (error no-input-field-error)))
-          (t
-           (let ((cwd (or (cdr value)
-                          (error no-cwd-error)))
-                 (input (or (gethash 'input dep-record)
-                            (error no-input-field-error))))
-             (expand-file-name input cwd))))))
-      ('ext-lang
-       (let ((lang (gethash 'language dep-record))
-             (input (gethash 'input dep-record)))
-         (cond
-          (lang lang)
-          (input (let ((extension (or (file-name-extension input)
-                                      (file-name-nondirectory input))))
-                   (or (gethash extension
-                                citre-readtags--lang-extension-table)
-                       extension)))
-          (t (error "Ext-lang field required, but neither language field\
+(defun citre-readtags--get-ext-lang (dep-record _)
+  "Return the language.
+If `language' field is presented in DEP-RECORD, it's returned
+directly.  Otherwise, the language is guessed based on the file
+extension of the `input' field in DEP-RECORD (if there's no
+extension, the file name is used)."
+  (let ((lang (gethash 'language dep-record))
+        (input (gethash 'input dep-record)))
+    (cond
+     (lang lang)
+     (input (let ((extension (or (file-name-extension input)
+                                 (file-name-nondirectory input))))
+              (or (gethash extension
+                           citre-readtags--lang-extension-table)
+                  extension)))
+     (t (error "Ext-lang field required, but neither language field\
 nor input field is found in DEP-RECORD")))))
-      (_ (error "Invalid FIELD")))))
 
 ;;;;; Parse lines
 
@@ -846,14 +892,15 @@ To use an extension field, it must appear in REQUIRE or OPTIONAL."
          (find-field-depends
           (lambda (field)
             (car (alist-get field
-                            citre-readtags--extension-fields-alist
+                            citre-readtags--ext-fields-dependency-alist
                             nil nil #'equal))))
          (find-info-depends
           (lambda (field)
             (nth 1 (alist-get field
-                              citre-readtags--extension-fields-alist
+                              citre-readtags--ext-fields-dependency-alist
                               nil nil #'equal))))
-         (ext-fields (mapcar #'car citre-readtags--extension-fields-alist))
+         (ext-fields (mapcar #'car
+                             citre-readtags--ext-fields-dependency-alist))
          (require-ext (cl-intersection require ext-fields))
          (optional-ext (cl-intersection optional ext-fields))
          (ext-dep (cl-delete-duplicates
@@ -911,7 +958,7 @@ When FIELD is one of these values, the result is calculated in
 real time, rather than get from the record."
   (pcase field
     ('line-content
-     (when-let ((path (gethash 'abspath record))
+     (when-let ((path (gethash 'ext-abspath record))
                 (line (gethash 'line record)))
        (when (file-exists-p path)
          (with-temp-buffer
