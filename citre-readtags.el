@@ -178,6 +178,8 @@ This function internally calls `string-match'."
 
 ;;;; Internals: Additional information handling
 
+;;;;; Info: path
+
 ;; TODO: Enhance the error handling here.  It's not easy, all the technique I
 ;; found to get the exit status before the pipe is not POSIX-compatible.
 (defun citre-readtags--tags-file-use-relative-path-p (tagsfile)
@@ -197,6 +199,8 @@ inspecting the first line of regular tags."
       (error "Readtags: %s" (string-trim line)))
      (t
       (not (file-name-absolute-p (nth 1 (split-string line "\t" t))))))))
+
+;;;;; Data structures & APIs
 
 (defun citre-readtags--detect-tags-file-info (tagsfile kind)
   "Detect the value of info KIND of TAGSFILE.
@@ -287,16 +291,7 @@ When KINDS is nil, all kinds of info are updated."
 
 ;;;; Internals: Tags file filtering & parsing
 
-(defvar citre-readtags--extension-fields-alist
-  '((abspath . ((input)
-                (path))))
-  "Alist of extension fields and their dependencies.
-Its keys are extension fields offered by Citre, values are lists
-of two elements:
-
-- A list of (normal) fields the the extension field depends on.
-- A list of kinds of additional info of tags file that the
-  extension field depends on.")
+;;;;; Get lines
 
 (defun citre-readtags--get-lines
     (tagsfile &optional name match case-sensitive filter-sexp)
@@ -343,6 +338,8 @@ CASE-SENSITIVE and FILTER-SEXP."
       (if (string= status "0")
           output
         (error "Readtags: %s" (string-join output "\n"))))))
+
+;;;;; Parse fields
 
 (defun citre-readtags--read-field-value (value)
   "Translate escaped sequences in VALUE.
@@ -403,6 +400,213 @@ field names, cdrs are the values."
          (_
           `((,(intern field-name) . ,field-value))))))))
 
+;;;;; Extension fields
+
+(defvar citre-readtags--extension-fields-alist
+  '((abspath . ((input)
+                (path)))
+    (ext-lang . ((language input)
+                 nil)))
+  "Alist of extension fields and their dependencies.
+Its keys are extension fields offered by Citre, values are lists
+of two elements:
+
+- A list of (normal) fields the the extension field depends on.
+- A list of kinds of additional info of tags file that the
+  extension field depends on.")
+
+(defvar citre-readtags--lang-extension-table
+  #s(hash-table
+     test equal
+     data
+     ("ada" "Ada" "adb" "Ada" "ads" "Ada"
+      "ant" "Ant"
+      "asc" "Asciidoc" "adoc" "Asciidoc" "asciidoc" "Asciidoc"
+      "asm" "Asm" "s" "Asm"
+      "asa" "Asp" "asp" "Asp"
+      "ac" "Autoconf" "in" "Autoconf"
+      "au3" "AutoIt"
+      "am" "Automake"
+      "awk" "Awk" "gawk" "Awk" "mawk" "Awk"
+      "bas" "Basic" "bi" "Basic" "bb" "Basic" "pb" "Basic"
+      "bet" "BETA"
+      "bib" "BibTeX"
+      "clj" "Clojure" "cljs" "Clojure" "cljc" "Clojure"
+      "cmake" "CMake" "txt" "CMake"
+      "c" "C"
+      "h" "C++" "c++" "C++" "h++" "C++"
+      "cc" "C++" "hh" "C++" "cp" "C++" "hp" "C++"
+      "cpp" "C++" "hpp" "C++" "tpp" "C++" "cxx" "C++" "hxx" "C++" "inl" "C++"
+      "css" "CSS"
+      "cs" "C#"
+      "ctags" "Ctags"
+      "cbl" "Cobol" "cob" "Cobol"
+      "cu" "CUDA" "cuh" "CUDA"
+      "d" "D" "di" "D"
+      "diff" "Diff" "patch" "Diff"
+      "dtd" "DTD" "mod" "DTD"
+      "dts" "DTS" "dtsi" "DTS"
+      "bat" "DosBatch" "cmd" "DosBatch"
+      "e" "Eiffel"
+      "ex" "Elixir" "exs" "Elixir"
+      "elm" "Elm"
+      "el" "EmacsLisp"
+      "erl" "Erlang" "hrl" "Erlang"
+      "fal" "Falcon" "ftd" "Falcon"
+      "as" "Flex" "mxml" "Flex"
+      "f" "Fortran" "for" "Fortran" "ftn" "Fortran"
+      "f77" "Fortran" "f90" "Fortran" "f95" "Fortran"
+      "f03" "Fortran" "f08" "Fortran" "f15" "Fortran"
+      "fy" "Fypp"
+      "gdbinit" "Gdbinit" "gdb" "Gdbinit"
+      "go" "Go"
+      "html" "HTML" "htm" "HTML"
+      "ini" "Iniconf" "conf" "Iniconf"
+      "inko" "Inko"
+      "itcl" "ITcl"
+      "java" "Java"
+      "properties" "JavaProperties"
+      "js" "JavaScript" "jsx" "JavaScript" "mjs" "JavaScript"
+      "json" "JSON"
+      "lds" "LdScript" "ld" "LdScript" "ldi" "LdScript" "scr" "LdScript"
+      "cl" "Lisp" "clisp" "Lisp" "lisp" "Lisp" "lsp" "Lisp" "l" "Lisp"
+      "lua" "Lua"
+      "m4" "M4" "spt" "M4"
+      "1" "Man" "2" "Man" "3" "Man" "4" "Man" "5" "Man" "6" "Man" "7" "Man"
+      "8" "Man" "9" "Man" "3pm" "Man" "3stap" "Man" "7stap" "Man"
+      "makefile" "Make" "gnumakefile" "Make" "mak" "Make" "mk" "Make"
+      "md" "Markdown" "mkd" "Markdown" "markdown" "Markdown"
+      "m" "Matlab"
+      "myr" "Myrddin"
+      "nsi" "NSIS" "nsh" "NSIS"
+      "mm" "ObjectiveC"
+      "ml" "OCaml" "mli" "OCaml" "aug" "OCaml"
+      "passwd" "Passwd"
+      "p" "Pascal" "pas" "Pascal"
+      "pl" "Perl" "pm" "Perl" "ph" "Perl" "plx" "Perl" "perl" "Perl"
+      "p6" "Perl6" "pm6" "Perl6" "pl6" "Perl6"
+      "php" "PHP" "php3" "PHP" "php4" "PHP" "php5" "PHP"
+      "php7" "PHP" "phtml" "PHP"
+      "pod" "Pod"
+      "ps1" "PowerShell" "psm1" "PowerShell"
+      "proto" "Protobuf"
+      "pp" "PuppetManifest"
+      "py" "Python" "pyx" "Python" "pxd" "Python" "pxi" "Python"
+      "scons" "Python" "wsgi" "Python"
+      "hx" "QemuHX"
+      "r" "R" "q" "R"
+      "rexx" "REXX" "rx" "REXX"
+      "robot" "Robot"
+      "spec" "RpmSpec"
+      "rst" "ReStructuredText" "rest" "ReStructuredText"
+      "rb" "Ruby" "ruby" "Ruby"
+      "rs" "Rust"
+      "scm" "Scheme" "sm" "Scheme" "sch" "Scheme"
+      "scheme" "Scheme" "rkt" "Scheme"
+      "scss" "SCSS"
+      "sh" "Sh" "bsh" "Sh" "bash" "Sh" "ksh" "Sh" "zsh" "Sh" "ash" "Sh"
+      "sl" "SLang"
+      "sml" "SML" "sig" "SML"
+      "sql" "SQL"
+      "service" "SystemdUnit" "socket" "SystemdUnit" "device" "SystemdUnit"
+      "mount" "SystemdUnit" "automount" "SystemdUnit" "swap" "SystemdUnit"
+      "target" "SystemdUnit" "path" "SystemdUnit" "timer" "SystemdUnit"
+      "snapshot" "SystemdUnit" "slice" "SystemdUnit"
+      "stp" "SystemTap"
+      "stpm" "SystemTap"
+      "tcl" "Tcl" "tk" "Tcl" "wish" "Tcl" "exp" "Tcl"
+      "tex" "Tex"
+      "ttcn" "TTCN" "ttcn3" "TTCN"
+      "ts" "TypeScript"
+      "vr" "Vera" "vri" "Vera" "vrh" "Vera"
+      "v" "Verilog"
+      "sv" "SystemVerilog" "svh" "SystemVerilog" "svi" "SystemVerilog"
+      "vhdl" "VHDL" "vhd" "VHDL"
+      "vimrc" "Vim" "_vimrc" "Vim" "gvimrc" "Vim" "_gvimrc" "Vim"
+      "vim" "Vim" "vba" "Vim"
+      "rc" "WindRes"
+      "y" "YACC"
+      "repo" "YumRepo"
+      "zep" "Zephir"
+      "glade" "Glade"
+      "pom" "Maven2"
+      "plist" "PlistXML"
+      "rng" "RelaxNG"
+      "svg" "SVG"
+      "xml" "XML"
+      "xsl" "XSLT" "xslt" "XSLT"
+      "yml" "Yaml"
+      "varlink" "Varlink"
+      ;; Following extensions are not in the default language map of Universal
+      ;; Ctags.
+      "eex" "Elixir"
+      "vue" "JavaScript"
+      "dpr" "Pascal" "int" "Pascal" "dfm" "Pascal"
+      "erb" "Ruby" "haml" "Ruby" "rake" "Ruby" "slim" "Ruby"
+      "tcsh" "Sh"
+      "tsx" "TypeScript"
+      ;; Following languages are not officially supported by Universal Ctags.
+      "coffee" "CoffeeScript" "litcoffee" "CoffeeScript"
+      "cr" "Crystal" "ecr" "Crystal"
+      "dart" "Dart"
+      "fs" "F#" "fsi" "F#" "fsx" "F#"
+      "dsp" "Faust" "lib" "Faust"
+      "gradle" "Groovy" "groovy" "Groovy" "jenkinsfile" "Groovy"
+      "hs" "Haskell" "lhs" "Haskell"
+      "jl" "Julia"
+      "kt" "Kotlin" "kts" "Kotlin"
+      "nim" "Nim"
+      "nix" "Nix"
+      "org" "Org"
+      "scala" "Scala"
+      "swift" "Swift"
+      "vala" "Vala" "vapi" "Vala"))
+  "Hash table of file extensions and the corresponding languages.
+File extension (or the file name, if it doesn't have an
+extension) are downcased first, then used as the key to lookup in
+this table.")
+
+;; TODO: put this logic into a table
+(defun citre-readtags--get-ext-field
+    (dep-record field tagsfile-info)
+  "Calculate the value of extension field FIELD.
+DEP-RECORD is a hash table containing the fields that FIELD
+depends on, it's generated and passed by
+`citre-readtags--parse-line'.  TAGSFILE-INFO is the additional
+info of the tags file."
+  (let ((no-cwd-error "Can't get absolute paths.  You can:\n\
+1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
+2. Regenerate the tags file using absolute paths in the command")
+        (no-input-field-error "\"input\" field not found in DEP-RECORD"))
+    (pcase field
+      ('abspath
+       (let ((value (citre-readtags--tags-file-info tagsfile-info 'path 'value)))
+         (cond
+          ((null (car value))
+           (or (gethash 'input dep-record)
+               (error no-input-field-error)))
+          (t
+           (let ((cwd (or (cdr value)
+                          (error no-cwd-error)))
+                 (input (or (gethash 'input dep-record)
+                            (error no-input-field-error))))
+             (expand-file-name input cwd))))))
+      ('ext-lang
+       (let ((lang (gethash 'language dep-record))
+             (input (gethash 'input dep-record)))
+         (cond
+          (lang lang)
+          (input (let ((extension (or (file-name-extension input)
+                                      (file-name-nondirectory input))))
+                   (or (gethash extension
+                                citre-readtags--lang-extension-table)
+                       extension)))
+          (t (error "Ext-lang field required, but neither language field\
+nor input field is found in DEP-RECORD")))))
+      (_ (error "Invalid FIELD")))))
+
+;;;;; Parse lines
+
 (defun citre-readtags--split-tags-line (line)
   "Split LINE from a tags file into fields."
   (let* ((tab-idx (citre-readtags--string-match-all "\t" line))
@@ -446,38 +650,11 @@ field names, cdrs are the values."
       (setq start (1+ end)))
     (nreverse result)))
 
-(defun citre-readtags--get-ext-field
-    (dep-record field tagsfile-info)
-  "Calculate the value of extension field FIELD.
-DEP-RECORD is a hash table containing the fields that FIELD
-depends on, it's generated and passed by
-`citre-readtags--parse-line'.  TAGSFILE-INFO is the additional
-info of the tags file."
-  (let ((no-cwd-error "Can't get absolute paths.  You can:\n\
-1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
-2. Regenerate the tags file with path in the command")
-        (no-input-field-error "\"input\" field not found in DEP-RECORD"))
-    (pcase field
-      ('abspath
-       (let ((value (citre-readtags--tags-file-info tagsfile-info 'path 'value)))
-         (cond
-          ((null (car value))
-           (or (gethash 'input dep-record)
-               (error no-input-field-error)))
-          (t
-           (let ((cwd (or (cdr value)
-                          (error no-cwd-error)))
-                 (input (or (gethash 'input dep-record)
-                            (error no-input-field-error))))
-             (expand-file-name input cwd))))))
-      (_ (error "Invalid FIELD")))))
-
 ;; TODO: offer "kind-full" extension field.
 ;; TODO: should we split the "lists" in LINE by comma?
 (defun citre-readtags--parse-line (line &optional tagsfile-info
                                         require optional exclude
-                                        require-ext optional-ext
-                                        require-ext-dep optional-ext-dep
+                                        require-ext optional-ext ext-dep
                                         parse-all-field)
   "Parse a LINE from readtags output.
 This returns a hash table called \"record\" by Citre.  Its keys
@@ -496,8 +673,7 @@ in them.  Use these for extension fields:
   any field in it, if it can be get, it will be recorded; if
   can't, it's ignored, and no error will occur.
 
-The normal field they depend on should appear in REQUIRE-EXT-DEP
-and OPTIONAL-EXT-DEP.
+The normal field they depend on should appear in EXT-DEP.
 
 TAGSFILE-INFO is needed to offer additional information for these
 extension fields.  It is the additional info of the tags file
@@ -522,10 +698,8 @@ mentioned above, we still have:
          (require-counter 0)
          (optional-num (length optional))
          (optional-counter 0)
-         (require-ext-dep-num (length require-ext-dep))
-         (require-ext-dep-counter 0)
-         (optional-ext-dep-num (length optional-ext-dep))
-         (optional-ext-dep-counter 0))
+         (ext-dep-num (length ext-dep))
+         (ext-dep-counter 0))
     (cl-block nil
       (dotimes (i (length elts))
         (let ((results (citre-readtags--parse-field (nth i elts) i)))
@@ -535,8 +709,7 @@ mentioned above, we still have:
                    (in-require (memq field require))
                    (in-optional (memq field optional))
                    (in-exclude (memq field exclude))
-                   (in-require-ext-dep (memq field require-ext-dep))
-                   (in-optional-ext-dep (memq field optional-ext-dep)))
+                   (in-ext-dep (memq field ext-dep)))
               (when (or in-require in-optional
                         (and parse-all-field (null in-exclude)))
                 (puthash field value record)
@@ -544,28 +717,20 @@ mentioned above, we still have:
                   (cl-incf require-counter))
                 (when in-optional
                   (cl-incf optional-counter)))
-              (when (or in-require-ext-dep in-optional-ext-dep)
+              (when in-ext-dep
                 (puthash field value dep-record)
-                (when in-require-ext-dep
-                  (cl-incf require-ext-dep-counter))
-                (when in-optional-ext-dep
-                  (cl-incf optional-ext-dep-counter)))
+                (cl-incf ext-dep-counter))
               (when (and (null parse-all-field)
                          (eq require-counter require-num)
                          (eq optional-counter optional-num)
-                         (eq require-ext-dep-counter require-ext-dep-num)
-                         (eq optional-ext-dep-counter optional-ext-dep-num))
+                         (eq ext-dep-counter ext-dep-num))
                 (cl-return)))))))
-    (when (or (< require-counter require-num)
-              (< require-ext-dep-counter require-ext-dep-num))
+    (when (< require-counter require-num)
       (error "Fields not found in tags file: %s"
              (string-join
               (mapcar #'symbol-name
-                      (cl-union
-                       (cl-set-difference require
-                                          (hash-table-keys record))
-                       (cl-set-difference require-ext-dep
-                                          (hash-table-keys dep-record))))
+                      (cl-set-difference require
+                                          (hash-table-keys record)))
               ", ")))
     (dolist (field require-ext)
       (puthash field
@@ -691,12 +856,11 @@ To use an extension field, it must appear in REQUIRE or OPTIONAL."
          (ext-fields (mapcar #'car citre-readtags--extension-fields-alist))
          (require-ext (cl-intersection require ext-fields))
          (optional-ext (cl-intersection optional ext-fields))
-         (require-ext-dep (cl-delete-duplicates
-                           (apply #'append
-                                  (mapcar find-field-depends require-ext))))
-         (optional-ext-dep (cl-delete-duplicates
-                           (apply #'append
-                                  (mapcar find-field-depends optional-ext))))
+         (ext-dep (cl-delete-duplicates
+                   (apply #'append
+                          (append
+                           (mapcar find-field-depends require-ext)
+                           (mapcar find-field-depends optional-ext)))))
          (require (cl-delete-duplicates
                    (cl-set-difference require ext-fields)))
          (optional (cl-delete-duplicates
@@ -714,8 +878,7 @@ To use an extension field, it must appear in REQUIRE or OPTIONAL."
               (citre-readtags--parse-line
                line info
                require optional exclude
-               require-ext optional-ext
-               require-ext-dep optional-ext-dep
+               require-ext optional-ext ext-dep
                parse-all-field))
             (citre-readtags--get-lines
              tagsfile name match case-sensitive filter-sexp))))
