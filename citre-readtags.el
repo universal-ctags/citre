@@ -35,6 +35,7 @@
 
 ;;;; Libraries
 
+(require 'citre-readtags-tables)
 (require 'cl-lib)
 (require 'subr-x)
 
@@ -178,36 +179,27 @@ This function internally calls `string-match'."
 
 ;;;; Internals: Additional information handling
 
-;;;;; Info: path
-
-;; TODO: Enhance the error handling here.  It's not easy, all the technique I
-;; found to get the exit status before the pipe is not POSIX-compatible.
-(defun citre-readtags--tags-file-use-relative-path-p (tagsfile)
-  "Detect if file paths in tags file TAGSFILE are relative.
-TAGSFILE is the path to the tags file.  This is done by
-inspecting the first line of regular tags."
-  (let* ((program (or citre-readtags-program "readtags"))
-         (line (shell-command-to-string
-                (concat
-                 (citre-readtags--build-shell-command
-                  program "-t" tagsfile "-l")
-                 " | head -1"))))
-    (cond
-     ((string-empty-p line)
-      (error "Invalid tags file"))
-     ((not (string-match "\t" line))
-      (error "Readtags: %s" (string-trim line)))
-     (t
-      (not (file-name-absolute-p (nth 1 (split-string line "\t" t))))))))
-
-;;;;; Data structures & APIs
+;; TODO: These methods often call `citre-readtags--get-records', which may call
+;; `citre-readtags--get-tags-file-info', which calls these methods.  We need to
+;; be careful not asking for extension fields in these methods.  We could make
+;; it clear in the docstring, or invent some mechanism that avoid this problem
+;; forever.  I think the former should be enough since when this happens, there
+;; will be a max eval depth error, which is easy to understand and protects us
+;; from bad fateful consequences.
+(defvar citre-readtags--tags-file-info-method-alist
+  '((path . citre-readtags--get-path-info)
+    (kind . citre-readtags--get-kind-info))
+  "Alist of kinds of additional information and the functions to get them.
+See `citre-readtags--tags-file-info-alist' to know about the
+kinds of info.")
 
 (defun citre-readtags--detect-tags-file-info (tagsfile kind)
   "Detect the value of info KIND of TAGSFILE.
 TAGSFILE is the path to the tags file, KIND can be `path'."
-  (pcase kind
-    ('path (cons (citre-readtags--tags-file-use-relative-path-p tagsfile)
-                 (citre-readtags-get-pseudo-tag "TAG_PROC_CWD" tagsfile)))))
+  (if-let ((method
+            (alist-get kind citre-readtags--tags-file-info-method-alist)))
+      (funcall method tagsfile)
+    (error "Invalid KIND")))
 
 (defvar citre-readtags--tags-file-info-alist nil
   "Alist for storing informations about tags file.
@@ -227,7 +219,13 @@ their corresponding value fields are:
 
 - `path': The value field is a cons pair.  Its car is t when
   relative paths are used in the tags file, and cdr is the
-  current working directory when generating the tags file.")
+  current working directory when generating the tags file.
+
+- `kind': The value field is a cons pair.  Its car is t when
+  single-letter kinds are used in the tags file, and cdr is a
+  hash table for getting full-length kinds from single-letter
+  kinds, like `citre-readtags--kind-name-table', or nil if the
+  TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
 (defmacro citre-readtags--tags-file-info (info kind &optional field)
   "Return the place form of KIND in INFO.
@@ -272,32 +270,94 @@ When KINDS is nil, all kinds of info are updated."
   (unless (file-exists-p tagsfile)
     (error "%s doesn't exist" tagsfile))
   (let ((recent-modification (file-attribute-modification-time
-                              (file-attributes tagsfile)))
-        (kinds (or kinds '(path))))
+                              (file-attributes tagsfile))))
     (cl-symbol-macrolet ((info (alist-get tagsfile
                                           citre-readtags--tags-file-info-alist
                                           nil nil #'equal)))
       (unless info
-        (setf info (make-hash-table :test #'eq :size 5)))
+        (setf info (make-hash-table :test #'eq)))
       (dolist (kind kinds)
-        (unless (equal recent-modification
-                       (citre-readtags--tags-file-info info kind 'time))
-          (setf (citre-readtags--tags-file-info info kind) '(nil . nil))
-          (setf (citre-readtags--tags-file-info info kind 'time)
-                recent-modification)
-          (setf (citre-readtags--tags-file-info info kind 'value)
-                (citre-readtags--detect-tags-file-info tagsfile kind))))
+        (unless (equal (citre-readtags--tags-file-info info kind 'time)
+                       recent-modification)
+          (setf (citre-readtags--tags-file-info info kind)
+                (cons recent-modification
+                      (citre-readtags--detect-tags-file-info tagsfile kind)))))
       info)))
+
+;;;;; Info: path
+
+(defun citre-readtags--tags-file-use-relative-path-p (tagsfile)
+  "Detect if file paths in tags file TAGSFILE are relative.
+TAGSFILE is the path to the tags file.  This is done by
+inspecting the first line of regular tags."
+  (let* ((record (car (citre-readtags-get-records
+                       tagsfile nil nil nil nil
+                       :require '(input) :lines 1))))
+    (if (null record)
+        (error "Invalid tags file")
+      (not (file-name-absolute-p (citre-readtags-get-field 'input record))))))
+
+(defun citre-readtags--get-path-info (tagsfile)
+  "Get path info of tags file TAGSFILE.
+See `citre-readtags--tags-file-info-alist' to know about the
+return value.  It is a valid value field of `path' information."
+  (cons (citre-readtags--tags-file-use-relative-path-p tagsfile)
+        (nth 1 (car (citre-readtags-get-pseudo-tags
+                     "TAG_PROC_CWD" tagsfile)))))
+
+;;;;; Info: kind
+
+(defun citre-readtags--tags-file-use-single-letter-kind-p
+    (tagsfile)
+  "Detect if kinds in tags file TAGSFILE are single-letter.
+TAGSFILE is the path to the tags file.  This is done by
+inspecting the first line of regular tags."
+  (let ((record (car (citre-readtags-get-records
+                      tagsfile nil nil nil nil
+                      :require '(kind) :lines 1))))
+    (if (null record)
+        (error "Invalid tags file")
+      (eq 1 (length (citre-readtags-get-field 'kind record))))))
+
+(defun citre-readtags--tags-file-kind-name-table (tagsfile)
+  "Generate a kind name table for tags file TAGSFILE.
+This is done by using the TAG_KIND_DESCRIPTION pseudo tags.  The
+generated table is like `citre-readtags--kind-name-table'.
+
+If the required pseudo tags are not presented, nil is returned."
+  (let ((kind-descs (citre-readtags-get-pseudo-tags
+                     "TAG_KIND_DESCRIPTION" tagsfile 'prefix))
+        (prefix-len (length "!_TAG_KIND_DESCRIPTION!"))
+        (table (make-hash-table :test #'equal)))
+    (when kind-descs
+      (dolist (kind-desc kind-descs)
+        (let* ((lang (substring (car kind-desc) prefix-len))
+               (kind-pair (split-string (nth 1 kind-desc) ","))
+               (kind (car kind-pair))
+               (kind-full (nth 1 kind-pair)))
+          (unless (gethash lang table)
+            (puthash lang (make-hash-table :test #'equal) table))
+          (puthash kind kind-full (gethash lang table))))
+      table)))
+
+(defun citre-readtags--get-kind-info (tagsfile)
+  "Get kind info of tags file TAGSFILE.
+See `citre-readtags--tags-file-info-alist' to know about the
+return value.  It is a valid value field of `kind' information."
+  (cons (citre-readtags--tags-file-use-single-letter-kind-p tagsfile)
+        (citre-readtags--tags-file-kind-name-table tagsfile)))
 
 ;;;; Internals: Tags file filtering & parsing
 
 ;;;;; Get lines
 
+;; TODO: readtags exits correctly when the file provided is a path. Handle
+;; this.
 (defun citre-readtags--get-lines
-    (tagsfile &optional name match case-sensitive filter-sexp)
+    (tagsfile &optional name match case-sensitive filter-sexp lines)
   "Get lines in tags file TAGSFILE using readtags.
 See `citre-readtags-get-records' to know about NAME, MATCH,
-CASE-SENSITIVE and FILTER-SEXP."
+CASE-SENSITIVE, FILTER-SEXP and LINES."
   (let* ((parts nil)
          (match (or match 'exact))
          (extras (concat
@@ -336,7 +396,9 @@ CASE-SENSITIVE and FILTER-SEXP."
            (status (car (last result)))
            (output (cl-subseq result 0 -1)))
       (if (string= status "0")
-          output
+          (if (or (null lines) (> lines (length output)))
+              output
+            (cl-subseq output 0 lines))
         (error "Readtags: %s" (string-join output "\n"))))))
 
 ;;;;; Parse fields
@@ -403,10 +465,12 @@ field names, cdrs are the values."
 ;;;;; Extension fields
 
 (defvar citre-readtags--ext-fields-dependency-alist
-  '((ext-abspath . ((input)
-                    (path)))
-    (ext-lang    . ((language input)
-                    nil)))
+  '((ext-abspath   . ((input)
+                      (path)))
+    (ext-lang      . ((language input)
+                      nil))
+    (ext-kind-full . ((kind language input)
+                      (kind))))
   "Alist of extension fields and their dependencies.
 Its keys are extension fields offered by Citre, values are lists
 of two elements:
@@ -422,7 +486,9 @@ of two elements:
      (ext-abspath
       citre-readtags--get-ext-abspath
       ext-lang
-      citre-readtags--get-ext-lang))
+      citre-readtags--get-ext-lang
+      ext-kind-full
+      citre-readtags--get-ext-kind-full))
   "Hash table of extension fields and the methods to get them.
 Its keys are extension fields offered by Citre, values are
 functions that returns the value of the extension field.  The
@@ -442,7 +508,6 @@ The needed DEP-RECORD and TAGSFILE-INFO are specified by
 `citre-readtags--get-ext-field' takes care to pass the needed
 arguments to the functions.")
 
-;; TODO: put this logic into a table
 (defun citre-readtags--get-ext-field
     (dep-record field tagsfile-info)
   "Calculate the value of extension field FIELD.
@@ -482,157 +547,6 @@ signaled."
 
 ;;;;;; ext-lang
 
-(defvar citre-readtags--lang-extension-table
-  #s(hash-table
-     test equal
-     data
-     ("ada" "Ada" "adb" "Ada" "ads" "Ada"
-      "ant" "Ant"
-      "asc" "Asciidoc" "adoc" "Asciidoc" "asciidoc" "Asciidoc"
-      "asm" "Asm" "s" "Asm"
-      "asa" "Asp" "asp" "Asp"
-      "ac" "Autoconf" "in" "Autoconf"
-      "au3" "AutoIt"
-      "am" "Automake"
-      "awk" "Awk" "gawk" "Awk" "mawk" "Awk"
-      "bas" "Basic" "bi" "Basic" "bb" "Basic" "pb" "Basic"
-      "bet" "BETA"
-      "bib" "BibTeX"
-      "clj" "Clojure" "cljs" "Clojure" "cljc" "Clojure"
-      "cmake" "CMake" "txt" "CMake"
-      "c" "C"
-      "h" "C++" "c++" "C++" "h++" "C++"
-      "cc" "C++" "hh" "C++" "cp" "C++" "hp" "C++"
-      "cpp" "C++" "hpp" "C++" "tpp" "C++" "cxx" "C++" "hxx" "C++" "inl" "C++"
-      "css" "CSS"
-      "cs" "C#"
-      "ctags" "Ctags"
-      "cbl" "Cobol" "cob" "Cobol"
-      "cu" "CUDA" "cuh" "CUDA"
-      "d" "D" "di" "D"
-      "diff" "Diff" "patch" "Diff"
-      "dtd" "DTD" "mod" "DTD"
-      "dts" "DTS" "dtsi" "DTS"
-      "bat" "DosBatch" "cmd" "DosBatch"
-      "e" "Eiffel"
-      "ex" "Elixir" "exs" "Elixir"
-      "elm" "Elm"
-      "el" "EmacsLisp"
-      "erl" "Erlang" "hrl" "Erlang"
-      "fal" "Falcon" "ftd" "Falcon"
-      "as" "Flex" "mxml" "Flex"
-      "f" "Fortran" "for" "Fortran" "ftn" "Fortran"
-      "f77" "Fortran" "f90" "Fortran" "f95" "Fortran"
-      "f03" "Fortran" "f08" "Fortran" "f15" "Fortran"
-      "fy" "Fypp"
-      "gdbinit" "Gdbinit" "gdb" "Gdbinit"
-      "go" "Go"
-      "html" "HTML" "htm" "HTML"
-      "ini" "Iniconf" "conf" "Iniconf"
-      "inko" "Inko"
-      "itcl" "ITcl"
-      "java" "Java"
-      "properties" "JavaProperties"
-      "js" "JavaScript" "jsx" "JavaScript" "mjs" "JavaScript"
-      "json" "JSON"
-      "lds" "LdScript" "ld" "LdScript" "ldi" "LdScript" "scr" "LdScript"
-      "cl" "Lisp" "clisp" "Lisp" "lisp" "Lisp" "lsp" "Lisp" "l" "Lisp"
-      "lua" "Lua"
-      "m4" "M4" "spt" "M4"
-      "1" "Man" "2" "Man" "3" "Man" "4" "Man" "5" "Man" "6" "Man" "7" "Man"
-      "8" "Man" "9" "Man" "3pm" "Man" "3stap" "Man" "7stap" "Man"
-      "makefile" "Make" "gnumakefile" "Make" "mak" "Make" "mk" "Make"
-      "md" "Markdown" "mkd" "Markdown" "markdown" "Markdown"
-      "m" "Matlab"
-      "myr" "Myrddin"
-      "nsi" "NSIS" "nsh" "NSIS"
-      "mm" "ObjectiveC"
-      "ml" "OCaml" "mli" "OCaml" "aug" "OCaml"
-      "passwd" "Passwd"
-      "p" "Pascal" "pas" "Pascal"
-      "pl" "Perl" "pm" "Perl" "ph" "Perl" "plx" "Perl" "perl" "Perl"
-      "p6" "Perl6" "pm6" "Perl6" "pl6" "Perl6"
-      "php" "PHP" "php3" "PHP" "php4" "PHP" "php5" "PHP"
-      "php7" "PHP" "phtml" "PHP"
-      "pod" "Pod"
-      "ps1" "PowerShell" "psm1" "PowerShell"
-      "proto" "Protobuf"
-      "pp" "PuppetManifest"
-      "py" "Python" "pyx" "Python" "pxd" "Python" "pxi" "Python"
-      "scons" "Python" "wsgi" "Python"
-      "hx" "QemuHX"
-      "r" "R" "q" "R"
-      "rexx" "REXX" "rx" "REXX"
-      "robot" "Robot"
-      "spec" "RpmSpec"
-      "rst" "ReStructuredText" "rest" "ReStructuredText"
-      "rb" "Ruby" "ruby" "Ruby"
-      "rs" "Rust"
-      "scm" "Scheme" "sm" "Scheme" "sch" "Scheme"
-      "scheme" "Scheme" "rkt" "Scheme"
-      "scss" "SCSS"
-      "sh" "Sh" "bsh" "Sh" "bash" "Sh" "ksh" "Sh" "zsh" "Sh" "ash" "Sh"
-      "sl" "SLang"
-      "sml" "SML" "sig" "SML"
-      "sql" "SQL"
-      "service" "SystemdUnit" "socket" "SystemdUnit" "device" "SystemdUnit"
-      "mount" "SystemdUnit" "automount" "SystemdUnit" "swap" "SystemdUnit"
-      "target" "SystemdUnit" "path" "SystemdUnit" "timer" "SystemdUnit"
-      "snapshot" "SystemdUnit" "slice" "SystemdUnit"
-      "stp" "SystemTap"
-      "stpm" "SystemTap"
-      "tcl" "Tcl" "tk" "Tcl" "wish" "Tcl" "exp" "Tcl"
-      "tex" "Tex"
-      "ttcn" "TTCN" "ttcn3" "TTCN"
-      "ts" "TypeScript"
-      "vr" "Vera" "vri" "Vera" "vrh" "Vera"
-      "v" "Verilog"
-      "sv" "SystemVerilog" "svh" "SystemVerilog" "svi" "SystemVerilog"
-      "vhdl" "VHDL" "vhd" "VHDL"
-      "vimrc" "Vim" "_vimrc" "Vim" "gvimrc" "Vim" "_gvimrc" "Vim"
-      "vim" "Vim" "vba" "Vim"
-      "rc" "WindRes"
-      "y" "YACC"
-      "repo" "YumRepo"
-      "zep" "Zephir"
-      "glade" "Glade"
-      "pom" "Maven2"
-      "plist" "PlistXML"
-      "rng" "RelaxNG"
-      "svg" "SVG"
-      "xml" "XML"
-      "xsl" "XSLT" "xslt" "XSLT"
-      "yml" "Yaml"
-      "varlink" "Varlink"
-      ;; Following extensions are not in the default language map of Universal
-      ;; Ctags.
-      "eex" "Elixir"
-      "vue" "JavaScript"
-      "dpr" "Pascal" "int" "Pascal" "dfm" "Pascal"
-      "erb" "Ruby" "haml" "Ruby" "rake" "Ruby" "slim" "Ruby"
-      "tcsh" "Sh"
-      "tsx" "TypeScript"
-      ;; Following languages are not officially supported by Universal Ctags.
-      "coffee" "CoffeeScript" "litcoffee" "CoffeeScript"
-      "cr" "Crystal" "ecr" "Crystal"
-      "dart" "Dart"
-      "fs" "F#" "fsi" "F#" "fsx" "F#"
-      "dsp" "Faust" "lib" "Faust"
-      "gradle" "Groovy" "groovy" "Groovy" "jenkinsfile" "Groovy"
-      "hs" "Haskell" "lhs" "Haskell"
-      "jl" "Julia"
-      "kt" "Kotlin" "kts" "Kotlin"
-      "nim" "Nim"
-      "nix" "Nix"
-      "org" "Org"
-      "scala" "Scala"
-      "swift" "Swift"
-      "vala" "Vala" "vapi" "Vala"))
-  "Hash table of file extensions and the corresponding languages.
-File extension (or the file name, if it doesn't have an
-extension) are downcased first, then used as the key to lookup in
-this table.")
-
 (defun citre-readtags--get-ext-lang (dep-record _)
   "Return the language.
 If `language' field is presented in DEP-RECORD, it's returned
@@ -645,11 +559,34 @@ extension, the file name is used)."
      (lang lang)
      (input (let ((extension (or (file-name-extension input)
                                  (file-name-nondirectory input))))
-              (or (gethash extension
+              (or (gethash (downcase extension)
                            citre-readtags--lang-extension-table)
                   extension)))
      (t (error "Ext-lang field required, but neither language field\
 nor input field is found in DEP-RECORD")))))
+
+;;;;;; ext-kind-full
+
+(defun citre-readtags--get-ext-kind-full (dep-record tagsfile-info)
+  "Return the absolute path of the input file.
+This needs the `input' field to be presented in DEP-RECORD, and
+if it's value is a relative path, `path' info in TAGSFILE-INFO is
+used.  If the `path' info doesn't contain the current working
+directory when generating the tags file, an error will be
+signaled."
+  (let ((kind-info (citre-readtags--tags-file-info tagsfile-info
+                                                   'kind 'value)))
+    (if (null (car kind-info))
+        (gethash 'kind dep-record)
+      (if-let* ((kind (gethash 'kind dep-record))
+                (lang (citre-readtags--get-ext-lang
+                       dep-record tagsfile-info))
+                (table (or (cdr kind-info)
+                           citre-readtags--tags-file-kind-name-table))
+                (table (gethash lang table))
+                (kind-full (gethash kind table)))
+          kind-full
+        kind))))
 
 ;;;;; Parse lines
 
@@ -791,32 +728,38 @@ mentioned above, we still have:
 
 ;;;; APIs
 
-(defun citre-readtags-get-pseudo-tag (name tagsfile)
-  "Read the value of pseudo tag NAME in tags file TAGSFILE.
+(defun citre-readtags-get-pseudo-tags (name tagsfile &optional prefix)
+  "Read pseudo tags matching NAME in tags file TAGSFILE.
+When PREFIX is non-nil, match NAME by prefix.
+
 NAME should not start with \"!_\".  Run
 
   $ ctags --list-pseudo-tags
 
-to know the valid NAMEs."
+to know the valid NAMEs.  The return value is a list, and each
+element of it is another list consists of the fields separated by
+tabs in a pseudo tag line."
   (let* ((program (or citre-readtags-program "readtags"))
          (name (concat "!_" name))
+         (op (if prefix 'prefix? 'eq?))
          (result (split-string
                   (shell-command-to-string
                    (concat
                     (citre-readtags--build-shell-command
-                     program "-t" tagsfile "-Q" `(eq? ,name $name) "-D")
+                     program "-t" tagsfile "-Q" `(,op $name ,name) "-D")
                     "; printf \"\n$?\n\""))
                   "\n" t))
          (status (car (last result)))
-         (output (car (cl-subseq result 0 -1))))
+         (output (cl-subseq result 0 -1)))
     (if (string= status "0")
-        (when output
-          (nth 1 (split-string output "\t" t)))
+        (mapcar (lambda (line)
+                  (split-string line "\t" t))
+                output)
       (error "Readtags: %s" output))))
 
 (cl-defun citre-readtags-get-records
     (tagsfile &optional name match case-sensitive filter-sexp
-              &key require optional exclude parse-all-field)
+              &key require optional exclude parse-all-field lines)
   "Get records of tags in tags file TAGSFILE based on the arguments.
 
 TAGSFILE is the canonical path of tags file.  The meaning of the
@@ -845,8 +788,8 @@ Requirements of postprocessor expressions are:
 
 Each element in the returned value is a hash table containing the
 tag and some of its fields, which can be utilized by
-`citre-get-field'. The fields to contain can be customized by the
-key arguments:
+`citre-get-field'. The fields to contain can be customized by
+these keyword arguments:
 
 - REQUIRE: A list containing fields that must be presented.  If
   any of these fields doesn't exist, an error will occur.
@@ -881,7 +824,11 @@ them, Citre offers its own extension fields:
 
 - \"abspath\": The canonical path of \"input\".  Needs \"input\".
 
-To use an extension field, it must appear in REQUIRE or OPTIONAL."
+To use an extension field, it must appear in REQUIRE or OPTIONAL.
+
+Other keyword arguments are:
+
+- LINES: When non-nil, get the first LINES of records at most."
   (when (and optional exclude)
     (error "OPTIONAL and EXCLUDE can't be used together"))
   (when (cl-intersection require exclude)
@@ -928,7 +875,7 @@ To use an extension field, it must appear in REQUIRE or OPTIONAL."
                require-ext optional-ext ext-dep
                parse-all-field))
             (citre-readtags--get-lines
-             tagsfile name match case-sensitive filter-sexp))))
+             tagsfile name match case-sensitive filter-sexp lines))))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
