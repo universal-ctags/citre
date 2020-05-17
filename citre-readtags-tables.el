@@ -892,15 +892,17 @@ This is used for updating `citre-readtags--kind-name-table'.  The
 result will be shown in a *Pp Eval Output* buffer, and it can be
 directly copied into the variable definition.
 
-  CTAGS-PROGRAM is the name/path of the ctags program, nil means
+CTAGS-PROGRAM is the name/path of the ctags program, nil means
 \"ctags\"."
   (let* ((ctags-program (or ctags-program "ctags"))
          (output (shell-command-to-string
-                  (citre-readtags--build-shell-command ctags-program
-                                                       "--list-kinds-full")))
+                  (citre-readtags--build-shell-command
+                   ctags-program
+                   "--quiet" "--options=NONE"
+                   "--machinable" "--list-kinds-full")))
          (output-lines (nthcdr 1 (split-string output "\n" t)))
          (output-records (mapcar (lambda (line)
-                                   (cl-subseq (split-string line " " t) 0 3))
+                                   (cl-subseq (split-string line "\t" t) 0 3))
                                  output-lines))
          (table (make-hash-table :test #'equal)))
     (dolist (record output-records)
@@ -930,7 +932,7 @@ directly copied into the variable definition.
               (save-excursion
                 (backward-sexp) (backward-sexp)
                 (insert-char ?\n)
-                (funcall indent-line-function)))))))
+                (lisp-indent-line)))))))
     (whitespace-cleanup)
     (goto-char (point-min))))
 
