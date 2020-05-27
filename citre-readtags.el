@@ -490,8 +490,8 @@ of two elements:
       ext-kind-full
       citre-readtags--get-ext-kind-full))
   "Hash table of extension fields and the methods to get them.
-Its keys are extension fields offered by Citre, values are
-functions that returns the value of the extension field.  The
+Its keys are extension fields offered by Citre, and values are
+functions that return the value of the extension field.  The
 arguments of the functions are:
 
 - DEP-RECORD: A hash table containing the fields that the
@@ -552,7 +552,8 @@ signaled."
 If `language' field is presented in DEP-RECORD, it's returned
 directly.  Otherwise, the language is guessed based on the file
 extension of the `input' field in DEP-RECORD (if there's no
-extension, the file name is used)."
+extension, the file name is used).  If the language can't be
+guessed, the file extension is returned."
   (let ((lang (gethash 'language dep-record))
         (input (gethash 'input dep-record)))
     (cond
@@ -568,12 +569,17 @@ nor input field is found in DEP-RECORD")))))
 ;;;;;; ext-kind-full
 
 (defun citre-readtags--get-ext-kind-full (dep-record tagsfile-info)
-  "Return the absolute path of the input file.
-This needs the `input' field to be presented in DEP-RECORD, and
-if it's value is a relative path, `path' info in TAGSFILE-INFO is
-used.  If the `path' info doesn't contain the current working
-directory when generating the tags file, an error will be
-signaled."
+  "Return full-length kind name.
+This needs the `kind' field to be presented in DEP-RECORD.  If
+the tags file uses full-length kind name (told by TAGSFILE-INFO),
+it's returned directly.  If not, then:
+
+- The language is guessed first, see `citre-readtags--get-ext-lang'.
+- The single-letter kind is converted to full-length, based on
+  the TAG_KIND_DESCRIPTION pseudo tags, or
+  `citre-readtags--kind-name-table' if it's not presented.
+
+If this fails, the single-letter kind is returned directly."
   (let ((kind-info (citre-readtags--tags-file-info tagsfile-info
                                                    'kind 'value)))
     (if (null (car kind-info))
@@ -582,7 +588,7 @@ signaled."
                 (lang (citre-readtags--get-ext-lang
                        dep-record tagsfile-info))
                 (table (or (cdr kind-info)
-                           citre-readtags--tags-file-kind-name-table))
+                           citre-readtags--kind-name-table))
                 (table (gethash lang table))
                 (kind-full (gethash kind table)))
           kind-full
@@ -725,6 +731,47 @@ mentioned above, we still have:
                            dep-record field tagsfile-info))))
         (puthash field value record)))
     record))
+
+;;;; Internals: Extension fields from records
+
+(defvar citre-readtags-extra-ext-fields-table
+  #s(hash-table
+     test eq
+     data
+     (line-content
+      citre-readtags--get-line-content-from-record))
+  "Hash table for getting extra extension fields from records.
+It's used by `citre-readtags-get-field'. Its keys will be valid
+FIELD argument values for `citre-readtags-get-field', and values
+are functions that return the value of the fields.  The arguments
+of the functions are:
+
+- RECORD: The record to get field from.
+
+The needed fields in RECORD should appear in the docstrings of
+the functions.  If the field can't be calculated, the functions
+should return nil, rather than signal an error, so it feels more
+like `gethash', which makes sense since the records are indeed
+hash tables.
+
+This table is intended to be extended by libraries that uses
+citre-readtags.  They should not modify existing key-value pairs
+in this table, and the added keys should be prefixed by the name
+of the library to avoid naming conflict.")
+
+(defun citre-readtags--get-line-content-from-record (record)
+  "Get the line content from RECORD.
+The leading and trailing whitespaces are trimmed.  This needs the
+`abspath' and `line' fields in RECORD."
+  (when-let ((path (gethash 'ext-abspath record))
+             (line (string-to-number (gethash 'line record))))
+    (when (file-exists-p path)
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (when (eq (forward-line (1- line)) 0)
+          (string-trim (buffer-substring (line-beginning-position)
+                                         (line-end-position))))))))
 
 ;;;; APIs
 
@@ -895,27 +942,20 @@ be all valid normal and extension fields, see
 When FIELD is `line' or `end', an integer is returned, instead of
 a string.
 
-FIELD can also be:
+`citre-readtags-extra-ext-fields-table' defines some extra fields
+that can be used as FIELD.  Their values are calculated in
+real-time based on RECORD.  The built-in ones are:
 
-- \"line-content\": The line containing the tag.  Leading and
-  trailing whitespaces are trimmed.  Depends on the \"abspath\"
-  and \"line\" fields.
-
-When FIELD is one of these values, the result is calculated in
-real time, rather than get from the record."
-  (pcase field
-    ('line-content
-     (when-let ((path (gethash 'ext-abspath record))
-                (line (gethash 'line record)))
-       (when (file-exists-p path)
-         (with-temp-buffer
-           (insert-file-contents path)
-           (goto-char (point-min))
-           (when (eq (forward-line (1- line)) 0)
-             (string-trim (buffer-substring (line-beginning-position)
-                                            (line-end-position))))))))
-    ((or 'line 'end) (string-to-number (gethash field record)))
-    (_ (gethash field record))))
+- `line-content': The line containing the tag.  Leading and
+  trailing whitespaces are trimmed.  Depends on the `abspath' and
+  `line' fields."
+  (if-let ((method
+            (gethash field
+                     citre-readtags-extra-ext-fields-table)))
+      (funcall method record)
+    (pcase field
+      ((or 'line 'end) (string-to-number (gethash field record)))
+      (_ (gethash field record)))))
 
 (provide 'citre-readtags)
 
