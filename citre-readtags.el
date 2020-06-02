@@ -354,10 +354,10 @@ return value.  It is a valid value field of `kind' information."
 ;; TODO: readtags exits correctly when the file provided is a path. Handle
 ;; this.
 (defun citre-readtags--get-lines
-    (tagsfile &optional name match case-sensitive filter-sexp sorter-sexp lines)
+    (tagsfile &optional name match case-sensitive filter sorter lines)
   "Get lines in tags file TAGSFILE using readtags.
 See `citre-readtags-get-records' to know about NAME, MATCH,
-CASE-SENSITIVE, FILTER-SEXP, SORTER-SEXP and LINES."
+CASE-SENSITIVE, FILTER, SORTER and LINES."
   (let* ((parts nil)
          (match (or match 'exact))
          (extras (concat
@@ -373,12 +373,12 @@ CASE-SENSITIVE, FILTER-SEXP, SORTER-SEXP and LINES."
     (push "-t" parts)
     (push tagsfile parts)
     ;; Filter expression
-    (when filter-sexp
+    (when filter
       (push "-Q" parts)
-      (push filter-sexp parts))
-    (when sorter-sexp
+      (push filter parts))
+    (when sorter
       (push "-S" parts)
-      (push sorter-sexp parts))
+      (push sorter parts))
     ;; Extra arguments
     (push extras parts)
     ;; Action
@@ -808,8 +808,9 @@ tabs in a pseudo tag line."
       (error "Readtags: %s" output))))
 
 (cl-defun citre-readtags-get-records
-    (tagsfile &optional name match case-sensitive filter-sexp sorter-sexp
-              &key require optional exclude parse-all-field lines)
+    (tagsfile &optional name match case-sensitive
+              &key filter sorter
+              require optional exclude parse-all-field lines)
   "Get records of tags in tags file TAGSFILE based on the arguments.
 
 TAGSFILE is the canonical path of tags file.  The meaning of the
@@ -823,10 +824,14 @@ optional arguments are:
 - CASE-SENSITIVE: Nil means performing case-insensitive
   matching in the NAME action, non-nil means performing
   case-sensitive matching in the NAME action.
-- FILTER-SEXP: Should be nil, or a postprocessor expression.
-  Non-nil means filtering the tags with it using -Q option.
-- SORTER-SEXP: Should be nil, or a postprocessor expression.
-  Non-nil means sortering the tags with it using -S option.
+
+Filter and sorter expressions can be specified by these keyword
+arguments:
+
+- FILTER: Should be nil, or a postprocessor expression.  Non-nil
+  means filtering the tags with it using -Q option.
+- SORTER: Should be nil, or a postprocessor expression.  Non-nil
+  means sortering the tags with it using -S option.
 
 Requirements of postprocessor expressions are:
 
@@ -927,7 +932,7 @@ Other keyword arguments are:
                parse-all-field))
             (citre-readtags--get-lines
              tagsfile name match case-sensitive
-             filter-sexp sorter-sexp lines))))
+             filter sorter lines))))
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
