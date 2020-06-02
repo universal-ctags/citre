@@ -642,8 +642,6 @@ If this fails, the single-letter kind is returned directly."
       (setq start (1+ end)))
     (nreverse result)))
 
-;; TODO: offer "kind-full" extension field.
-;; TODO: should we split the "lists" in LINE by comma?
 (defun citre-readtags--parse-line (line &optional tagsfile-info
                                         require optional exclude
                                         require-ext optional-ext ext-dep
@@ -941,8 +939,6 @@ Other keyword arguments are:
 ;; difference if we use nil or empty string to represent it, so it's good to
 ;; directly use empty string in the records, or make `citre-get-field' not
 ;; return nil.
-
-;; TODO: extensible "fields calculated in real time".
 (defun citre-readtags-get-field (field record)
   "Get FIELD from RECORD.
 RECORD is an output from `citre--readtags-parse-line'.  FIELD can
