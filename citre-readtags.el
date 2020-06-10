@@ -179,94 +179,89 @@ This function internally calls `string-match'."
 
 ;;;; Internals: Additional information handling
 
-;; TODO: These methods often call `citre-readtags--get-records', which may call
-;; `citre-readtags--get-tags-file-info', which calls these methods.  We need to
-;; be careful not asking for extension fields in these methods.  We could make
-;; it clear in the docstring, or invent some mechanism that avoid this problem
-;; forever.  I think the former should be enough since when this happens, there
-;; will be a max eval depth error, which is easy to understand and protects us
-;; from bad fateful consequences.
 (defvar citre-readtags--tags-file-info-method-alist
   '((path . citre-readtags--get-path-info)
     (kind . citre-readtags--get-kind-info))
-  "Alist of kinds of additional information and the functions to get them.
-See `citre-readtags--tags-file-info-alist' to know about the
-kinds of info.")
+  "Alist of additional info fields and the functions to get them.
+See `citre-readtags--tags-file-info-alist' to know about
+additional info.
 
-(defun citre-readtags--detect-tags-file-info (tagsfile kind)
-  "Detect the value of info KIND of TAGSFILE.
-TAGSFILE is the path to the tags file, KIND can be `path'."
+NOTICE: It's allowed for these functions to call
+`citre-readtags-get-records', but notice that if asking it for
+certain extension fields, it may in turn calls these functions
+again, causing a max eval depth error.")
+
+(defun citre-readtags--detect-tags-file-info (tagsfile field)
+  "Detect the value of additional info FIELD of TAGSFILE.
+TAGSFILE is the path to the tags file.  For valid FIELDs, see
+`citre-readtags--tags-file-info-alist'."
   (if-let ((method
-            (alist-get kind citre-readtags--tags-file-info-method-alist)))
+            (alist-get field citre-readtags--tags-file-info-method-alist)))
       (funcall method tagsfile)
-    (error "Invalid KIND")))
+    (error "Invalid FIELD")))
 
 (defvar citre-readtags--tags-file-info-alist nil
-  "Alist for storing informations about tags file.
-Since some informations offered by tags files may be ambiguous,
-we use this variable to store additional informations to
-ascertain them.
+  "Alist for storing additional info about tags file.
+Since tags files can offer ambiguous info, we use this variable
+to store additional info to ascertain them.
 
 This alist looks like:
 
   (alist of:
    tags file -> hash table of additional info:
-                (info kind -> (time field . value field)))
+                (info field -> (time . value)))
 
-The time fields are the last update time of its corresponding
-kind of info, in the style of (current-time).  Kinds of info and
-their corresponding value fields are:
+TIME is the last update time of the info field, in the style
+of (current-time).  Info fields and their corresponding VALUEs
+are:
 
-- `path': The value field is a cons pair.  Its car is t when
-  relative paths are used in the tags file, and cdr is the
-  current working directory when generating the tags file.
+- `path': The value is a cons pair.  Its car is t when relative
+  paths are used in the tags file, or nil when not.  Its cdr is
+  the current working directory when generating the tags file.
+- `kind': The value is a cons pair.  Its car is t when
+  single-letter kinds are used in the tags file, or nil when not.
+  Its cdr is a hash table for getting full-length kinds from
+  single-letter kinds, like `citre-readtags--kind-name-table', or
+  nil if the TAG_KIND_DESCRIPTION pseudo tags are not
+  presented.")
 
-- `kind': The value field is a cons pair.  Its car is t when
-  single-letter kinds are used in the tags file, and cdr is a
-  hash table for getting full-length kinds from single-letter
-  kinds, like `citre-readtags--kind-name-table', or nil if the
-  TAG_KIND_DESCRIPTION pseudo tags are not presented.")
-
-(defmacro citre-readtags--tags-file-info (info kind &optional field)
-  "Return the place form of KIND in INFO.
+(defmacro citre-readtags--tags-file-info (info field &optional key)
+  "Return the place form of additional info FIELD in INFO.
 INFO is a valid value in `citre-readtags--tags-file-info-alist',
-For possible values of KIND, see
-`citre-readtags--get-tags-file-info'.  FIELD could be `time' or
-`value' to return the time field or value field in KIND.  When
-nil, the whole kind of info is returned."
-  (let ((form `(gethash ,kind ,info)))
-    `(pcase ,field
+For possible values of FIELD, see
+`citre-readtags--get-tags-file-info'.  KEY could be `time' or
+`value' to return the last update time of FIELD, or the value of
+it.  When nil, (TIME . VALUE) is returned."
+  (let ((form `(gethash ,field ,info)))
+    `(pcase ,key
        ('time (car ,form))
        ('value (cdr ,form))
        ('nil ,form)
-       (_ (error "Invalid FIELD")))))
+       (_ (error "Invalid KEY")))))
 
 ;; TODO: In many situations, we require the file path is not only absolute
 ;; (i.e., `file-name-absolute-p' returns t), but also "canonical" (i.e., AND it
 ;; doesn't start with "~"). We should make this definition clear in the
 ;; documentations for developers, and make the requirement clear in all the
 ;; docstrings.
-(defun citre-readtags--get-tags-file-info (tagsfile &rest kinds)
-  "Return the additional info of tags file TAGSFILE.
+(defun citre-readtags--get-tags-file-info (tagsfile &rest fields)
+  "Return the additional info FIELDS of tags file TAGSFILE.
 TAGSFILE is the canonical path to the tags file, and the return
 value is the additional info of it.  This return value is a valid
 value in `citre--tags-file-info-alist', see its docstring for
 details.
 
-KINDS is a list of symbols representing the additional kinds of
-info needed by the caller.  Presented ones are updated when:
+FIELDS is a list of symbols representing the additional info
+fields needed by the caller.  Presented ones are updated when:
 
 - The tags file has not been registered in
   `citre--tags-file-info-alist'.
 - The tags file has been updated since this kind of info is asked
   last time.
 
-The possible values of KINDS are:
-
-- `path': Whether the tags file uses relative path, and the
-  current working directory when generating the tags file.
-
-When KINDS is nil, all kinds of info are updated."
+For valid values in FIELDS, see
+`citre-readtags--tags-file-info-alist'.  When FIELDS is nil, all
+fields of info are updated."
   (unless (file-exists-p tagsfile)
     (error "%s doesn't exist" tagsfile))
   (let ((recent-modification (file-attribute-modification-time
@@ -276,12 +271,12 @@ When KINDS is nil, all kinds of info are updated."
                                           nil nil #'equal)))
       (unless info
         (setf info (make-hash-table :test #'eq)))
-      (dolist (kind kinds)
-        (unless (equal (citre-readtags--tags-file-info info kind 'time)
+      (dolist (field fields)
+        (unless (equal (citre-readtags--tags-file-info info field 'time)
                        recent-modification)
-          (setf (citre-readtags--tags-file-info info kind)
+          (setf (citre-readtags--tags-file-info info field)
                 (cons recent-modification
-                      (citre-readtags--detect-tags-file-info tagsfile kind)))))
+                      (citre-readtags--detect-tags-file-info tagsfile field)))))
       info)))
 
 ;;;;; Info: path
@@ -291,7 +286,7 @@ When KINDS is nil, all kinds of info are updated."
 TAGSFILE is the path to the tags file.  This is done by
 inspecting the first line of regular tags."
   (let* ((record (car (citre-readtags-get-records
-                       tagsfile nil nil nil nil
+                       tagsfile nil nil nil
                        :require '(input) :lines 1))))
     (if (null record)
         (error "Invalid tags file")
@@ -300,7 +295,7 @@ inspecting the first line of regular tags."
 (defun citre-readtags--get-path-info (tagsfile)
   "Get path info of tags file TAGSFILE.
 See `citre-readtags--tags-file-info-alist' to know about the
-return value.  It is a valid value field of `path' information."
+return value.  It is a valid value field of the `path' field."
   (cons (citre-readtags--tags-file-use-relative-path-p tagsfile)
         (nth 1 (car (citre-readtags-get-pseudo-tags
                      "TAG_PROC_CWD" tagsfile)))))
@@ -313,7 +308,7 @@ return value.  It is a valid value field of `path' information."
 TAGSFILE is the path to the tags file.  This is done by
 inspecting the first line of regular tags."
   (let ((record (car (citre-readtags-get-records
-                      tagsfile nil nil nil nil
+                      tagsfile nil nil nil
                       :require '(kind) :lines 1))))
     (if (null record)
         (error "Invalid tags file")
@@ -343,7 +338,7 @@ If the required pseudo tags are not presented, nil is returned."
 (defun citre-readtags--get-kind-info (tagsfile)
   "Get kind info of tags file TAGSFILE.
 See `citre-readtags--tags-file-info-alist' to know about the
-return value.  It is a valid value field of `kind' information."
+return value.  It is a valid value field of the `kind' field."
   (cons (citre-readtags--tags-file-use-single-letter-kind-p tagsfile)
         (citre-readtags--tags-file-kind-name-table tagsfile)))
 
@@ -392,8 +387,9 @@ CASE-SENSITIVE, FILTER, SORTER and LINES."
                      (concat
                       (apply #'citre-readtags--build-shell-command
                              (nreverse parts))
-                      ;; In case the output of readtags is not terminated by
-                      ;; newline, we add an extra one.
+                      ;; "$?" is for getting the exit status.  In case the
+                      ;; output of readtags is not terminated by newline, we
+                      ;; add an extra one.
                       "; printf \"\n$?\n\""))
                     "\n" t))
            (status (car (last result)))
@@ -409,7 +405,7 @@ CASE-SENSITIVE, FILTER, SORTER and LINES."
 (defun citre-readtags--read-field-value (value)
   "Translate escaped sequences in VALUE.
 See man tags(5) to know about the escaped sequences.  VALUE
-should be the values of fields in a tags file."
+should be a field value in a tags file."
   (if-let ((backslash-idx (citre-readtags--string-match-all-escaping-backslash
                            value)))
       (let ((last 0)
@@ -438,12 +434,12 @@ should be the values of fields in a tags file."
 
 (defun citre-readtags--parse-field (field nth)
   "Parse FIELD from a line in readtags output.
-FIELD is a string from the line, separated with other fields by
-tabs.  NTH is the position of the field in the line, counts from
-zero.
+FIELD is a substring from the line, which can be get using
+`citre-readtags--split-tags-line'.  NTH is the position of the
+field in the line, counts from zero.
 
-The return value is a list of cons pairs, the cars of which are
-field names, cdrs are the values."
+The return value is a list of cons pairs, the cars are field
+names, cdrs are the values."
   (pcase nth
     (0 `((name . ,(citre-readtags--read-field-value field))))
     (1 `((input . ,(citre-readtags--read-field-value field))))
@@ -515,9 +511,8 @@ arguments to the functions.")
     (dep-record field tagsfile-info)
   "Calculate the value of extension field FIELD.
 DEP-RECORD is a hash table containing the fields that FIELD
-depends on, it's generated and passed by
-`citre-readtags--parse-line'.  TAGSFILE-INFO is the additional
-info of the tags file."
+depends on.  TAGSFILE-INFO is the additional info that FIELD
+depends on."
   (if-let ((method (gethash field citre-readtags--ext-fields-method-table)))
         (funcall method dep-record tagsfile-info)
       (error "Invalid FIELD")))
@@ -651,7 +646,7 @@ This returns a hash table called \"record\" by Citre.  Its keys
 are the fields, values are their values.  It can be utilized by
 `citre-get-field'.
 
-The keyword arguments can be used to specify the fields wanted in
+Optional arguments can be used to specify the fields wanted in
 the returned record. REQUIRE, OPTIONAL and EXCLUDE are similar to
 `citre-readtags-get-records', but extension fields can't appear
 in them.  Use these for extension fields:
@@ -670,19 +665,19 @@ extension fields.  It is the additional info of the tags file
 containing LINE.  Such TAGSFILE-INFO should be get using
 `citre-readtags--get-tags-file-info'.
 
-Keyword arguments must satisfy certain conditions, which the
-caller should take care of.  `citre--readtags-parse-line' doesn't
-check them for the sake of performance.  Other than those
-mentioned above, we still have:
+The arguments must satisfy certain conditions, which the caller
+should take care of.  `citre--readtags-parse-line' doesn't check
+them for the sake of performance.  Other than those mentioned
+above, we still have:
 
-- All lists used as keyword arguments should not contain
+- All lists specifying needed fields should not contain
   duplicated elements.
 - REQUIRE and EXCLUDE shouldn't intersect.
 - OPTIONAL and EXCLUDE shouldn't intersect.
 - OPTIONAL and EXCLUDE should not be used together."
   (let* ((elts (citre-readtags--split-tags-line line))
          (record (make-hash-table :test #'eq :size 20))
-         (dep-record (make-hash-table :test #'eq :size 2))
+         (dep-record (make-hash-table :test #'eq :size 10))
          (parse-all-field (or exclude parse-all-field))
          (require-num (length require))
          (require-counter 0)
@@ -839,11 +834,14 @@ Requirements of postprocessor expressions are:
   operators/variables/anything else.
 - Use `true' for `#t', `false' for `#f', and nil or `()'
   for `()'.
+- Use `(string->regexp \"PATTERN\")' or `(string->regexp
+  \"PATTERN\" :case-fold true)' for `#/PATTERN/' or
+  `#/PATTERN/i'.
 
 Each element in the returned value is a hash table containing the
-tag and some of its fields, which can be utilized by
-`citre-get-field'. The fields to contain can be customized by
-these keyword arguments:
+fields of matched tags, which can be utilized by
+`citre-readtags-get-field'. The fields to contain can be
+customized by these keyword arguments:
 
 - REQUIRE: A list containing fields that must be presented.  If
   any of these fields doesn't exist, an error will occur.
@@ -854,20 +852,20 @@ these keyword arguments:
 - EXCLUDE: A list containing fields that should be excluded.  All
   other fields will be recorded.
 
-OPTIONAL and REQUIRE should not be used together.  When both
+OPTIONAL and EXCLUDE should not be used together.  When both
 OPTIONAL and EXCLUDE are not presented, then only the fields in
 REQUIRE are parsed, unless PARSE-ALL-FIELD is non-nil.
 
-Valid field names are strings. Please notice these field names:
+Fields should be symbols. Please notice these fields:
 
-- \"name\": The name of the tag itself.
-- \"input\": The file containing the tag.
-- \"pattern\": EX command used to search the tag in the file.
+- `name': The name of the tag itself.
+- `input': The file containing the tag.
+- `pattern': EX command used to search the tag in the file.
 
 Citre treats some fields specially:
 
-- \"scope\": It's splitted into 2 fields: \"scope-kind\" and
-  \"scope-name\".  It's recommended to generate tags file with
+- `scope': It's splitted into 2 fields: `scope-kind' and
+  `scope-name'.  It's recommended to generate tags file with
   --fields=+Z, or this field will not be prefixed by \"scope:\"
   in the tags file, and there's no reliable way to know such a
   field is about scope.  Currently when this happens, the class
@@ -876,9 +874,33 @@ Citre treats some fields specially:
 Certain fields may offer ambiguous information.  To ascertain
 them, Citre offers its own extension fields:
 
-- \"abspath\": The canonical path of \"input\".  Needs \"input\".
+- `ext-abspath': The canonical path of `input'.
 
-To use an extension field, it must appear in REQUIRE or OPTIONAL.
+  Needs `input' field to be presented in the tags file.
+
+- `ext-lang': The language.  It uses the `language' field if it's
+  presented, or it guesses the language by the file extension.
+
+  Needs `language' or `input' fields to be presented in the tags
+  file.
+
+  When this fails, the file extension (or the file name, if it
+  doesn't have an extension) is used.
+
+- `ext-kind-full': The full name of `kind'. It uses the `kind'
+  field if it's not single-letter, or it guesses the full name by
+  `kind' and the language (which is also guessed by `input' if
+  necessary).
+
+  Needs `kind', `language' or `input' fields to be presented in
+  the tags file.
+
+  When this fails, the single-letter kind is used.
+
+For more on extension fields, see
+`citre-readtags--ext-fields-dependency-alist' and
+`citre-readtags--ext-fields-method-table'.  To use an extension
+field, it must appear in REQUIRE or OPTIONAL.
 
 Other keyword arguments are:
 
