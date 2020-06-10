@@ -346,8 +346,6 @@ return value.  It is a valid value field of the `kind' field."
 
 ;;;;; Get lines
 
-;; TODO: readtags exits correctly when the file provided is a path. Handle
-;; this.
 (defun citre-readtags--get-lines
     (tagsfile &optional name match case-sensitive filter sorter lines)
   "Get lines in tags file TAGSFILE using readtags.
@@ -604,6 +602,12 @@ If this fails, the single-letter kind is returned directly."
          (delimiters-in-pattern 0)
          (tabs-in-pattern 0)
          (result nil))
+    ;; There are at least 4 fields in a normal tag, so we can tell if something
+    ;; is wrong based on the number of tabs.  Sometimes readtags exits normally
+    ;; when an error actually occurs.  By doing this we can capture the error
+    ;; messages in the output (as long as there aren't many tabs).
+    (when (< (length tab-idx) 3)
+      (error (format "Invalid LINE: %s" line)))
     (setq pattern-delimiter
           (pcase (aref line (1+ start))
             ;; Make sure there are an even number of backslashes before a
