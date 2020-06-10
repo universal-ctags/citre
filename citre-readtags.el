@@ -804,6 +804,109 @@ tabs in a pseudo tag line."
                 output)
       (error "Readtags: %s" output))))
 
+;; TODO: Another "ambiguous information" problem: How should I match the input
+;; field, if I don't know the tags file uses absolute/relative path beforehand?
+;; And how should I match the kind field, if I don't know whether single-letter
+;; or full-length kind is used?  And, should we make this function handle these
+;; or offer separate helpers (to use for the STRING argument)?
+
+;; The path is not hard to deal with.  The kind is somewhat hard: We could
+;; simply turn a full-length kind into a single-letter one, but there may be
+;; more then one single-letter representation, and we may match other kinds in
+;; other languages, which have the same single-letter representation.  And what
+;; if the user defines his/her own kinds and the TAG_KIND_DESCRIPTION ptags are
+;; missing?  We could also match the language to make it more accurate, but
+;; this would make the implementation extremely complex, and, what if the
+;; language field is missing?  Perhaps we should simply don't filter it when a
+;; full kind is offered, and the tags file uses single-letter kind, and vice
+;; versa.
+(defun citre-readtags-build-filter (field string match
+                                          &optional case-fold invert
+                                          ignore-missing)
+  "Build a filter expression that filters on FIELD by STRING.
+MATCH could be:
+
+- `eq': See if FIELD is STRING.
+- `prefix': See if FIELD starts with STRING.
+- `suffix': See if FIELD ends with STRING.
+- `substr': See if FIELD contains STRING.
+- `regexp': See if FIELD can be matched by regexp STRING.  \"/\"
+  in STRING doesn't need to be escaped.
+
+If CASE-FOLD is non-nil, do case-insensitive matching.  If INVERT
+is non-nil, keep lines that doesn't match.  If IGNORE-MISSING is
+non-nil, also keep lines where FIELD is missing."
+  (let ((filter nil)
+        (field (intern (concat "$" (symbol-name field)))))
+    (pcase match
+      ('regexp
+       (setq filter
+             `((string->regexp ,string :case-fold
+                               ,(pcase case-fold
+                                  ('nil 'false)
+                                  (_ 'true)))
+               ,field)))
+      (_ (setq filter `(,(intern (concat (symbol-name match) "?"))
+                        ,(pcase case-fold
+                           ('nil field)
+                           (_ `(downcase ,field)))
+                        ,(pcase case-fold
+                           ('nil string)
+                           (_ (downcase string)))))))
+    (when invert
+      (setq filter `(not ,filter)))
+    (when ignore-missing
+      (setq filter `(or (not ,field) ,filter)))
+    filter))
+
+(defun citre-readtags-build-sorter (&rest fields)
+  "Build a sorter expression out of FIELDS.
+The return value can be used as the :sorter argument in
+`citre-readtags-get-records'.
+
+Each element of FIELDS can be:
+
+- A symbol.  For example, `input' means sort based on the input
+  field, in ascending order.
+- A list `(symbol +)' or `(symbol -)'.  For example, `(line +)'
+  means sort based on the line field, in ascending order,
+  and `(line -)' means in descending order.
+
+When multiple elements are presented in FIELDS, they are tried in
+order, until the order is decided.  For example,
+
+  (citre-readtags-build-sorter input \\='(line -))
+
+means sort by the file name, then the line number (in descending
+order) if they are in the same file.
+
+NOTICE: You should make sure that the used fields are not
+presented only in some of the lines in the tags file, or readtags
+will run into errors.  It's ok if it's missing in all lines."
+  (let ((sorter (list '<or>))
+        (err-msg "Invalid element in FIELDS: %s"))
+    (dolist (field fields)
+      (push (pcase field
+              ((pred symbolp)
+               (let ((name (symbol-name field)))
+                 `(<> ,(intern (concat "$" name))
+                      ,(intern (concat "&" name)))))
+              ((pred listp)
+               (unless (= (length field) 2)
+                 (error (format err-msg field)))
+               (let ((name (symbol-name (car field)))
+                     (order (nth 1 field)))
+                 (pcase order
+                   ('+ `(<> ,(intern (concat "$" name))
+                            ,(intern (concat "&" name))))
+                   ('- `(<> ,(intern (concat "&" name))
+                            ,(intern (concat "$" name))))
+                   (_ (error
+                       (format err-msg field))))))
+              (_ (error (format err-msg field))))
+            sorter))
+    (nreverse sorter)))
+
 (cl-defun citre-readtags-get-records
     (tagsfile &optional name match case-sensitive
               &key filter sorter
