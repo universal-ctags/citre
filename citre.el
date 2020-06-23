@@ -1315,7 +1315,7 @@ N can be negative."
       (move-overlay citre-peek--ov overlay-pos overlay-pos))
     (let* ((loc (nth citre-peek--location-index citre-peek--locations))
            (loc-numbers (length citre-peek--locations))
-           (initial-newline (if (= (point-at-eol) (point-max))
+           (initial-newline (if (eq (point-at-eol) (point-max))
                                 "\n" ""))
            (border (citre-peek--make-border))
            (file-content (citre-peek--get-content
@@ -1339,7 +1339,7 @@ N can be negative."
                        (list :background citre-peek--bg))
       (dotimes (n (length displayed-locs))
         (let ((line (concat (nth n displayed-locs) "\n")))
-          (if (= n displayed-index)
+          (if (eq n displayed-index)
               (setf (nth n displayed-locs)
                     (citre--add-face line 'citre-peek-current-location-face))
             (setf (nth n displayed-locs)
