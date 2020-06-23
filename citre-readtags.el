@@ -880,7 +880,7 @@ will be returned.  TAGSFILE is a canonical path."
          (car (citre-readtags--tags-file-info
                (citre-readtags--get-tags-file-info tagsfile 'kind)
                'kind 'value)))
-        (arg-kind-single-letter-p (= (length kind) 1)))
+        (arg-kind-single-letter-p (eq (length kind) 1)))
     (if (or (and tags-file-kind-single-letter-p
                  arg-kind-single-letter-p)
             (and (not tags-file-kind-single-letter-p)
@@ -921,7 +921,7 @@ will run into errors.  It's ok if it's missing in all lines."
                  `(<> ,(intern (concat "$" name))
                       ,(intern (concat "&" name)))))
               ((pred listp)
-               (unless (= (length field) 2)
+               (unless (eq (length field) 2)
                  (error (format err-msg field)))
                (let ((name (symbol-name (car field)))
                      (order (nth 1 field)))
