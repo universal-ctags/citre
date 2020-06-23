@@ -201,7 +201,7 @@ TAGSFILE is the path to the tags file.  For valid FIELDs, see
     (error "Invalid FIELD")))
 
 (defvar citre-readtags--tags-file-info-alist nil
-  "Alist for storing additional info about tags file.
+  "Alist for storing additional info about tags files.
 Since tags files can offer ambiguous info, we use this variable
 to store additional info to ascertain them.
 
@@ -256,8 +256,8 @@ fields needed by the caller.  Presented ones are updated when:
 
 - The tags file has not been registered in
   `citre--tags-file-info-alist'.
-- The tags file has been updated since this kind of info is asked
-  last time.
+- The tags file has been updated since this field of info is
+  asked last time.
 
 For valid values in FIELDS, see
 `citre-readtags--tags-file-info-alist'.  When FIELDS is nil, all
