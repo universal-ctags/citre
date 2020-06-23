@@ -804,26 +804,10 @@ tabs in a pseudo tag line."
                 output)
       (error "Readtags: %s" output))))
 
-;; TODO: Another "ambiguous information" problem: How should I match the input
-;; field, if I don't know the tags file uses absolute/relative path beforehand?
-;; And how should I match the kind field, if I don't know whether single-letter
-;; or full-length kind is used?  And, should we make this function handle these
-;; or offer separate helpers (to use for the STRING argument)?
-
-;; The path is not hard to deal with.  The kind is somewhat hard: We could
-;; simply turn a full-length kind into a single-letter one, but there may be
-;; more then one single-letter representation, and we may match other kinds in
-;; other languages, which have the same single-letter representation.  And what
-;; if the user defines his/her own kinds and the TAG_KIND_DESCRIPTION ptags are
-;; missing?  We could also match the language to make it more accurate, but
-;; this would make the implementation extremely complex, and, what if the
-;; language field is missing?  Perhaps we should simply don't filter it when a
-;; full kind is offered, and the tags file uses single-letter kind, and vice
-;; versa.
 (defun citre-readtags-build-filter (field string match
                                           &optional case-fold invert
                                           ignore-missing)
-  "Build a filter expression that filters on FIELD by STRING.
+  "Return a filter expression that filters on FIELD by STRING.
 MATCH could be:
 
 - `eq': See if FIELD is STRING.
@@ -859,8 +843,53 @@ non-nil, also keep lines where FIELD is missing."
       (setq filter `(or (not ,field) ,filter)))
     filter))
 
+(defun citre-readtags-filter-match-input (tagsfile input)
+  "Return a filter expression that matches the input field by INPUT.
+INPUT can be canonical or relative, and it will be converted to
+canonical (relative) path if the tags file TAGSFILE uses
+canonical (relative) path.  TAGSFILE is a canonical path."
+  (let* ((pathinfo (citre-readtags--tags-file-info
+                    (citre-readtags--get-tags-file-info tagsfile 'path)
+                    'path 'value))
+         (tags-file-input-relative-p (car pathinfo))
+         (arg-input-relative-p (not (file-name-absolute-p input)))
+         (cwd (cdr pathinfo))
+         (no-cwd-error "Can't get absolute path.  You can:\n\
+1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
+2. Regenerate the tags file using absolute paths in the command"))
+    (cond
+     ((and tags-file-input-relative-p (not arg-input-relative-p))
+      (unless cwd
+        (error no-cwd-error))
+      (setq input (substring input (length cwd))))
+     ((and (not tags-file-input-relative-p) arg-input-relative-p)
+      (unless cwd
+        (error no-cwd-error))
+      (setq input (concat cwd input))))
+    `(eq? $input ,input)))
+
+;; TODO: Should we convert between single-letter and full-length kinds here?
+;; The implementation would be messy since it also involves the language field,
+;; and we need to match the file extension if the language field is missing.
+(defun citre-readtags-filter-match-kind (tagsfile kind)
+  "Return a filter expression that matches the kind field by KIND.
+If KIND is single-letter (or full-length), but the tags file
+TAGSFILE uses full-length (or single-letter) kinds, then `true'
+will be returned.  TAGSFILE is a canonical path."
+  (let ((tags-file-kind-single-letter-p
+         (car (citre-readtags--tags-file-info
+               (citre-readtags--get-tags-file-info tagsfile 'kind)
+               'kind 'value)))
+        (arg-kind-single-letter-p (= (length kind) 1)))
+    (if (or (and tags-file-kind-single-letter-p
+                 arg-kind-single-letter-p)
+            (and (not tags-file-kind-single-letter-p)
+                 (not arg-kind-single-letter-p)))
+        `(eq? $kind ,kind)
+      'true)))
+
 (defun citre-readtags-build-sorter (&rest fields)
-  "Build a sorter expression out of FIELDS.
+  "Return a sorter expression based on FIELDS.
 The return value can be used as the :sorter argument in
 `citre-readtags-get-records'.
 
