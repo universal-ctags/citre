@@ -232,9 +232,10 @@ them.  This is used for `citre-jump'.
 
 The strings are in the format of \"relative-file-path:
 line-content\", and the function should show it to the user. Each
-string also has `kind' and `linum' properties (see
-`citre-get-field'), which can be read by `citre--get-property'.
-The function can choose to also show them to the user.
+string also has `kind' and `line' properties (see
+`citre-readtags-get-field'), which can be read by
+`citre--get-property'.  The function can choose to also show them
+to the user.
 
 The list is guaranteed to have one or more elements. When there
 are only one element, the function can decide to let the user
@@ -344,55 +345,66 @@ When nil, don't modify `completion-in-region-function'."
 
 Note for developers: Actually this doesn't affect auto-completion
 directly.  This option controls the behavior of
-`citre--get-lines' when its argument MATCH is `prefix' or
-`substring', and in Citre, these two match styles are only used
-by auto completion."
+`citre-get-records' when its argument MATCH is not nil or
+`exact', and when this is the case, it's likely that the user is
+getting records for auto-completion."
   :type '(choice (const :tag "Sensitive" sensitive)
                  (const :tag "Insensitive" insensitive)
                  (const :tag "Smart" smart)))
 
-;;;; Core layer
+;;;; Readtags API wrappers
 
-;; The core layer focuses on parsing tags files. The upper components should
-;; use the functions in the readtags APIs section to get information from tags
-;; files. But for `citre--readtags-get-lines', it's better to use its wrapper
-;; `citre-get-lines' instead, since it's argument is more human friendly.
+;; Wrappers around the APIs offered by citre-readtags.el.
 
-;;;;; Readtags API wrappers
-
-(defun citre-get-records (name match tagsfile)
+(cl-defun citre-get-records
+    (&optional tagsfile name match
+               &key filter sorter
+               require optional exclude parse-all-fields lines)
   "Get records of tags in tags file TAGSFILE that match NAME.
-TAGSFILE is the canonical path of the tags file.  MATCH is how
-should the tags match NAME, which can be:
+This is like `citre-readtags-get-records', except that:
 
-- `prefix': Match all lines whose tags begin with SYMBOL, case
-  insensitively
-- `substring': Match all lines whose tags contain SYMBOL, case
-  insensitively.
-- `exact': Match all lines whose tags are exactly SYMBOL, case
-  sensitively.
+- TAGSFILE could be nil, and it will be find automatically under
+  current project root.
+- MATCH could be nil, `exact' or `prefix', which is the same as
+  in `citre-readtags-get-records'. But it can also be `suffix',
+  `substr' or `regexp'.  In these cases, a filter expression is
+  built for matching, and it will be merged with FILTER by a
+  logical `and'.
+- When MATCH is nil or `exact', CASE-FOLD is always nil,
+  otherwise it's decided by `citre-case-sensitivity' and NAME.
+
+TAGSFILE is the canonical path of the tags file. for SORTER,
+REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES, see
+`citre-readtags-get-records'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
-`citre-get-field'."
-  (let* ((case-sensitive (pcase citre-case-sensitivity
-                           ('sensitive t)
-                           ('insensitive nil)
-                           ('smart (if (eq match 'exact)
-                                       t
-                                     (if (string= (downcase name) name)
-                                         nil t))))))
-    (pcase match
-      ((or 'exact 'prefix)
-       (citre-readtags-get-records tagsfile name match case-sensitive))
-      ('substring
-       (let ((tag-name-expr (if case-sensitive '$name '(downcase $name)))
-             (query-name-expr (if case-sensitive name (downcase name))))
-         (citre-readtags-get-records
-          tagsfile nil nil nil
-          `(substr? ,tag-name-expr ,query-name-expr))))
-      (_
-       (error "Unexpected value of MATCH")))))
+`citre-readtags-get-field'."
+  ;; Vars that end with a dash are the arguments in the
+  ;; `citre-readtags-get-records' call.
+  (let* ((tagsfile- (or tagsfile (citre--tags-file-path)))
+         (name- (when (memq match '(nil exact prefix)) name))
+         (match- (when (memq match '(nil exact prefix)) match))
+         (case-fold- (pcase citre-case-sensitivity
+                       ('sensitive nil)
+                       ('insensitive t)
+                       ('smart (if (memq match '(nil exact))
+                                   nil
+                                 (if (and name
+                                          (string= (downcase name) name))
+                                     t nil)))))
+         (filter- (when (and name (memq match '(suffix substr regexp)))
+                    (citre-readtags-build-filter
+                     'name name match case-fold-)))
+         (filter- (if (and filter- filter)
+                      `(and ,filter- ,filter)
+                    (or filter- filter))))
+    (citre-readtags-get-records tagsfile- name- match- case-fold-
+                                :filter filter- :sorter sorter
+                                :require require :optional optional
+                                :exclude exclude
+                                :parse-all-fields parse-all-fields
+                                :lines lines)))
 
 ;;;; Utils layer
 
@@ -442,7 +454,7 @@ Notice that this is destructive, which is different from
     (dolist (field fields)
       (put-text-property 0 len
                          (intern (concat "citre-" (symbol-name field)))
-                         (citre-get-field field record)
+                         (citre-readtags-get-field field record)
                          str))
     str))
 
@@ -640,54 +652,68 @@ If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
 not specified, fint it automatically under current project root.
 
 The result is a list of strings, each string is a tag name, with
-its text properties containing the kind and signature fields.
+its text property `citre-kind' and `citre-signature' being the
+kind and signature of the tag.
 
 It returns nil when the completion can't be done."
   ;; TODO: When inside a symbol, don't grab the part after point.
   (let ((symbol (or symbol (thing-at-point 'symbol)))
         (tagsfile (or tagsfile (citre--tags-file-path)))
         (match (if citre-do-substring-completion
-                   'substring 'prefix))
+                   'substr 'prefix))
         (candidate-str-generator
          (lambda (record)
            (citre--propertize
-            (citre-get-field 'tag record)
+            (citre-readtags-get-field 'name record)
+            ;; TODO: Maybe in the future we want to get ext-kind-full instead.
             record 'kind 'signature))))
     (when symbol
-      (cl-map 'list candidate-str-generator
-              (citre-get-records symbol match tagsfile)))))
+      (mapcar candidate-str-generator
+              (citre-get-records tagsfile symbol match
+                                 :require '(name)
+                                 :optional '(kind signature))))))
 
 ;;;;; Utils: Finding definitions
 
-(defun citre-get-definition-locations (&optional symbol tagsfile)
-  "Get locations from tags file TAGSFILE of symbol at point.
+(defun citre-get-definition-records (&optional tagsfile symbol)
+  "Get definitions from tags file TAGSFILE of symbol at point.
 If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
 not specified, find it automatically under current project root.
 
-The result is a list of strings, each string consists of relative
-file path and the line content, with text properties containing
-the kind, linum and absolute path of the tag."
+The result is a list of records, with the fields `ext-abspath',
+`line' and `kind'."
   (let ((symbol (or symbol (thing-at-point 'symbol)))
-        (tagsfile (or tagsfile (citre--tags-file-path)))
-        (location-str-generator
-         (lambda (record)
-           (citre--propertize
-            (concat (propertize
-                     (citre--relative-path
-                      (citre-get-field 'path record))
-                     'face 'warning)
-                    ": "
-                    (citre-get-field 'line record))
-            record 'kind 'linum 'path))))
+        (tagsfile (or tagsfile (citre--tags-file-path))))
     (unless symbol
       (user-error "No symbol at point"))
-    (cl-map 'list location-str-generator
-            (citre-get-records symbol 'exact tagsfile))))
+    (citre-get-records tagsfile symbol 'exact
+                       :require '(ext-abspath line)
+                       :optional '(kind))))
+
+;; TODO: make this pluggable?
+(defun citre-generate-location-str (record)
+  "Generate a string for RECORD for displaying.
+RECORD should be an element in the returned value of
+`citre-get-definition-records'.  The string returned looks like
+\"file: line-content\", with its properties `citre-ext-abspath',
+`citre-line' and `citre-kind' containing the corresponding fields
+in RECORD.
+
+This is for showing the results for all \"finding definition\"
+tools, except for the xref interface."
+  (citre--propertize
+   (concat (propertize
+            (citre--relative-path
+             (citre-readtags-get-field 'ext-abspath record))
+            'face 'warning)
+           ": "
+           (citre-readtags-get-field 'line-content record))
+   record 'kind 'line 'ext-abspath))
 
 ;;;;; Utils: Jumping related
 
-(defun citre--open-file-and-goto-line (path linum &optional window)
-  "Open file PATH and goto the line LINUM.
+(defun citre--open-file-and-goto-line (path line &optional window)
+  "Open file PATH and goto the line LINE.
 WINDOW can be:
 
 - nil: Use current window.
@@ -701,12 +727,11 @@ WINDOW can be:
         (pop-to-buffer (find-file-noselect path))
       (switch-to-buffer (find-file-noselect path)))
     (goto-char (point-min))
-    (forward-line (1- linum))
+    (forward-line (1- line))
     (run-hooks 'citre-after-jump-hook)
     (when (eq window 'other-window-noselect)
       (pop-to-buffer buf))))
 
-;; TODO: xref face for blinking should be used.
 (defun citre-recenter-and-blink ()
   "Recenter point and blink after point.
 This is suitable to run after jumping to a location."
@@ -727,19 +752,19 @@ This is suitable to run after jumping to a location."
 
 (defun citre--make-xref-object (record)
   "Make xref object of RECORD."
-  (let ((kind (citre-get-field 'kind record))
-        (path (citre-get-field 'path record))
-        (linum (citre-get-field 'linum record))
-        (line (citre-get-field 'line record)))
+  (let ((kind (citre-readtags-get-field 'kind record))
+        (path (citre-readtags-get-field 'ext-abspath record))
+        (line (citre-readtags-get-field 'line record))
+        (line-content (citre-readtags-get-field 'line-content record)))
     (xref-make
      (concat
-      (propertize kind 'face 'warning) " " line)
-     (xref-make-file-location path linum 0))))
+      (propertize kind 'face 'warning) " " line-content)
+     (xref-make-file-location path line 0))))
 
 (defun citre--xref-find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
-  (cl-map 'list #'citre--make-xref-object
-          (citre-get-records symbol 'exact (citre--tags-file-path))))
+  (mapcar #'citre--make-xref-object
+          (citre-get-definition-records nil symbol)))
 
 (defun citre-xref-backend ()
   "Define the Citre backend for xref."
@@ -760,13 +785,8 @@ This is suitable to run after jumping to a location."
          (tagsfile (citre--tags-file-path project)))
     (lambda (str pred action)
       (let ((collection
-             (cl-map 'list (apply-partially #'citre-get-field 'tag)
-                     ;; No need to use `substring' match style here when the
-                     ;; completion style is `substring' or `flex'.  Since Emacs
-                     ;; knows nothing about the internal of a collection
-                     ;; function, it will call this closure with an empty STR
-                     ;; to get the whole collection anyway.
-                     (citre-get-records str 'prefix tagsfile))))
+             (mapcar (lambda (record) (citre-readtags-get-field 'name record))
+                     (citre-get-records nil "" nil :require '(name)))))
         (complete-with-action action collection str pred)))))
 
 ;;;;; Tool: peek definition
@@ -806,7 +826,7 @@ to cdr (not included)."
       (when (< index len)
         index))))
 
-(defun citre--file-total-linum (path)
+(defun citre--file-total-lines (path)
   "Return the total number of lines of file PATH."
   (with-temp-buffer
     (insert-file-contents path)
@@ -851,8 +871,8 @@ and 1.0 which is the influence of C1 on the result."
 (defvar-local citre-peek--locations nil
   "List of definition locations used when peeking.
 Each element is a string to be displayed, with text properties
-`citre-path' being the absolute path, and `citre-linum' being the
-line number.")
+`citre-ext-abspath' being the absolute path, and `citre-line'
+being the line number.")
 
 (defvar-local citre-peek--displayed-locations-interval nil
   "The interval of displayed locations in `citre-peek--locations'.
@@ -887,9 +907,9 @@ buffers created during peeking."
   (or (alist-get filename citre-peek--temp-buffer-alist)
       (find-buffer-visiting filename)))
 
-(defun citre-peek--get-content (path linum n)
+(defun citre-peek--get-content (path line n)
   "Get file contents for peeking.
-PATH is the path of the file.  LINUM is the starting line.  N is
+PATH is the path of the file.  LINE is the starting line.  N is
 the number of lines.
 
 If there's no buffer visiting PATH currently, create a new
@@ -912,7 +932,7 @@ temporary buffer for it.  It will be killed by `citre-abort'."
               (end nil))
           (save-excursion
             (goto-char (point-min))
-            (forward-line (1- linum))
+            (forward-line (1- line))
             (setq beg (point))
             (forward-line (1- n))
             (setq end (point-at-eol))
@@ -940,13 +960,13 @@ N can be negative."
 N can be negative."
   (let* ((loc (nth citre-peek--location-index
                    citre-peek--locations))
-         (target (+ n (citre--get-property loc 'linum)))
-         (total-linum (citre--get-property loc 'total-linum))
+         (target (+ n (citre--get-property loc 'line)))
+         (total-lines (citre--get-property loc 'total-lines))
          (target (cond
                   ((< target 1) 1)
-                  ((> target total-linum) total-linum)
+                  ((> target total-lines) total-lines)
                   (t target))))
-    (citre--put-property loc 'linum target)))
+    (citre--put-property loc 'line target)))
 
 (defun citre-peek--make-border ()
   "Return the border to be used in peek windows."
@@ -970,8 +990,8 @@ N can be negative."
                                 "\n" ""))
            (border (citre-peek--make-border))
            (file-content (citre-peek--get-content
-                          (citre--get-property loc 'path)
-                          (citre--get-property loc 'linum)
+                          (citre--get-property loc 'ext-abspath)
+                          (citre--get-property loc 'line)
                           citre-peek-file-content-height))
            (displayed-locs (citre--subseq
                             citre-peek--locations
@@ -1013,16 +1033,17 @@ N can be negative."
   (when (overlayp citre-peek--ov)
     (citre-peek-abort))
   ;; Fetch informations to show.
-  (setq citre-peek--locations (citre-get-definition-locations))
+  (setq citre-peek--locations (mapcar #'citre-generate-location-str
+                                      (citre-get-definition-records)))
   (when (null citre-peek--locations)
     (user-error "Can't find definition"))
   (dolist (loc citre-peek--locations)
-    (citre--put-property loc 'total-linum
-                         (citre--file-total-linum
-                          (citre--get-property loc 'path)))
+    (citre--put-property loc 'total-lines
+                         (citre--file-total-lines
+                          (citre--get-property loc 'ext-abspath)))
     (citre--put-property loc 'buffer-exist-p
                          (find-buffer-visiting
-                          (citre--get-property loc 'path))))
+                          (citre--get-property loc 'ext-abspath))))
   ;; Setup environment for peeking.
   (citre-peek-mode)
   (setq citre-peek--ov (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
@@ -1127,13 +1148,14 @@ definition that is currently peeked."
           (setq target (nth citre-peek--location-index
                             citre-peek--locations))
           (citre-peek-abort))
-      (let ((locations (citre-get-definition-locations)))
+      (let ((locations (mapcar #'citre-generate-location-str
+                               (citre-get-definition-records))))
         (if (null locations)
             (user-error "Can't find definition")
           (setq target (funcall citre-select-location-function locations)))))
     (citre--open-file-and-goto-line
-     (citre--get-property target 'path)
-     (citre--get-property target 'linum))
+     (citre--get-property target 'ext-abspath)
+     (citre--get-property target 'line))
     (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
@@ -1404,15 +1426,13 @@ the appropriate function to call."
 The help string consists of the function name and its signature,
 and can be used as eldoc message."
   (when-let* ((func-name (citre--find-function-name))
-              (records (citre-get-records func-name 'exact
-                                          (citre--tags-file-path))))
-    (when func-name
-      (concat
-       (propertize func-name 'face 'font-lock-function-name-face)
-       " "
-       (cl-dolist (record records)
-         (when-let ((signature (citre-get-field 'signature record)))
-           (cl-return signature)))))))
+              (records (citre-get-definition-records nil func-name)))
+    (concat
+     (propertize func-name 'face 'font-lock-function-name-face)
+     " "
+     (cl-dolist (record records)
+       (when-let ((signature (citre-readtags-get-field 'signature record)))
+         (cl-return signature))))))
 
 ;;;;; Tool: misc commands
 
