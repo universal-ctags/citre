@@ -149,8 +149,16 @@ Handy helpers are offered to build filter and sorter expressions. See
 `citre-readtags-build-filter`, `citre-readtags-filter-match-input`,
 `citre-readtags-filter-match-kind` and `citre-readtags-build-sorter`.
 
-(TBW: talk about the wrappers in `citre.el` when the upper components
-are fixed.)
+`citre.el` implements a wrapper on `citre-readtags-get-records`, which
+is called `citre-get-records`. They work similar, and the only
+difference is: In `citre-readtags-get-records`, you can use nil, `exact`
+or `prefix` as the MATCH argument, and the NAME action and appropriate
+options will be used to match the tag name. But in `citre-get-records`,
+you can also use `substr`, `suffix` or `regexp` as the MATCH argument.
+In these cases, filter expressions are used to match the tag name. When
+an additional filter expression is offered, they are merged by a logical
+`and`. So, `citre-get-records` makes it easier to match the tag name in
+different ways, and in a lot of situations this is much more convenient.
 
 ## Appendix: How is the readtags command built?
 
