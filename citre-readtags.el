@@ -26,6 +26,9 @@
 
 ;;; Commentary:
 
+;; This is a readtags abstraction layer.  See docs/core-layer.md to know
+;; the design.  See the APIs section to know the APIs it offers.
+
 ;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and
@@ -347,10 +350,10 @@ return value.  It is a valid value field of the `kind' field."
 ;;;;; Get lines
 
 (defun citre-readtags--get-lines
-    (tagsfile &optional name match case-sensitive filter sorter lines)
+    (tagsfile &optional name match case-fold filter sorter lines)
   "Get lines in tags file TAGSFILE using readtags.
 See `citre-readtags-get-records' to know about NAME, MATCH,
-CASE-SENSITIVE, FILTER, SORTER and LINES."
+CASE-FOLD, FILTER, SORTER and LINES."
   (let* ((parts nil)
          (match (or match 'exact))
          (extras (concat
@@ -359,7 +362,7 @@ CASE-SENSITIVE, FILTER, SORTER and LINES."
                     ('exact "")
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
-                  (if case-sensitive "" "i"))))
+                  (if case-fold "i" ""))))
     ;; Program name
     (push (or citre-readtags-program "readtags") parts)
     ;; Read from this tags file
@@ -644,16 +647,17 @@ If this fails, the single-letter kind is returned directly."
 (defun citre-readtags--parse-line (line &optional tagsfile-info
                                         require optional exclude
                                         require-ext optional-ext ext-dep
-                                        parse-all-field)
+                                        parse-all-fields)
   "Parse a LINE from readtags output.
 This returns a hash table called \"record\" by Citre.  Its keys
 are the fields, values are their values.  It can be utilized by
 `citre-get-field'.
 
 Optional arguments can be used to specify the fields wanted in
-the returned record. REQUIRE, OPTIONAL and EXCLUDE are similar to
-`citre-readtags-get-records', but extension fields can't appear
-in them.  Use these for extension fields:
+the returned record. REQUIRE, OPTIONAL, EXCLUDE and
+PARSE-ALL-FIELDS are similar to `citre-readtags-get-records', but
+extension fields can't appear in them.  Use these for extension
+fields:
 
 - REQUIRE-EXT: A list containing extension fields that must be
   presented.  If any of these fields can't be get, an error will
@@ -682,7 +686,7 @@ above, we still have:
   (let* ((elts (citre-readtags--split-tags-line line))
          (record (make-hash-table :test #'eq :size 20))
          (dep-record (make-hash-table :test #'eq :size 10))
-         (parse-all-field (or exclude parse-all-field))
+         (parse-all-fields (or exclude parse-all-fields))
          (require-num (length require))
          (require-counter 0)
          (optional-num (length optional))
@@ -700,7 +704,7 @@ above, we still have:
                    (in-exclude (memq field exclude))
                    (in-ext-dep (memq field ext-dep)))
               (when (or in-require in-optional
-                        (and parse-all-field (null in-exclude)))
+                        (and parse-all-fields (null in-exclude)))
                 (puthash field value record)
                 (when in-require
                   (cl-incf require-counter))
@@ -709,7 +713,7 @@ above, we still have:
               (when in-ext-dep
                 (puthash field value dep-record)
                 (cl-incf ext-dep-counter))
-              (when (and (null parse-all-field)
+              (when (and (null parse-all-fields)
                          (eq require-counter require-num)
                          (eq optional-counter optional-num)
                          (eq ext-dep-counter ext-dep-num))
@@ -775,34 +779,7 @@ The leading and trailing whitespaces are trimmed.  This needs the
 
 ;;;; APIs
 
-(defun citre-readtags-get-pseudo-tags (name tagsfile &optional prefix)
-  "Read pseudo tags matching NAME in tags file TAGSFILE.
-When PREFIX is non-nil, match NAME by prefix.
-
-NAME should not start with \"!_\".  Run
-
-  $ ctags --list-pseudo-tags
-
-to know the valid NAMEs.  The return value is a list, and each
-element of it is another list consists of the fields separated by
-tabs in a pseudo tag line."
-  (let* ((program (or citre-readtags-program "readtags"))
-         (name (concat "!_" name))
-         (op (if prefix 'prefix? 'eq?))
-         (result (split-string
-                  (shell-command-to-string
-                   (concat
-                    (citre-readtags--build-shell-command
-                     program "-t" tagsfile "-Q" `(,op $name ,name) "-D")
-                    "; printf \"\n$?\n\""))
-                  "\n" t))
-         (status (car (last result)))
-         (output (cl-subseq result 0 -1)))
-    (if (string= status "0")
-        (mapcar (lambda (line)
-                  (split-string line "\t" t))
-                output)
-      (error "Readtags: %s" output))))
+;;;;; Build postprocessor expressions
 
 (defun citre-readtags-build-filter (field string match
                                           &optional case-fold invert
@@ -936,23 +913,54 @@ will run into errors.  It's ok if it's missing in all lines."
             sorter))
     (nreverse sorter)))
 
+;;;;; Get records from tags files
+
+(defun citre-readtags-get-pseudo-tags (name tagsfile &optional prefix)
+  "Read pseudo tags matching NAME in tags file TAGSFILE.
+When PREFIX is non-nil, match NAME by prefix.
+
+NAME should not start with \"!_\".  Run
+
+  $ ctags --list-pseudo-tags
+
+to know the valid NAMEs.  The return value is a list, and each
+element of it is another list consists of the fields separated by
+tabs in a pseudo tag line."
+  (let* ((program (or citre-readtags-program "readtags"))
+         (name (concat "!_" name))
+         (op (if prefix 'prefix? 'eq?))
+         (result (split-string
+                  (shell-command-to-string
+                   (concat
+                    (citre-readtags--build-shell-command
+                     program "-t" tagsfile "-Q" `(,op $name ,name) "-D")
+                    "; printf \"\n$?\n\""))
+                  "\n" t))
+         (status (car (last result)))
+         (output (cl-subseq result 0 -1)))
+    (if (string= status "0")
+        (mapcar (lambda (line)
+                  (split-string line "\t" t))
+                output)
+      (error "Readtags: %s" output))))
+
 (cl-defun citre-readtags-get-records
-    (tagsfile &optional name match case-sensitive
+    (tagsfile &optional name match case-fold
               &key filter sorter
-              require optional exclude parse-all-field lines)
+              require optional exclude parse-all-fields lines)
   "Get records of tags in tags file TAGSFILE based on the arguments.
 
 TAGSFILE is the canonical path of tags file.  The meaning of the
 optional arguments are:
 
-- NAME: If this is an non-empty string, use the NAME action.
+- NAME: If this is a non-empty string, use the NAME action.
   Otherwise use the -l action.
 - MATCH: Nil or `exact' means performing exact matching in the
   NAME action, `prefix' means performing prefix matching in the
   NAME action.
-- CASE-SENSITIVE: Nil means performing case-insensitive
-  matching in the NAME action, non-nil means performing
-  case-sensitive matching in the NAME action.
+- CASE-FOLD: Nil means performing case-insensitive matching in
+  the NAME action, non-nil means performing case-sensitive
+  matching in the NAME action.
 
 Filter and sorter expressions can be specified by these keyword
 arguments:
@@ -990,7 +998,7 @@ customized by these keyword arguments:
 
 OPTIONAL and EXCLUDE should not be used together.  When both
 OPTIONAL and EXCLUDE are not presented, then only the fields in
-REQUIRE are parsed, unless PARSE-ALL-FIELD is non-nil.
+REQUIRE are parsed, unless PARSE-ALL-FIELDS is non-nil.
 
 Fields should be symbols. Please notice these fields:
 
@@ -1085,10 +1093,12 @@ Other keyword arguments are:
                line info
                require optional exclude
                require-ext optional-ext ext-dep
-               parse-all-field))
+               parse-all-fields))
             (citre-readtags--get-lines
-             tagsfile name match case-sensitive
+             tagsfile name match case-fold
              filter sorter lines))))
+
+;;;;; Get fields from records
 
 ;; TODO: When format a nil field with "%s", it becomes "nil", which is not
 ;; suitable for showing to the user.  Currently I don't know what's the best
