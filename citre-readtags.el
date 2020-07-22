@@ -877,6 +877,9 @@ Each element of FIELDS can be:
 - A list `(symbol +)' or `(symbol -)'.  For example, `(line +)'
   means sort based on the line field, in ascending order,
   and `(line -)' means in descending order.
+- A list `(operator symbol +)' or `(operator symbol -)'. For
+  example, `(length name +)' means sort based on the lengths of
+  the tag names, in ascending order.
 
 When multiple elements are presented in FIELDS, they are tried in
 order, until the order is decided.  For example,
@@ -889,28 +892,30 @@ order) if they are in the same file.
 NOTICE: You should make sure that the used fields are not
 presented only in some of the lines in the tags file, or readtags
 will run into errors.  It's ok if it's missing in all lines."
-  (let ((sorter (list '<or>))
-        (err-msg "Invalid element in FIELDS: %s"))
+  (let* ((sorter (list '<or>))
+         (err-msg "Invalid element in FIELDS: %s")
+         (var (lambda (field op)
+                (let ((var (intern (concat op (symbol-name (nth 1 field))))))
+                  (pcase (car field)
+                    ('nil var)
+                    (_ `(,(car field) ,var))))))
+         (expr (lambda (field)
+                 (pcase (nth 2 field)
+                   ('+ `(<> ,(funcall var field "$")
+                            ,(funcall var field "&")))
+                   ('- `(<> ,(funcall var field "&")
+                            ,(funcall var field "$")))
+                   (_ (error (format err-msg field)))))))
     (dolist (field fields)
-      (push (pcase field
-              ((pred symbolp)
-               (let ((name (symbol-name field)))
-                 `(<> ,(intern (concat "$" name))
-                      ,(intern (concat "&" name)))))
-              ((pred listp)
-               (unless (eq (length field) 2)
-                 (error (format err-msg field)))
-               (let ((name (symbol-name (car field)))
-                     (order (nth 1 field)))
-                 (pcase order
-                   ('+ `(<> ,(intern (concat "$" name))
-                            ,(intern (concat "&" name))))
-                   ('- `(<> ,(intern (concat "&" name))
-                            ,(intern (concat "$" name))))
-                   (_ (error
-                       (format err-msg field))))))
-              (_ (error (format err-msg field))))
-            sorter))
+      (let ((field (pcase field
+                     ((pred symbolp)
+                      `(nil ,field +))
+                     ((pred listp)
+                      (pcase (length field)
+                        (2 `(nil ,(car field) ,(nth 1 field)))
+                        (3 field)
+                        (_ (error (format err-msg field))))))))
+        (push (funcall expr field) sorter)))
     (nreverse sorter)))
 
 ;;;;; Get records from tags files
