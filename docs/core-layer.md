@@ -3,16 +3,16 @@
 The core layer defines the way that upper components should use to get
 information from tags files.
 
-The basis of this layer is a readtags abstraction layer. Readtags is a
-program for filtering, sorting, and printing tags from tags files. On
-top of this, there are some wrappers around the APIs offered by the
-readtags abstraction layer, which transforms human-friendly inputs to
-readtags API calls.
+The basis of this layer is a readtags abstraction layer, implemented by
+`citre-readtags.el`. Readtags is a program for filtering, sorting, and
+printing tags from tags files. On top of this, `citre.el` implements
+some wrappers around the APIs offered by `citre-readtags.el`, which
+transforms human-friendly inputs to the API calls.
 
 ## Concepts of readtags
 
 The following is a brief introduction to the key concepts of readtags.
-Run `$ readtags -h` to learn more.
+Run `$ readtags -h` and see the manpage readtags(1) to learn more.
 
 The basic filtering and printing is done using **"actions"**. `-l`
 action lists all regular tags:
@@ -39,111 +39,149 @@ expressions to specify the condition of sorting:
 $ readtags -Q '(eq? "macro" $kind)' -nep - zero
 ```
 
-Learn more about filters from `$ readtags -H filter`.
+**Sorter** is another post processor, for sorting the printed tags. For
+example, sort by the name of the tags:
 
-**Sorter** is another post processor, for sorting the printed tags. It's
-not utilized by Citre for now.
+``` console
+$ readtags -S '(<> $name &name)' -ne -l
+```
+
+You can learn more about filters and sorters from `$readtags -H filter`,
+`$readtags -H sorter` and readtags(1).
 
 ## The ambiguity of information offered by tags files
 
 Tags file can offer *ambiguous information*. For example, when
-generating the tags file with `$ ctags -R`, the file fields use relative
-path to the current working directory. When jumping to definitions, how
-do we know where do they actually point to? This shows the ambiguity of
-information offered by tags files.
+generating the tags file with `$ ctags -R`, the input fields use
+relative path to the current working directory. When jumping to
+definitions, how do we know where do they actually point to? This shows
+the ambiguity of information offered by tags files.
 
 To ascertain such ambiguous information, we need *additional
 information*. For example, the `TAG_PROC_CWD` pseudo tag tells us
 exactly the needed current working directory. Combining it with the file
 fields, we know the accurate paths.
 
+Citre-readtags can gather the needed additional info from the tags file
+itself, and uses `citre-readtags--tags-file-info-alist` to store them.
+For now we have 2 fields of additional info:
+
+- `path`: Whether the tags file uses relative paths, and the current
+  working directory when generating the tags file.
+- `kind`: Whether the tags file uses single-letter kinds, and how to
+  convert single-letter kinds to full-length kinds
+
+You can learn more from the docstring of
+`citre-readtags--tags-file-info-alist`. We offer 2 functions for
+accessing these additional info:
+
+- `citre-readtags--get-tags-file-info`: Return the additional info of a
+  tags file. It caches the results in
+  `citre-readtags--tags-file-info-alist`, and only update them when the
+  tags file itself is updated.
+- `citre-readtags--tags-file-info`: Get a certain field from the return
+  value of `citre-readtags--get-tags-file-info`, or from a value in
+  `citre-readtags--tags-file-info-alist`.
+
+Based on this, Citre-readtags offers "extension fields". For example,
+through the `ext-abspath` field, you can always get absolute paths, no
+matter the input fields actually use absolute or relative paths. See the
+docstring of `citre-readtags-get-records` to know about all extension
+fields. Keep the concept of extension fields in mind since we'll use it
+frequently from now.
+
 ## Readtags abstraction layer internals
 
-`citre--readtags-get-lines` is the function that runs readtags. It's
-arguments directly corresponds to the options and actions of the
-readtags command. Read its docstring to know the details.
+`citre-readtags--get-lines` is the function that runs readtags, and get
+its output. It's arguments directly correspond to the options and
+actions of the readtags command. Read its docstring to know the details.
 
-`citre--readtags-parse-line` operates on the result of
-`citre--readtags-get-lines`. It transforms a line into a "record", which
+`citre-readtags--parse-line` operates on the result of
+`citre-readtags--get-lines`. It transforms a line into a "record", which
 is the data structure Citre uses to store information of a tag, and can
-be utilized by `citre-get-field`.
-
-Citre ensures the records store unambiguous information. Due to this
-reason, `citre--readtags-parse-line` has a `tagsfile-info` argument,
-where you should offer necessary additional information.
-
-Let's have a look at how Citre handles those "additional information".
-For each tags file, the additional information of it is stored in
-`citre--tags-file-info-alist`. The function `citre--tags-file-info` is
-the way to operate on it. It either returns the information required
-from `citre--tags-file-info-alist`, or if it's not presented, gather the
-information needed from pseudo tags, user input, etc., then write them
-to `citre--tags-file-info-alist` and returns them.
-
-For now, the only piece of additional information is the current working
-directory mentioned above, and it is ensured by `citre--tags-file-info`
-to only present when relative paths are indeed used in the tags file. In
-the future, as upper tools want to do more and more fancy things, we may
-use an extensible data structure for additional information, and let
-`citre--tags-file-info` writes and returns only the required pieces in
-it.
+be utilized by `citre-get-field`. If additional info is offered, it can
+also write extension fields to the records.
 
 ## Readtags APIs and their wrappers
 
-The core API is `citre-readtags-get-records`. It's arguments directly
-corresponds to the options and actions of the readtags program. What it
-does is:
+The core API is `citre-readtags-get-records`. It asks for:
 
-- Get the additional information needed with `citre--tags-file-info`.
+- The action, case-sensitivity, filter/sorter expressions, etc. These
+  are feed as actions and options to the readtags program.
+- The fields required. You could ask it to get certain fields, or
+  exclude certain fields, or throw an error when certain fields don't
+  exist. Extension fields can also be used. This is for upper components
+  to get the fields it needed. See the docstring for details.
+
+What it does is:
+
+- Get the additional information needed by the extension fields
+  required.
 - Run `citre--readtags-get-lines` to get the lines needed.
 - Run `citre--readtags-parse-line`, with the additional information, on
   the result of `citre--readtags-get-lines`, to produce records.
 
-The records generated can be utilized by `citre-get-field`, to extract
-all kinds of information offered by them.
+The records generated can be utilized by `citre-readtags-get-field`, to
+extract all kinds of information offered by them.
 
-Another API is `citre-readtags-get-pseudo-tag`, which gets the value of
-a specific pseudo tag in a tags file. This is mainly used by
-`citre--tags-file-info`, but upper components may want to use it too.
+`citre-readtags-get-field` can accept another kind of extension fields,
+called "extra extension fields" since I couldn't come up with a better
+name. The difference between it and the extension fields are:
 
-`citre-readtags-get-records` has two problems:
+- Extension fields offer "ascertained version" of ambiguous fields, and
+  are for this purpose only. Upper components should not extend them.
+- Extra extension fields is just another way to calculate some info
+  based on the records. Upper components could extend them (using
+  `citre-readtags-extra-ext-fields-table`) when certain procedure is
+  frequently used to do this kind of calculation. Also, they are not
+  valid field arguments for `citre-readtags-get-records`.
 
-- The arguments are natural for the readtags program, but not human
-  friendly.
-- Additional information may be needed for the filter expression. For
-  example, I want to filter tags from `/home/me/citre/citre.el"`, but
-  how do I know if the tags use relative or absolute paths? So I have to
-  call `citre--tags-file-info` beforehand to get this piece of
-  information, then I can build the right filter expression.
+Another API is `citre-readtags-get-pseudo-tags`, which gets the value of
+a specific pseudo tag in a tags file. This is also used internally for
+getting additional info of a tags file. Upper tools could use this to
+write their own doctor/diagnostic tool, to inspect the tags file and see
+if it meets their requirements. For this purpose,
+`citre-readtags-get-records` could also be used. It has a `lines`
+argument, making it possible to get one or more sample records to
+analyse.
 
-`citre-get-records` is a wrapper around `citre-readtags-get-records`, to
-overcome these inconvenience. It transforms human-friendly arguments to
-`citre-readtags-get-records` calls, and whenever the need emerges in the
-future, it will also take care of getting the additional information
-needed. In general, it's recommended for upper components to use
-`citre-get-records` instead of `citre-readtags-get-records`.
+Handy helpers are offered to build filter and sorter expressions. See
+`citre-readtags-build-filter`, `citre-readtags-filter-match-input`,
+`citre-readtags-filter-match-kind` and `citre-readtags-build-sorter`.
+
+`citre.el` implements a wrapper on `citre-readtags-get-records`, which
+is called `citre-get-records`. They work similar, and the only
+difference is: In `citre-readtags-get-records`, you can use nil, `exact`
+or `prefix` as the MATCH argument, and the NAME action and appropriate
+options will be used to match the tag name. But in `citre-get-records`,
+you can also use `substr`, `suffix` or `regexp` as the MATCH argument.
+In these cases, filter expressions are used to match the tag name. When
+an additional filter expression is offered, they are merged by a logical
+`and`. So, `citre-get-records` makes it easier to match the tag name in
+different ways, and in a lot of situations this is much more convenient.
 
 ## Appendix: How is the readtags command built?
 
-`citre--build-shell-commands` is used to build the readtags command.
-Each of its argument can be a string, symbol, or list of
+`citre-readtags--build-shell-command` is used to build the readtags
+command. Each of its argument can be a string, symbol, or list of
 strings/symbols/similar lists.
 
 This function uses `%s` to format strings, and `%S` to format anything
-else. Then, it runs `citre--disable-single-quote-as-terminator` on each
-of the results, and wrap them with single quotes, then concatenate them
-with spaces in between.
+else. Then, it runs `citre-readtags--escape-single-quote` on each of the
+results, and wrap them with single quotes, then concatenate them with
+spaces in between.
 
 Most of this is straight forward: you use strings for each part of the
-command, then `citre--build-shell-commands` concatenates them for you.
-The interesting parts are the symbols and lists, let's call them "source
-expressions", which is used specifically for building post processor
-expressions, and let's call them "target expressions".
+command, then `citre-readtags--build-shell-command` concatenates them
+for you. The interesting parts are the symbols and lists, let's call
+them "source expressions", which is used specifically for building
+sorters and filters in the readtags command, and let's call them "target
+expressions".
 
 The rule is simple: For strings in target expressions, you use strings
 in source expressions; for anything else in target expressions, you use
 symbols in source expressions. This is also said in the docstring of
-`citre--readtags-get-lines`. See this:
+`citre-readtags-get-records`. See this:
 
 ``` elisp
 (setq source-expr
@@ -158,8 +196,8 @@ for target expressions. The `?` in `eq?` is escaped, but readtags know
 this escape sequence, and will explain it as `eq?`.
 
 The problem happens when `%S` produces escape sequences that readtags
-doesn't know. From what we know for now, this happens only for `#t`,
-`#f`, and `()`. For example:
+doesn't know. From what we know for now, this happens for `#`, `(` and
+`)`. For example:
 
 ```elisp
 (insert (format "%S" '\#t))
@@ -170,4 +208,6 @@ doesn't know. From what we know for now, this happens only for `#t`,
 problems.
 
 Readtags defines some aliases specifically for this need. Use the symbol
-`true` for `#t`, `false` for `#f`, and `nil`/`()` for `()`.
+`true` for `#t`, `false` for `#f`, `nil`/`()` for `()`, and
+`string->regexp` for `#/PATTERN/`. This is also said in the docstring of
+`citre-readtags-get-records`.
