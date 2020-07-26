@@ -877,7 +877,7 @@ Each element of FIELDS can be:
 - A list `(symbol +)' or `(symbol -)'.  For example, `(line +)'
   means sort based on the line field, in ascending order,
   and `(line -)' means in descending order.
-- A list `(operator symbol +)' or `(operator symbol -)'. For
+- A list `(operator symbol +)' or `(operator symbol -)'.  For
   example, `(length name +)' means sort based on the lengths of
   the tag names, in ascending order.
 

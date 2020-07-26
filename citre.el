@@ -785,13 +785,11 @@ This is suitable to run after jumping to a location."
 (cl-defmethod xref-backend-identifier-completion-table
   ((_backend (eql citre)))
   "Return a function for xref to find all completions of a prefix."
-  (let* ((project (citre--project-root))
-         (tagsfile (citre--tags-file-path project)))
-    (lambda (str pred action)
-      (let ((collection
-             (mapcar (lambda (record) (citre-readtags-get-field 'name record))
-                     (citre-get-records nil "" nil :require '(name)))))
-        (complete-with-action action collection str pred)))))
+  (lambda (str pred action)
+    (let ((collection
+           (mapcar (lambda (record) (citre-readtags-get-field 'name record))
+                   (citre-get-records nil "" nil :require '(name)))))
+      (complete-with-action action collection str pred))))
 
 ;;;;; Tool: peek definition
 
