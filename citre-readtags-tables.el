@@ -883,58 +883,52 @@ This is used for guessing the full-length kind when it's not
 presented, and TAG_KIND_DESCRIPTION pseudo tags are not presented
 too.")
 
-(declare-function citre-readtags--build-shell-command "citre-readtags")
+;; Run this snippet to generate a kind name table from the help info of ctags.
+;; This is used for updating `citre-readtags--kind-name-table'.  The result
+;; will be shown in a *Pp Eval Output* buffer, and it can be directly copied
+;; into the variable definition.
 
-(defun citre-readtags--generate-kind-name-table
-    (&optional ctags-program)
-  "Generate a kind name table from the help info of ctags.
-This is used for updating `citre-readtags--kind-name-table'.  The
-result will be shown in a *Pp Eval Output* buffer, and it can be
-directly copied into the variable definition.
-
-CTAGS-PROGRAM is the name/path of the ctags program, nil means
-\"ctags\"."
-  (let* ((ctags-program (or ctags-program "ctags"))
-         (output (shell-command-to-string
-                  (citre-readtags--build-shell-command
-                   ctags-program
-                   "--quiet" "--options=NONE"
-                   "--machinable" "--list-kinds-full")))
-         (output-lines (nthcdr 1 (split-string output "\n" t)))
-         (output-records (mapcar (lambda (line)
-                                   (cl-subseq (split-string line "\t" t) 0 3))
-                                 output-lines))
-         (table (make-hash-table :test #'equal)))
-    (dolist (record output-records)
-      (let ((lang (car record))
-            (kind (nth 1 record))
-            (kind-full (nth 2 record)))
-        (unless (gethash lang table)
-          (puthash lang (make-hash-table :test #'equal) table))
-        (puthash kind kind-full (gethash lang table))))
-    (pp-eval-expression table)
-    (pop-to-buffer "*Pp Eval Output*")
-    (setq fill-column (- fill-column 2))
-    (goto-char (point-min))
-    (ignore-errors
-      (while (re-search-forward "#s(hash-table.*data")
-        (replace-match "\n#s(hash-table\ntest equal\ndata")))
-    (goto-char (point-min))
-    (delete-char 1)
-    (indent-region (point-min) (point-max))
-    (ignore-errors
-      (while (re-search-forward "(\\(\"[a-zA-Z0-9]+\" *\\)+)")
-        (save-excursion
-          (backward-sexp)
-          (forward-char)
-          (while (ignore-errors (progn (forward-sexp) (forward-sexp) t))
-            (when (> (current-column) fill-column)
-              (save-excursion
-                (backward-sexp) (backward-sexp)
-                (insert-char ?\n)
-                (lisp-indent-line)))))))
-    (whitespace-cleanup)
-    (goto-char (point-min))))
+;; (let* ((ctags-program (or citre-ctags-program "ctags"))
+;;        (output (shell-command-to-string
+;;                 (citre-readtags--build-shell-command
+;;                  ctags-program
+;;                  "--quiet" "--options=NONE"
+;;                  "--machinable" "--list-kinds-full")))
+;;        (output-lines (nthcdr 1 (split-string output "\n" t)))
+;;        (output-records (mapcar (lambda (line)
+;;                                  (cl-subseq (split-string line "\t" t) 0 3))
+;;                                output-lines))
+;;        (table (make-hash-table :test #'equal)))
+;;   (dolist (record output-records)
+;;     (let ((lang (car record))
+;;           (kind (nth 1 record))
+;;           (kind-full (nth 2 record)))
+;;       (unless (gethash lang table)
+;;         (puthash lang (make-hash-table :test #'equal) table))
+;;       (puthash kind kind-full (gethash lang table))))
+;;   (pp-eval-expression table)
+;;   (pop-to-buffer "*Pp Eval Output*")
+;;   (setq fill-column (- fill-column 2))
+;;   (goto-char (point-min))
+;;   (ignore-errors
+;;     (while (re-search-forward "#s(hash-table.*data")
+;;       (replace-match "\n#s(hash-table\ntest equal\ndata")))
+;;   (goto-char (point-min))
+;;   (delete-char 1)
+;;   (indent-region (point-min) (point-max))
+;;   (ignore-errors
+;;     (while (re-search-forward "(\\(\"[a-zA-Z0-9]+\" *\\)+)")
+;;       (save-excursion
+;;         (backward-sexp)
+;;         (forward-char)
+;;         (while (ignore-errors (progn (forward-sexp) (forward-sexp) t))
+;;           (when (> (current-column) fill-column)
+;;             (save-excursion
+;;               (backward-sexp) (backward-sexp)
+;;               (insert-char ?\n)
+;;               (lisp-indent-line)))))))
+;;   (whitespace-cleanup)
+;;   (goto-char (point-min)))
 
 (provide 'citre-readtags-tables)
 
