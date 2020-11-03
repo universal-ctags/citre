@@ -1,0 +1,3 @@
+--fields=Kz{line}{signature}
+-L .ctags.d/src.list
+-o target.tags
