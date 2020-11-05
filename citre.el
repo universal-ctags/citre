@@ -38,6 +38,7 @@
 (require 'citre-readtags)
 (require 'cl-lib)
 (require 'project)
+(require 'readtags-xref)
 (require 'ring)
 (require 'subr-x)
 (require 'thingatpt)
@@ -733,48 +734,6 @@ This is suitable to run after jumping to a location."
 ;; The tools layer provides tools that's used directly by the user.  This layer
 ;; could use all functions offered by the utils layer, but only the two APIs
 ;; offered by the core layer.
-
-;;;;; Tool: jump to definition (based on xref)
-
-(declare-function xref-make "xref" (summary location))
-(declare-function xref-make-file-location "xref" (file line column))
-
-(defun citre--make-xref-object (record)
-  "Make xref object of RECORD."
-  (let ((kind (citre-readtags-get-field 'kind record))
-        (path (citre-readtags-get-field 'ext-abspath record))
-        (line (citre-readtags-get-field 'line record))
-        (line-content (citre-readtags-get-field 'line-content record)))
-    (xref-make
-     (concat
-      (propertize kind 'face 'warning) " " line-content)
-     (xref-make-file-location path line 0))))
-
-(defun citre--xref-find-definition (symbol)
-  "Return the xref object of the definition information of SYMBOL."
-  (mapcar #'citre--make-xref-object
-          (citre-get-definition-records nil symbol)))
-
-(defun citre-xref-backend ()
-  "Define the Citre backend for xref."
-  'citre)
-
-(cl-defmethod xref-backend-identifier-at-point ((_backend (eql citre)))
-  "Define method for xref to get symbol at point."
-  (thing-at-point 'symbol))
-
-(cl-defmethod xref-backend-definitions ((_backend (eql citre)) symbol)
-  "Define method for xref to find definition of SYMBOL."
-  (citre--xref-find-definition symbol))
-
-(cl-defmethod xref-backend-identifier-completion-table
-  ((_backend (eql citre)))
-  "Return a function for xref to find all completions of a prefix."
-  (lambda (str pred action)
-    (let ((collection
-           (mapcar (lambda (record) (citre-readtags-get-field 'name record))
-                   (citre-get-records nil "" nil :require '(name)))))
-      (complete-with-action action collection str pred))))
 
 ;;;;; Tool: peek definition
 
