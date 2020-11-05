@@ -263,7 +263,7 @@ implementation."
     (define-key map (kbd "M-p") 'citre-peek-prev-line)
     (define-key map (kbd "M-N") 'citre-peek-next-location)
     (define-key map (kbd "M-P") 'citre-peek-prev-location)
-    (define-key map [remap keyboard-quit] ' citre-peek-abort)
+    (define-key map [remap keyboard-quit] 'citre-peek-abort)
     map)
   "Keymap used for `citre-peek' sessions."
   :type 'keymap)
