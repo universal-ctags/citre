@@ -12,7 +12,7 @@ PASSED_FACE="\e[1;32m"
 NORMAL_FACE='\e[0m'
 
 d=$(pwd)
-preload_options="-Q"
+preload_options=
 
 pass()
 {
@@ -41,8 +41,8 @@ done
 for t in tests/*/test.el; do
     d=$(dirname $t)
     (cd $d
-     if ! $EMACS --batch -l ert $preload_options -l ../common.el -l ./test.el \
-          -f ert-run-tests-batch-and-exit; then
+     if ! $EMACS -Q --batch -l ert $preload_options -l ../common.el \ \
+          -l ./test.el -f ert-run-tests-batch-and-exit; then
          error "A test in $d failed."
      fi
      exit 0
