@@ -1,7 +1,7 @@
 #!/bin/sh
 
 EMACS=${EMACS:=emacs}
-PRELOAD=citre.el
+PRELOAD="citre-readtags-tables.el citre-readtags.el citre.el"
 
 d=$(pwd)
 preload_options=
