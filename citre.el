@@ -365,11 +365,6 @@ This is like `citre-readtags-get-records', except that:
 
 - TAGSFILE could be nil, and it will be find automatically under
   current project root.
-- MATCH could be nil, `exact' or `prefix', which is the same as
-  in `citre-readtags-get-records'. But it can also be `suffix',
-  `substr' or `regexp'.  In these cases, a filter expression is
-  built for matching, and it will be merged with FILTER by a
-  logical `and'.
 - When MATCH is nil or `exact', CASE-FOLD is always nil,
   otherwise it's decided by `citre-case-sensitivity' and NAME.
 
@@ -380,11 +375,7 @@ REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES, see
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-readtags-get-field'."
-  ;; Vars that end with a dash are the arguments in the
-  ;; `citre-readtags-get-records' call.
   (let* ((tagsfile- (or tagsfile (citre--tags-file-path)))
-         (name- (when (memq match '(nil exact prefix)) name))
-         (match- (when (memq match '(nil exact prefix)) match))
          (case-fold- (pcase citre-case-sensitivity
                        ('sensitive nil)
                        ('insensitive t)
@@ -392,15 +383,9 @@ and some of its fields, which can be utilized by
                                    nil
                                  (if (and name
                                           (string= (downcase name) name))
-                                     t nil)))))
-         (filter- (when (and name (memq match '(suffix substr regexp)))
-                    (citre-readtags-build-filter
-                     'name name match case-fold-)))
-         (filter- (if (and filter- filter)
-                      `(and ,filter- ,filter)
-                    (or filter- filter))))
-    (citre-readtags-get-records tagsfile- name- match- case-fold-
-                                :filter filter- :sorter sorter
+                                     t nil))))))
+    (citre-readtags-get-records tagsfile- name match case-fold-
+                                :filter filter :sorter sorter
                                 :require require :optional optional
                                 :exclude exclude
                                 :parse-all-fields parse-all-fields

@@ -736,6 +736,80 @@ above, we still have:
         (puthash field value record)))
     record))
 
+;;;;; Get records from tags files
+
+(cl-defun citre-readtags--get-records
+    (tagsfile &optional name match case-fold
+              &key filter sorter
+              require optional exclude parse-all-fields lines)
+  "Get records of tags in tags file TAGSFILE based on the arguments.
+
+This is like `citre-readtags-get-records', which actually calls
+this function internally.  The difference is this is a interface
+that's closer to actual readtags command line calls.  The
+differences are:
+
+- NAME: If this is a non-empty string, use the NAME action.
+  Otherwise use the -l action.
+- MATCH: Can only be nil, `exact' or `prefix', which translates
+  to arguments controlling the NAME action.
+- CASE-FOLD: Only controls the NAME action.
+
+Notice when calling `citre-readtags-get-records' with NAME being
+`substr' or `regexp', it generates a filter expression to do
+that, and is merged with FILTER by a logical `and'.
+
+For SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and
+LINES, see `citre-readtags-get-records'."
+  (when (and optional exclude)
+    (error "OPTIONAL and EXCLUDE can't be used together"))
+  (when (cl-intersection require exclude)
+    (error "REQUIRE and EXCLUDE can't intersect"))
+  (when (cl-intersection optional exclude)
+    (error "OPTIONAL and EXCLUDE can't intersect"))
+  (let* ((optional (cl-set-difference optional require))
+         (find-field-depends
+          (lambda (field)
+            (car (alist-get field
+                            citre-readtags--ext-fields-dependency-alist
+                            nil nil #'equal))))
+         (find-info-depends
+          (lambda (field)
+            (nth 1 (alist-get field
+                              citre-readtags--ext-fields-dependency-alist
+                              nil nil #'equal))))
+         (ext-fields (mapcar #'car
+                             citre-readtags--ext-fields-dependency-alist))
+         (require-ext (cl-intersection require ext-fields))
+         (optional-ext (cl-intersection optional ext-fields))
+         (ext-dep (cl-delete-duplicates
+                   (apply #'append
+                          (append
+                           (mapcar find-field-depends require-ext)
+                           (mapcar find-field-depends optional-ext)))))
+         (require (cl-delete-duplicates
+                   (cl-set-difference require ext-fields)))
+         (optional (cl-delete-duplicates
+                    (cl-set-difference optional ext-fields)))
+         (exclude (cl-delete-duplicates exclude))
+         (kinds (cl-delete-duplicates
+                (apply #'append
+                       (mapcar find-info-depends
+                               (append require-ext optional-ext)))))
+         (info (apply #'citre-readtags--get-tags-file-info
+                      tagsfile kinds)))
+    (when (cl-intersection exclude ext-fields)
+      (error "EXCLUDE shouldn't contain extension fields"))
+    (mapcar (lambda (line)
+              (citre-readtags--parse-line
+               line info
+               require optional exclude
+               require-ext optional-ext ext-dep
+               parse-all-fields))
+            (citre-readtags--get-lines
+             tagsfile name match case-fold
+             filter sorter lines))))
+
 ;;;; Internals: Extension fields from records
 
 (defvar citre-readtags-extra-ext-fields-table
@@ -958,14 +1032,23 @@ tabs in a pseudo tag line."
 TAGSFILE is the canonical path of tags file.  The meaning of the
 optional arguments are:
 
-- NAME: If this is a non-empty string, use the NAME action.
-  Otherwise use the -l action.
-- MATCH: Nil or `exact' means performing exact matching in the
-  NAME action, `prefix' means performing prefix matching in the
-  NAME action.
-- CASE-FOLD: Nil means performing case-insensitive matching in
-  the NAME action, non-nil means performing case-sensitive
-  matching in the NAME action.
+- NAME: Should be a string or nil.  If this is a non-empty
+  string, filter the tags matching NAME before FILTER does its
+  job.  Otherwise they are only filtered by FILTER.
+
+- MATCH: How to match the tag name by NAME.  Can be:
+
+  - Nil or `exact': Match tags whose name is NAME.
+  - `prefix': Match tags that start with NAME.
+  - `suffix': Match tags that ends with NAME.
+  - `substr': Match tags that contains NAME.
+  - `regexp': Match tags that match the regexp NAME.
+
+  Nil, `exact' and `prefix' are done by the NAME action in
+  readtags, others are done by the filter expression.
+
+- CASE-FOLD: Nil means performing case-insensitive matching,
+  non-nil means performing case-sensitive matching.
 
 Filter and sorter expressions can be specified by these keyword
 arguments:
@@ -989,7 +1072,7 @@ Requirements of postprocessor expressions are:
 
 Each element in the returned value is a hash table containing the
 fields of matched tags, which can be utilized by
-`citre-readtags-get-field'. The fields to contain can be
+`citre-readtags-get-field'.  The fields to contain can be
 customized by these keyword arguments:
 
 - REQUIRE: A list containing fields that must be presented.  If
@@ -1005,7 +1088,7 @@ OPTIONAL and EXCLUDE should not be used together.  When both
 OPTIONAL and EXCLUDE are not presented, then only the fields in
 REQUIRE are parsed, unless PARSE-ALL-FIELDS is non-nil.
 
-Fields should be symbols. Please notice these fields:
+Fields should be symbols.  Please notice these fields:
 
 - `name': The name of the tag itself.
 - `input': The file containing the tag.
@@ -1054,54 +1137,20 @@ field, it must appear in REQUIRE or OPTIONAL.
 Other keyword arguments are:
 
 - LINES: When non-nil, get the first LINES of records at most."
-  (when (and optional exclude)
-    (error "OPTIONAL and EXCLUDE can't be used together"))
-  (when (cl-intersection require exclude)
-    (error "REQUIRE and EXCLUDE can't intersect"))
-  (when (cl-intersection optional exclude)
-    (error "OPTIONAL and EXCLUDE can't intersect"))
-  (let* ((optional (cl-set-difference optional require))
-         (find-field-depends
-          (lambda (field)
-            (car (alist-get field
-                            citre-readtags--ext-fields-dependency-alist
-                            nil nil #'equal))))
-         (find-info-depends
-          (lambda (field)
-            (nth 1 (alist-get field
-                              citre-readtags--ext-fields-dependency-alist
-                              nil nil #'equal))))
-         (ext-fields (mapcar #'car
-                             citre-readtags--ext-fields-dependency-alist))
-         (require-ext (cl-intersection require ext-fields))
-         (optional-ext (cl-intersection optional ext-fields))
-         (ext-dep (cl-delete-duplicates
-                   (apply #'append
-                          (append
-                           (mapcar find-field-depends require-ext)
-                           (mapcar find-field-depends optional-ext)))))
-         (require (cl-delete-duplicates
-                   (cl-set-difference require ext-fields)))
-         (optional (cl-delete-duplicates
-                    (cl-set-difference optional ext-fields)))
-         (exclude (cl-delete-duplicates exclude))
-         (kinds (cl-delete-duplicates
-                (apply #'append
-                       (mapcar find-info-depends
-                               (append require-ext optional-ext)))))
-         (info (apply #'citre-readtags--get-tags-file-info
-                      tagsfile kinds)))
-    (when (cl-intersection exclude ext-fields)
-      (error "EXCLUDE shouldn't contain extension fields"))
-    (mapcar (lambda (line)
-              (citre-readtags--parse-line
-               line info
-               require optional exclude
-               require-ext optional-ext ext-dep
-               parse-all-fields))
-            (citre-readtags--get-lines
-             tagsfile name match case-fold
-             filter sorter lines))))
+  (let* ((name- (when (memq match '(nil exact prefix)) name))
+         (match- (when (memq match '(nil exact prefix)) match))
+         (filter- (when (and name (memq match '(suffix substr regexp)))
+                    (citre-readtags-build-filter
+                     'name name match case-fold)))
+         (filter- (if (and filter- filter)
+                      `(and ,filter- ,filter)
+                    (or filter- filter))))
+    (citre-readtags--get-records tagsfile name- match- case-fold
+                                 :filter filter- :sorter sorter
+                                 :require require :optional optional
+                                 :exclude exclude
+                                 :parse-all-fields parse-all-fields
+                                 :lines lines)))
 
 ;;;;; Get fields from records
 
