@@ -1,25 +1,17 @@
-;;
-;; common codes for testing should be put here.
-;;
+;;; common.el --- Common code to run before each test
+
 (defconst default-tags "target.tags"
   "Default tags file under each test case directory.")
 
-(defconst default-test "test.el"
-  "Default test to run under each test case directory.")
+(setq citre-readtags-program (getenv "READTAGS"))
 
-(defmacro with-me (&rest body)
-  "Eval BODY in the buffer of `default-test' file.
-This is for use in the batch mode.  You should start Emacs with
-the working directory being a test case directory to ensure this
-work correctly."
-  `(with-current-buffer (find-file-noselect default-test)
-     ,@body))
-
-(defun expand-test-file (file)
+(defun expand-test-file (&optional file)
   "Get the absolute path of FILE.
-FILE is a relative path against the test case directory.
+FILE is a relative path against the test case directory.  If it's
+nil, the value of `default-tags' is used.
 
 This is for use in the batch mode.  You should start Emacs with
 the working directory being a test case directory to ensure this
 work correctly."
-  (expand-file-name (concat default-directory file)))
+  (let ((file (or file default-tags)))
+    (expand-file-name (concat default-directory file))))
