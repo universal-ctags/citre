@@ -613,6 +613,9 @@ If this fails, the single-letter kind is returned directly."
       (error (format "Invalid LINE: %s" line)))
     (setq pattern-delimiter
           (pcase (aref line (1+ start))
+            ((guard (string-match "^[0-9]+;\""
+                                  (substring line (1+ start))))
+             nil)
             ;; Make sure there are an even number of backslashes before a
             ;; delimiter, so we won't match escaped slashes or question marks.
             ((or ?/ (guard (string-match "^[0-9]+;/"
@@ -621,18 +624,19 @@ If this fails, the single-letter kind is returned directly."
              ;; the situation where it starts with a slash.  A regexp which
              ;; deals with this would be \\([^\\\\]\\|^\\)\\(\\\\\\\\\\)*/
              "[^\\\\]\\(\\\\\\\\\\)*/")
-            ((or ?? (guard (string-match "^[0-9]+;?"
+            ((or ?? (guard (string-match "^[0-9]+;\\?"
                                          (substring line (1+ start)))))
              "[^\\\\]\\(\\\\\\\\\\)*?")
             (_ (error "Invalid pattern field"))))
-    (cl-dolist (end (nthcdr 2 tab-idx))
-      (cl-incf delimiters-in-pattern
-               (citre-readtags--count-string-match pattern-delimiter
-                                                   (substring line start end)))
-      (if (eq (% delimiters-in-pattern 2) 0)
-          (cl-return)
-        (cl-incf tabs-in-pattern)
-        (setq start end)))
+    (when pattern-delimiter
+      (cl-dolist (end (nthcdr 2 tab-idx))
+        (cl-incf delimiters-in-pattern
+                 (citre-readtags--count-string-match
+                  pattern-delimiter (substring line start end)))
+        (if (eq (% delimiters-in-pattern 2) 0)
+            (cl-return)
+          (cl-incf tabs-in-pattern)
+          (setq start end))))
     ;; We make `tab-idx' include all tabs that's not in the pattern, and also
     ;; the length of `line'. This makes it easier to split the whole line.
     (setq tab-idx (nconc (list (car tab-idx) (cadr tab-idx))
