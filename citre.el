@@ -270,9 +270,9 @@ implementation."
 
 (defface citre-peek-border-face
   '((((background light))
-     :height 15 :background "#ffcbd3")
+     :height 15 :background "#ffcbd3" :extend t)
     (t
-     :height 15 :background "#db8e93"))
+     :height 15 :background "#db8e93" :extend t))
   "Face used for borders of peek windows.
 You can customize the appearance of the borders by setting the
 height and background properties of this face.
@@ -283,9 +283,9 @@ the color of the dashes.")
 
 (defface citre-peek-current-location-face
   '((((background light))
-     :background "#c0c0c0")
+     :background "#c0c0c0" :extend t)
     (t
-     :background "#666666"))
+     :background "#666666" :extend t))
   "Face used for the current location in the peek window.")
 
 ;;;;; Options: Eldoc & citre-peek-function related
@@ -994,7 +994,8 @@ N can be negative."
             (mapcar #'citre--fit-line displayed-locs))
       ;; Add faces.
       (citre--add-face file-content
-                       (list :background citre-peek--bg))
+                       (list :background citre-peek--bg
+                             :extend t))
       (dotimes (n (length displayed-locs))
         (let ((line (concat (nth n displayed-locs) "\n")))
           (if (eq n displayed-index)
@@ -1002,9 +1003,11 @@ N can be negative."
                     (citre--add-face line 'citre-peek-current-location-face))
             (setf (nth n displayed-locs)
                   (citre--add-face line
-                                   (list :background citre-peek--bg-alt))))))
+                                   (list :background citre-peek--bg-alt
+                                         :extend t))))))
       (citre--add-face count-info
-                       (list :background citre-peek--bg-alt))
+                       (list :background citre-peek--bg-alt
+                             :extend t))
       ;; And peek it!
       (overlay-put citre-peek--ov 'after-string
                    (concat initial-newline border file-content
