@@ -1,0 +1,15 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_OUTPUT_FILESEP	slash	/slash or backslash/
+!_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
+!_TAG_PATTERN_LENGTH_LIMIT	96	/0 for no limit/
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	0.0.0	/631690ad/
+pressure	src/original.f90	/^  real :: pressure(/;"	v	line:2	scope:module:test
+pressure	src/original.f90	/^  real :: pressure(/;"	v	line:6	scope:module:test2
+temp	src/original.f90	/^  real :: pressure(10,10), temp(/;"	v	line:2	scope:module:test
+temp	src/original.f90	/^  real :: pressure(10,10), temp(/;"	v	line:6	scope:module:test2
+test	src/original.f90	/^module test$/;"	m	line:1
+test2	src/original.f90	/^module test2$/;"	m	line:5

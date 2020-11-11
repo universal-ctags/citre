@@ -1194,6 +1194,186 @@ real-time based on RECORD.  The built-in ones are:
       ((or 'line 'end) (string-to-number (gethash field record)))
       (_ (gethash field record)))))
 
+;;;;; Helper for finding the location of a tag
+
+;;;;;; Internals
+
+(defvar citre-readtags--pattern-search-limit 50000
+  "The limit of chars to go to search for a pattern.")
+
+(defun citre-readtags--split-pattern (pattern)
+  "Split the pattern PATTERN.
+PATTERN should be the pattern field from a tag line.  It
+returns (LINUM PAT) where:
+
+- LINUM is the line number PATTERN contains (an integer), or nil
+  if not presented.
+- PAT is the search pattern that PATTERN contains, or nil if not
+  presented."
+  (let (line pat)
+    (pcase pattern
+      ;; Line number pattern
+      ((guard (string-match "^\\([0-9]+\\);\"$" pattern))
+       (setq line (string-to-number (match-string 1 pattern))))
+      ;; Search/combined pattern
+      ((guard (string-match "^\\([0-9]*\\);?\\([/?].*[/?]\\);\"$" pattern))
+       (let ((num (match-string 1 pattern)))
+         (setq line (unless (string-empty-p num) (string-to-number num))))
+       (setq pat (match-string 2 pattern)))
+      (_ (error "Invalid PATTERN")))
+    (list line pat)))
+
+(defun citre-readtags--parse-search-pattern (pattern)
+  "Parse the search pattern PATTERN.
+PATTERN looks like /pat/ or ?pat?.  It should come from the
+pattern field of a tag line.
+
+The returned value is (STR FROM-BEG TO-END), where STR is
+the (literal) string that PATTERN matches.  If FROM-BEG is
+non-nil, the string should begin from the beginning of a line.
+The same for TO-END.
+
+The reason we need this function is the pattern field is actually
+not a regexp.  It only adds \"^\" and \"$\", and escape several
+chars.  See the code of this function for the detail."
+  (let* ((direction (pcase (aref pattern 0)
+                      (?/ 'forward)
+                      (?? 'backward)))
+         ;; Remove the surrounding "/"s or "?"s.
+         (pattern (substring pattern 1 -1))
+         (from-beg (unless (string-empty-p pattern) (eq ?^ (aref pattern 0))))
+         ;; Check if there's an unescaped trailing "$".  Don't be scared, eval:
+         ;;
+         ;; (rx (or (not "\\") line-start) (zero-or-more "\\\\") "$" line-end)
+         ;;
+         ;; to understand it.
+         (to-end (string-match "\\([^\\]\\|^\\)\\(\\\\\\\\\\)*\\$$" pattern))
+         ;; Remove the beginning "^" and trailing "$"
+         (pattern (substring pattern
+                             (if from-beg 1 0)
+                             (if to-end -1 nil))))
+    (if-let ((backslash-idx
+              (citre-readtags--string-match-all-escaping-backslash pattern)))
+        (let ((last 0)
+              (i nil)
+              (parts nil))
+          (while (setq i (pop backslash-idx))
+            (push (substring pattern last i) parts)
+            (setq last (+ 2 i))
+            (let ((char (aref pattern (1+ i))))
+              (push (pcase char
+                      (?\\ "\\")
+                      ((and ?$ (guard (eq i (- (length pattern) 2)))) "$")
+                      ((and ?? (guard (eq direction 'backward))) "?")
+                      ((and ?/ (guard (eq direction 'forward))) "/")
+                      (_ (error "Invalid escape sequence")))
+                    parts)))
+          (push (substring pattern last) parts)
+          (setq pattern (apply #'concat (nreverse parts)))))
+    (list pattern from-beg to-end)))
+
+(defun citre-readtags--find-nearest-regexp
+    (regexp &optional limit case-fold)
+  "Find the nearest occurence of REGEXP from current position.
+By \"nearar\" we mean there are fewer lines between current
+position and the occurence.
+
+This goes to the beginning of line position of the occurence, and
+returns the position there.  If it's not found, return nil and
+don't go anywhere.
+
+When LIMIT is non-nil, it's the limit of chars that the search
+goes.  CASE-FOLD decides case-sensitivity."
+  (let ((start (line-beginning-position))
+        (case-fold-search case-fold)
+        after after-lines
+        before before-lines)
+    (save-excursion
+      (beginning-of-line)
+      (when (re-search-forward
+             regexp (when limit (+ start limit)) t)
+        (beginning-of-line)
+        (setq after (point))
+        (setq after-lines (count-lines start after))))
+    (unless (and after (<= after-lines 1))
+      (save-excursion
+        (beginning-of-line)
+        (when (re-search-backward
+               regexp (when limit (- start limit)) t)
+          (beginning-of-line)
+          (setq before (point))
+          (setq before-lines (count-lines before start)))))
+    (cond
+     ((and after before)
+      (goto-char (if (< before-lines after-lines) before after)))
+     ((or after before)
+      (goto-char (or after before))))))
+
+;;;;;; The API
+
+(defun citre-readtags-locate-tag (record &optional use-linum)
+  "Find the tag RECORD in current buffer.
+Returns the position to goto, or line number if USE-LINUM is
+non-nil.  Current buffer should be the buffer visiting the file
+containing the tag.
+
+The search is helped by:
+
+- The pattern field.
+- The line field, if the pattern is not a combined
+  pattern (i.e. not contatining the line number).
+- The name of the tag.
+
+This function does its best to find the tag if the file has been
+changed, and even when the line including the tag itself has been
+changed.  See the code for details.  If the search fails
+completely, it will return the beginning position of the file.
+
+This function has no side-effect on the buffer.  Upper components
+could wrap this function to provide a desired UI for jumping to
+the position of a tag."
+  (pcase-let*
+      ((name (citre-readtags-get-field 'name record))
+       (`(,line ,pat) (citre-readtags--split-pattern
+                       (citre-readtags-get-field 'pattern record)))
+       (line (or (citre-readtags-get-field 'line record) line))
+       (`(,str ,from-beg ,to-end) (citre-readtags--parse-search-pattern pat))
+       (pat-beg (if from-beg "^" ""))
+       (pat-end (if to-end "$" ""))
+       (lim citre-readtags--pattern-search-limit))
+    ;; NOTE: No need to explicitely throw/return whether the line or pattern
+    ;; exists, since this is "doing its best to search" and always need to
+    ;; return a position even if the search fails.
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char 1)
+        (when line (forward-line (1- line)))
+        (when pat
+          (or
+           ;; Search for the whole line.
+           (citre-readtags--find-nearest-regexp
+            (concat pat-beg (regexp-quote str) pat-end)
+            lim)
+           ;; Maybe the indentation or trailing whitespaces changed.
+           (citre-readtags--find-nearest-regexp
+            (concat pat-beg "[ \t]+" (regexp-quote (string-trim str)))
+            lim)
+           ;; The content is changed.  Try cutting from the end of the tag
+           ;; name and search.  From now on we also use case-fold search to
+           ;; deal with projects that uses a case-insensitive language and
+           ;; don't have a consistant style on it.
+           (when-let ((bound (when (string-match (regexp-quote name) str)
+                               (match-end 0)))
+                      (str (substring str 0 bound)))
+             (citre-readtags--find-nearest-regexp
+              (concat pat-beg "[ \t]+" (regexp-quote (string-trim str)))
+              lim 'case-fold))
+           ;; Last try: search for the tag name.
+           (citre-readtags--find-nearest-regexp (regexp-quote name)
+                                                lim 'case-fold)))
+        (if use-linum (line-number-at-pos) (point))))))
+
 (provide 'citre-readtags)
 
 ;; Local Variables:
