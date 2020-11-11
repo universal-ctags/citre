@@ -445,8 +445,13 @@ names, cdrs are the values."
     (0 `((name . ,(citre-readtags--read-field-value field))))
     (1 `((input . ,(citre-readtags--read-field-value field))))
     (2 `((pattern . ,field)))
-    (3 `((kind . ,(citre-readtags--read-field-value
-                   (cdr (citre-readtags--split-at-1st-colon field))))))
+    (3 (let* ((parts (citre-readtags--split-at-1st-colon field))
+              (field-name (car parts))
+              (field-name (pcase field-name
+                            ('nil 'kind)
+                            (_ (intern field-name))))
+              (field-value (citre-readtags--read-field-value (cdr parts))))
+         `((,field-name . ,field-value))))
     (_
      (let* ((parts (citre-readtags--split-at-1st-colon field))
             (field-name (car parts))
