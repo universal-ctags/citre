@@ -1355,9 +1355,10 @@ the position of a tag."
            (citre-readtags--find-nearest-regexp
             (concat pat-beg (regexp-quote str) pat-end)
             lim)
-           ;; Maybe the indentation or trailing whitespaces changed.
+           ;; Maybe the indentation or trailing whitespaces has changed, or
+           ;; something is added after.
            (citre-readtags--find-nearest-regexp
-            (concat pat-beg "[ \t]+" (regexp-quote (string-trim str)))
+            (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
             lim)
            ;; The content is changed.  Try cutting from the end of the tag
            ;; name and search.  From now on we also use case-fold search to
@@ -1367,7 +1368,7 @@ the position of a tag."
                                (match-end 0)))
                       (str (substring str 0 bound)))
              (citre-readtags--find-nearest-regexp
-              (concat pat-beg "[ \t]+" (regexp-quote (string-trim str)))
+              (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
               lim 'case-fold))
            ;; Last try: search for the tag name.
            (citre-readtags--find-nearest-regexp (regexp-quote name)
