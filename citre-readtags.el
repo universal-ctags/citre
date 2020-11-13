@@ -825,7 +825,9 @@ LINES, see `citre-readtags-get-records'."
   #s(hash-table
      test eq
      data
-     (line-content
+     (extra-line
+      citre-readtags--get-line-from-record
+      extra-line-content
       citre-readtags--get-line-content-from-record))
   "Hash table for getting extra extension fields from records.
 It's used by `citre-readtags-get-field'. Its keys will be valid
@@ -846,19 +848,17 @@ citre-readtags.  They should not modify existing key-value pairs
 in this table, and the added keys should be prefixed by the name
 of the library to avoid naming conflict.")
 
+(defun citre-readtags--get-line-from-record (record)
+  "Get the line number from RECORD."
+  (let ((line (car (citre-readtags--split-pattern
+                    (citre-readtags-get-field 'pattern record)))))
+    (or (citre-readtags-get-field 'line record) line)))
+
 (defun citre-readtags--get-line-content-from-record (record)
-  "Get the line content from RECORD.
-The leading and trailing whitespaces are trimmed.  This needs the
-`abspath' and `line' fields in RECORD."
-  (when-let ((path (gethash 'ext-abspath record))
-             (line (string-to-number (gethash 'line record))))
-    (when (file-exists-p path)
-      (with-temp-buffer
-        (insert-file-contents path)
-        (goto-char (point-min))
-        (when (eq (forward-line (1- line)) 0)
-          (string-trim (buffer-substring (line-beginning-position)
-                                         (line-end-position))))))))
+  "Get the line content from RECORD."
+  (let ((pat (nth 1 (citre-readtags--split-pattern
+                     (citre-readtags-get-field 'pattern record)))))
+    (car (citre-readtags--parse-search-pattern pat))))
 
 ;;;; APIs
 
@@ -1183,9 +1183,14 @@ a string.
 that can be used as FIELD.  Their values are calculated in
 real-time based on RECORD.  The built-in ones are:
 
-- `line-content': The line containing the tag.  Leading and
-  trailing whitespaces are trimmed.  Depends on the `abspath' and
-  `line' fields."
+- `extra-line': The line number of the tag.  This uses the `line'
+  field directly, and if it's not presented, get the line number
+  from the pattern field if it's a combined field.  If both can't
+  be done, return nil.
+- `extra-line-content': The line containing the tag, as recorded
+  in the pattern field.  Depends on the `pattern' field, and
+  returns nil if it doesn't record the line content (e.g. in tags
+  file generated using the -n option)."
   (if-let ((method
             (gethash field
                      citre-readtags-extra-ext-fields-table)))
