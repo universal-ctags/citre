@@ -368,9 +368,9 @@ This is like `citre-readtags-get-records', except that:
 - When MATCH is nil or `exact', CASE-FOLD is always nil,
   otherwise it's decided by `citre-case-sensitivity' and NAME.
 
-TAGSFILE is the canonical path of the tags file. for SORTER,
-REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES, see
-`citre-readtags-get-records'.
+TAGSFILE is the canonical path of the tags file.  for FILTER,
+SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
+see `citre-readtags-get-records'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
@@ -774,7 +774,11 @@ This is suitable to run after jumping to a location."
 (declare-function xref-make "xref" (summary location))
 (declare-function xref-make-file-location "xref" (file line column))
 
-(defun citre--xref-get-linum (record)
+;; NOTE: In the worst situation, this will create and kill a temporary buffer
+;; when processing every record.  If we get bug report on the performance, we
+;; could use the temp buffer technique in citre-peek, so we only need to do
+;; this once for every file.
+(defun citre-xref--get-linum (record)
   "Get the line number of tag RECORD.
 If there's no buffer visiting the file containing the tag, this
 openes it temporarily, and clean it up on exit."
@@ -792,22 +796,22 @@ openes it temporarily, and clean it up on exit."
       (kill-buffer buf))
     linum))
 
-(defun citre--make-xref-object (record)
+(defun citre-xref--make-object (record)
   "Make xref object of RECORD."
   (let* ((kind (citre-readtags-get-field 'kind record))
          (kind (if kind
                    (concat (propertize kind 'face 'warning) " ")
                  ""))
          (path (citre-readtags-get-field 'ext-abspath record))
-         (line (citre--xref-get-linum record))
+         (line (citre-xref--get-linum record))
          (str (citre-readtags-get-field 'extra-matched-str record)))
     (xref-make
      (concat kind str)
      (xref-make-file-location path line 0))))
 
-(defun citre--xref-find-definition (symbol)
+(defun citre-xref--find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
-  (mapcar #'citre--make-xref-object
+  (mapcar #'citre-xref--make-object
           (citre-get-definition-records nil symbol)))
 
 (defun citre-xref-backend ()
@@ -820,7 +824,7 @@ openes it temporarily, and clean it up on exit."
 
 (cl-defmethod xref-backend-definitions ((_backend (eql citre)) symbol)
   "Define method for xref to find definition of SYMBOL."
-  (citre--xref-find-definition symbol))
+  (citre-xref--find-definition symbol))
 
 (cl-defmethod xref-backend-identifier-completion-table
   ((_backend (eql citre)))
