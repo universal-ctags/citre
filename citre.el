@@ -719,7 +719,7 @@ tools, except for the xref interface."
                            (propertize (number-to-string line) 'face 'warning)
                            ")")
                  ""))
-         (str (citre-readtags-get-field 'extra-line-content record))
+         (str (citre-readtags-get-field 'extra-matched-str record))
          (str (if str
                   (concat ": " (string-trim str))
                 ""))

@@ -827,8 +827,8 @@ LINES, see `citre-readtags-get-records'."
      data
      (extra-line
       citre-readtags--get-line-from-record
-      extra-line-content
-      citre-readtags--get-line-content-from-record))
+      extra-matched-str
+      citre-readtags--get-matched-str-from-record))
   "Hash table for getting extra extension fields from records.
 It's used by `citre-readtags-get-field'. Its keys will be valid
 FIELD argument values for `citre-readtags-get-field', and values
@@ -854,7 +854,7 @@ of the library to avoid naming conflict.")
                     (citre-readtags-get-field 'pattern record)))))
     (or (citre-readtags-get-field 'line record) line)))
 
-(defun citre-readtags--get-line-content-from-record (record)
+(defun citre-readtags--get-matched-str-from-record (record)
   "Get the line content from RECORD."
   (let ((pat (nth 1 (citre-readtags--split-pattern
                      (citre-readtags-get-field 'pattern record)))))
@@ -1187,10 +1187,12 @@ real-time based on RECORD.  The built-in ones are:
   field directly, and if it's not presented, get the line number
   from the pattern field if it's a combined field.  If both can't
   be done, return nil.
-- `extra-line-content': The line containing the tag, as recorded
-  in the pattern field.  Depends on the `pattern' field, and
-  returns nil if it doesn't record the line content (e.g. in tags
-  file generated using the -n option)."
+
+- `extra-matched-str': The substring in the source file that's
+  matched by ctags when generating the tag.  It's often the whole
+  line containing the tag.  This depends on the `pattern' field,
+  and returns nil if it doesn't record the matched
+  string (e.g. in tags file generated using the -n option)."
   (if-let ((method
             (gethash field
                      citre-readtags-extra-ext-fields-table)))
