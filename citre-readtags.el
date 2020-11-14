@@ -858,7 +858,7 @@ of the library to avoid naming conflict.")
   "Get the line content from RECORD."
   (let ((pat (nth 1 (citre-readtags--split-pattern
                      (citre-readtags-get-field 'pattern record)))))
-    (car (citre-readtags--parse-search-pattern pat))))
+    (when pat (car (citre-readtags--parse-search-pattern pat)))))
 
 ;;;; APIs
 
@@ -1344,7 +1344,8 @@ the position of a tag."
        (`(,line ,pat) (citre-readtags--split-pattern
                        (citre-readtags-get-field 'pattern record)))
        (line (or (citre-readtags-get-field 'line record) line))
-       (`(,str ,from-beg ,to-end) (citre-readtags--parse-search-pattern pat))
+       (`(,str ,from-beg ,to-end)
+        (when pat (citre-readtags--parse-search-pattern pat)))
        (pat-beg (if from-beg "^" ""))
        (pat-end (if to-end "$" ""))
        (lim citre-readtags--pattern-search-limit))
