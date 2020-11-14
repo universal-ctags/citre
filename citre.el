@@ -458,22 +458,21 @@ STR should be propertized by `citre--propertize' or
 `citre--put-property'.
 
 When FIELD is non-nil and FROM-RECORD is nil, what it actually
-does is prefix the FIELD by `citre-', and get that text
-property.
-
-When FIELD and FROM-RECORD are both nil, it gets the record from
-STR, stored in the `citre-record' text property.
+does is prefix FIELD by `citre-', and get that text property.
 
 When FIELD and FROM-RECORD are both non-nil, it gets the record
-first, then get FIELD from it using `citre-readtags-get-field'."
+first, then get FIELD from it using `citre-readtags-get-field'.
+
+When FIELD is nil and FROM-RECORD is non-nil, it gets the record
+from STR, stored in the `citre-record' text property."
   (cond
    ((and field (null from-record))
     (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
-   ((and (null field) (null from-record))
+   ((and (null field) from-record)
     (get-text-property 0 'citre-record str))
    ((and field from-record)
     (citre-readtags-get-field field (get-text-property 0 'citre-record str)))
-   (_
+   (t
     (error "Invalid combination of FIELD and FROM-RECORD"))))
 
 (defun citre--put-property (str prop val)
@@ -935,8 +934,8 @@ buffers created during peeking."
 If there's no buffer visiting PATH currently, create a new
 temporary buffer for it.  It will be killed by `citre-abort'."
   (delay-mode-hooks
-    (let* ((buf-opened (citre-peek--find-buffer-visiting
-                        (citre-readtags-get-field 'ext-abspath record)))
+    (let* ((path (citre-readtags-get-field 'ext-abspath record))
+           (buf-opened (citre-peek--find-buffer-visiting path))
            (buf nil))
       (if buf-opened
           (setq buf buf-opened)
@@ -1039,9 +1038,10 @@ N can be negative."
            (border (citre-peek--make-border))
            (peek-line (or (citre--get-property loc 'peek-line)
                           (citre--get-property
-                           (citre--put-property loc 'peek-line
-                                                (citre-peek--get-linum
-                                                 (citre--get-property loc)))
+                           (citre--put-property
+                            loc 'peek-line
+                            (citre-peek--get-linum
+                             (citre--get-property loc nil 'from-record)))
                            'peek-line)))
            (file-content (citre-peek--get-content
                           (citre--get-property loc 'ext-abspath 'from-record)
@@ -1212,7 +1212,7 @@ definition that is currently peeked."
         (if (null locations)
             (user-error "Can't find definition")
           (setq target (funcall citre-select-location-function locations)))))
-    (citre--goto-tag (citre--get-property target))
+    (citre--goto-tag (citre--get-property target nil 'from-record))
     (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
