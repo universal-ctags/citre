@@ -774,15 +774,35 @@ This is suitable to run after jumping to a location."
 (declare-function xref-make "xref" (summary location))
 (declare-function xref-make-file-location "xref" (file line column))
 
+(defun citre--xref-get-linum (record)
+  "Get the line number of tag RECORD.
+If there's no buffer visiting the file containing the tag, this
+openes it temporarily, and clean it up on exit."
+  (let* ((path (citre-readtags-get-field 'ext-abspath record))
+         (buf-opened (find-buffer-visiting path))
+         buf linum)
+    (if buf-opened
+        (setq buf buf-opened)
+      (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
+      (with-current-buffer buf
+        (insert-file-contents path)))
+    (with-current-buffer buf
+      (setq linum (citre-readtags-locate-tag record 'use-linum)))
+    (unless buf-opened
+      (kill-buffer buf))
+    linum))
+
 (defun citre--make-xref-object (record)
   "Make xref object of RECORD."
-  (let ((kind (citre-readtags-get-field 'kind record))
-        (path (citre-readtags-get-field 'ext-abspath record))
-        (line (citre-readtags-get-field 'line record))
-        (line-content (citre-readtags-get-field 'line-content record)))
+  (let* ((kind (citre-readtags-get-field 'kind record))
+         (kind (if kind
+                   (concat (propertize kind 'face 'warning) " ")
+                 ""))
+         (path (citre-readtags-get-field 'ext-abspath record))
+         (line (citre--xref-get-linum record))
+         (str (citre-readtags-get-field 'extra-matched-str record)))
     (xref-make
-     (concat
-      (propertize kind 'face 'warning) " " line-content)
+     (concat kind str)
      (xref-make-file-location path line 0))))
 
 (defun citre--xref-find-definition (symbol)
