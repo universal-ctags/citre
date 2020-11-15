@@ -1373,7 +1373,8 @@ the position of a tag."
            ;; name and search.  From now on we also use case-fold search to
            ;; deal with projects that uses a case-insensitive language and
            ;; don't have a consistant style on it.
-           (when-let ((bound (when (string-match (regexp-quote name) str)
+           (when-let ((bound (when (let ((case-fold-search t))
+                                     (string-match (regexp-quote name) str))
                                (match-end 0)))
                       (str (substring str 0 bound)))
              (citre-readtags--find-nearest-regexp
