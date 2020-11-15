@@ -1,0 +1,5 @@
+-B
+--excmd=pattern
+--fields=s{scope}{line}
+-L .ctags.d/src.list
+-o backward-pattern-with-line-tags
