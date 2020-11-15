@@ -855,7 +855,7 @@ of the library to avoid naming conflict.")
     (or (citre-readtags-get-field 'line record) line)))
 
 (defun citre-readtags--get-matched-str-from-record (record)
-  "Get the line content from RECORD."
+  "Get the string contained by the pattern field from RECORD."
   (let ((pat (nth 1 (citre-readtags--split-pattern
                      (citre-readtags-get-field 'pattern record)))))
     (when pat (car (citre-readtags--parse-search-pattern pat)))))
@@ -1207,7 +1207,7 @@ real-time based on RECORD.  The built-in ones are:
 ;;;;;; Internals
 
 (defvar citre-readtags--pattern-search-limit 50000
-  "The limit of chars to go to search for a pattern.")
+  "The limit of chars to go when searching for a pattern.")
 
 (defun citre-readtags--split-pattern (pattern)
   "Split the pattern PATTERN.

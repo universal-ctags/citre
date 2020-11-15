@@ -368,7 +368,7 @@ This is like `citre-readtags-get-records', except that:
 - When MATCH is nil or `exact', CASE-FOLD is always nil,
   otherwise it's decided by `citre-case-sensitivity' and NAME.
 
-TAGSFILE is the canonical path of the tags file.  for FILTER,
+TAGSFILE is the canonical path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
 see `citre-readtags-get-records'.
 
@@ -707,12 +707,11 @@ The result is a list of records, with the fields `ext-abspath',
   "Generate a string for RECORD for displaying.
 RECORD should be an element in the returned value of
 `citre-get-definition-records'.  The string returned looks like
-\"file: line-content\", with its properties `citre-ext-abspath',
-`citre-line' and `citre-kind' containing the corresponding fields
-in RECORD.
+\"file(line-number): content\", with RECORD stored in its
+property `citre-record'.
 
-This is for showing the results for all \"finding definition\"
-tools, except for the xref interface."
+This is for showing the results for \"finding definition\"
+tools."
   (let* ((line (citre-readtags-get-field 'extra-line record))
          (line (if line
                    (concat "("
