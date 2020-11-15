@@ -14,16 +14,22 @@ This is for situations where the search pattern is presented."
       (should (eq (length records) 1))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/add-line.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 4)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 5)))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-indentation.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 4)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 5)))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-matched-str.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 3)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 4)))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-definition.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 3))))))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 4)))
+      (with-current-buffer (find-file-noselect
+                            (expand-test-file "src/remove-all.f90"))
+        (should (eq (citre-readtags-locate-tag record 'use-linum)
+                    (if (member tags '("forward-pattern-tags"
+                                       "backward-pattern-tags"))
+                        1 2)))))))
 
 (ert-deftest test-locate-tag-by-linum ()
   "Test `citre-readtags-locate-tag'.
@@ -39,13 +45,16 @@ This is for situations where the search pattern is not provided."
       (should (eq (length records) 1))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/add-line.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 2)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 3)))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-indentation.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 2)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 3)))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-matched-str.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 2)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 3)))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-definition.f90"))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 3)))
+      (with-current-buffer (find-file-noselect
+                            (expand-test-file "src/remove-all.f90"))
         (should (eq (citre-readtags-locate-tag record 'use-linum) 2))))))

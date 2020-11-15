@@ -1,3 +1,4 @@
+! Some comment.
 module test
   module inner
     ! Indentation changed because of the nested modules.

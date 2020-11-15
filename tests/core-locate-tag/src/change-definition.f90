@@ -1,4 +1,5 @@
+! Some comment.
 MODULE TEST
-  ! The whole file and the type is changed.
+  ! The whole file is upcased and the type is changed.
   INTEGER :: TEMP
 END MODULE TEST

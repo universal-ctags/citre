@@ -1,3 +1,4 @@
+! Some comment.
 ! Some comments are added.
 module test
   ! More comments are added.
