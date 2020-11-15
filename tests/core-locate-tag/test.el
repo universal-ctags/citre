@@ -14,16 +14,24 @@ This is for situations where the search pattern is presented."
       (should (eq (length records) 1))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/add-line.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 5)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 5))
+        (should (equal (match-string 0)
+                       "  real :: pressure(10,10), temp(")))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-indentation.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 5)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 5))
+        (should (equal (match-string 0)
+                       "    real :: pressure(10,10), temp(")))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-matched-str.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 4)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 4))
+        (should (equal (match-string 0)
+                       "  real :: pressure(10,10), temp")))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/change-definition.f90"))
-        (should (eq (citre-readtags-locate-tag record 'use-linum) 4)))
+        (should (eq (citre-readtags-locate-tag record 'use-linum) 4))
+        (should (equal (match-string 0)
+                       "TEMP")))
       (with-current-buffer (find-file-noselect
                             (expand-test-file "src/remove-all.f90"))
         (should (eq (citre-readtags-locate-tag record 'use-linum)
