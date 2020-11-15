@@ -631,7 +631,7 @@ If this fails, the single-letter kind is returned directly."
              "[^\\\\]\\(\\\\\\\\\\)*/")
             ((or ?? (guard (string-match "^[0-9]+;\\?"
                                          (substring line (1+ start)))))
-             "[^\\\\]\\(\\\\\\\\\\)*?")
+             "[^\\\\]\\(\\\\\\\\\\)*\\?")
             (_ (error "Invalid pattern field"))))
     (when pattern-delimiter
       (cl-dolist (end (nthcdr 2 tab-idx))
