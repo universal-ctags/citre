@@ -699,7 +699,7 @@ The result is a list of records, with the fields `ext-abspath',
     (citre-get-records tagsfile symbol 'exact
                        :sorter (citre-readtags-build-sorter
                                 'input '(length name +) 'name)
-                       :require '(ext-abspath pattern)
+                       :require '(name ext-abspath pattern)
                        :optional '(kind line))))
 
 ;; TODO: make this pluggable?

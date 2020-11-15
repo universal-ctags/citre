@@ -1332,6 +1332,9 @@ The search is helped by:
   pattern (i.e. not contatining the line number).
 - The name of the tag.
 
+The pattern and name field need to be presented, or an error will
+be signaled.
+
 This function does its best to find the tag if the file has been
 changed, and even when the line including the tag itself has been
 changed.  See the code for details.  If the search fails
@@ -1341,9 +1344,11 @@ This function has no side-effect on the buffer.  Upper components
 could wrap this function to provide a desired UI for jumping to
 the position of a tag."
   (pcase-let*
-      ((name (citre-readtags-get-field 'name record))
-       (`(,line ,pat) (citre-readtags--split-pattern
-                       (citre-readtags-get-field 'pattern record)))
+      ((name (or (citre-readtags-get-field 'name record)
+                 (error "NAME field doesn't exist")))
+       (pat (or (citre-readtags-get-field 'pattern record)
+                (error "PATTERN field doesn't exist")))
+       (`(,line ,pat) (citre-readtags--split-pattern pat))
        (line (or (citre-readtags-get-field 'line record) line))
        (`(,str ,from-beg ,to-end)
         (when pat (citre-readtags--parse-search-pattern pat)))
