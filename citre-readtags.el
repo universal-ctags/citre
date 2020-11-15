@@ -1198,7 +1198,8 @@ real-time based on RECORD.  The built-in ones are:
                      citre-readtags-extra-ext-fields-table)))
       (funcall method record)
     (pcase field
-      ((or 'line 'end) (string-to-number (gethash field record)))
+      ((or 'line 'end) (when-let ((val (gethash field record)))
+                         (string-to-number val)))
       (_ (gethash field record)))))
 
 ;;;;; Helper for finding the location of a tag
