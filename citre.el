@@ -1229,13 +1229,20 @@ definition that is currently peeked."
         (progn
           (setq target (nth citre-peek--location-index
                             citre-peek--locations))
-          (citre-peek-abort))
-      (let ((locations (mapcar #'citre-generate-location-str
-                               (citre-get-definition-records))))
+          (citre-peek-abort)
+          (citre--goto-tag (citre--get-property
+                            target nil 'from-record)))
+      (let* ((locations (mapcar #'citre-generate-location-str
+                                (citre-get-definition-records)))
+             (loc-alist (mapcar (lambda (loc)
+                                  (cons loc
+                                        (citre--get-property
+                                         loc nil 'from-record)))
+                                locations)))
         (if (null locations)
             (user-error "Can't find definition")
-          (setq target (funcall citre-select-location-function locations)))))
-    (citre--goto-tag (citre--get-property target nil 'from-record))
+          (setq target (funcall citre-select-location-function locations))
+          (citre--goto-tag (alist-get target loc-alist nil nil #'equal)))))
     (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
