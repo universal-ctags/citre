@@ -725,9 +725,10 @@ tools."
          (path (propertize
                 (citre--relative-path
                  (citre-readtags-get-field 'ext-abspath record))
-                'face 'font-lock-function-name-face)))
+                'face 'font-lock-function-name-face))
+         (file-missing-p (if (file-exists-p path) "" "*")))
     ;; TODO: Thinking of modifing the `citre--propertize'.
-    (citre--propertize (concat path line str) record)))
+    (citre--propertize (concat file-missing-p path line str) record)))
 
 (defun citre--goto-tag
     (record &optional window)
@@ -780,20 +781,29 @@ This is suitable to run after jumping to a location."
 (defun citre-xref--get-linum (record)
   "Get the line number of tag RECORD.
 If there's no buffer visiting the file containing the tag, this
-openes it temporarily, and clean it up on exit."
+openes it temporarily, and clean it up on exit.
+
+When the file pointed to by RECORD doesn't exist, this returns
+the line number in RECORD, or 0 if it doesn't record the line
+number.  This is because we don't want to fail an xref session
+only because one file is lost, and users may manually use the
+line number if they know the file is renamed/moved to which
+file."
   (let* ((path (citre-readtags-get-field 'ext-abspath record))
          (buf-opened (find-buffer-visiting path))
          buf linum)
-    (if buf-opened
-        (setq buf buf-opened)
-      (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
+    (if (not (file-exists-p path))
+        (or (citre-readtags-get-field 'extra-line record) 0)
+      (if buf-opened
+          (setq buf buf-opened)
+        (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
+        (with-current-buffer buf
+          (insert-file-contents path)))
       (with-current-buffer buf
-        (insert-file-contents path)))
-    (with-current-buffer buf
-      (setq linum (citre-readtags-locate-tag record 'use-linum)))
-    (unless buf-opened
-      (kill-buffer buf))
-    linum))
+        (setq linum (citre-readtags-locate-tag record 'use-linum)))
+      (unless buf-opened
+        (kill-buffer buf))
+      linum)))
 
 (defun citre-xref--make-object (record)
   "Make xref object of RECORD."
@@ -802,11 +812,13 @@ openes it temporarily, and clean it up on exit."
                    (concat (propertize kind 'face 'warning) " ")
                  ""))
          (path (citre-readtags-get-field 'ext-abspath record))
+         (file-existance
+          (if (file-exists-p path) "" "*missing*"))
          (line (citre-xref--get-linum record))
          (str (citre-readtags-get-field 'extra-matched-str record)))
     (xref-make
      (concat kind str)
-     (xref-make-file-location path line 0))))
+     (xref-make-file-location (concat file-existance path) line 0))))
 
 (defun citre-xref--find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
@@ -873,9 +885,10 @@ to cdr (not included)."
 
 (defun citre--file-total-lines (path)
   "Return the total number of lines of file PATH."
-  (with-temp-buffer
-    (insert-file-contents path)
-    (line-number-at-pos (point-max))))
+  (when (file-exists-p path)
+    (with-temp-buffer
+      (insert-file-contents path)
+      (line-number-at-pos (point-max)))))
 
 (defun citre--fit-line (str)
   "Fit STR in current window.
@@ -955,48 +968,41 @@ buffers created during peeking."
 (defun citre-peek--get-linum (record)
   "Get the line number of tag RECORD.
 If there's no buffer visiting PATH currently, create a new
-temporary buffer for it.  It will be killed by `citre-abort'."
+temporary buffer for it.  It will be killed by `citre-abort'.
+
+If the file pointed to by RECORD doesn't exist, returns 1.  This
+is because we want to display a one-line message about the
+missing file in the peek window."
+  ;; TODO: is this `delay-mode-hooks' needed?
   (delay-mode-hooks
     (let* ((path (citre-readtags-get-field 'ext-abspath record))
            (buf-opened (citre-peek--find-buffer-visiting path))
            (buf nil))
-      (if buf-opened
-          (setq buf buf-opened)
-        (setq buf (generate-new-buffer (format " *citre-peek-%s*" path)))
+      (if (not (file-exists-p path))
+          1
+        (if buf-opened
+            (setq buf buf-opened)
+          (setq buf (generate-new-buffer (format " *citre-peek-%s*" path)))
+          (with-current-buffer buf
+            (insert-file-contents path)
+            ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
+            (let ((buffer-file-name path))
+              (delay-mode-hooks
+                (set-auto-mode))))
+          (push (cons path buf) citre-peek--temp-buffer-alist))
         (with-current-buffer buf
-          (insert-file-contents path)
-          ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
-          (let ((buffer-file-name path))
-            (delay-mode-hooks
-              (set-auto-mode))))
-        (push (cons path buf) citre-peek--temp-buffer-alist))
-      (with-current-buffer buf
-        (citre-readtags-locate-tag record 'use-linum)))))
+          (citre-readtags-locate-tag record 'use-linum))))))
 
 (defun citre-peek--get-content (path line n)
   "Get file contents for peeking.
 PATH is the path of the file.  LINE is the starting line.  N is
 the number of lines.
 
-If there's no buffer visiting PATH currently, create a new
-temporary buffer for it.  It will be killed by `citre-abort'."
-  ;; Checking for `buf-opened' is non-necessary since `citre-peek--get-linum'
-  ;; has done it.  But we keep it here since it doesn't affect the
-  ;; functionality, and for possible refactoring that may get rid of
-  ;; `citre-peek--get-linum'.
-  (delay-mode-hooks
-    (let* ((buf-opened (citre-peek--find-buffer-visiting path))
-           (buf nil))
-      (if buf-opened
-          (setq buf buf-opened)
-        (setq buf (generate-new-buffer (format " *citre-peek-%s*" path)))
-        (with-current-buffer buf
-          (insert-file-contents path)
-          ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
-          (let ((buffer-file-name path))
-            (delay-mode-hooks
-              (set-auto-mode))))
-        (push (cons path buf) citre-peek--temp-buffer-alist))
+This must be called when a record pointing to PATH is already
+processed by `citre-peek--get-linum' earlier in a `citre-peek'
+session, or it may think the file doesn't exist and returns a
+message about the missing file."
+  (if-let ((buf (citre-peek--find-buffer-visiting path)))
       (with-current-buffer buf
         (let ((beg nil)
               (end nil))
@@ -1007,7 +1013,8 @@ temporary buffer for it.  It will be killed by `citre-abort'."
             (forward-line (1- n))
             (setq end (point-at-eol))
             (font-lock-fontify-region beg end)
-            (concat (buffer-substring beg end) "\n")))))))
+            (concat (buffer-substring beg end) "\n"))))
+    (propertize "This file doesn't exist.\n" 'face 'error)))
 
 (defun citre-peek--location-index-forward (n)
   "In a peek window, move current location N steps forward.
@@ -1119,9 +1126,11 @@ N can be negative."
     (user-error "Can't find definition"))
   (dolist (loc citre-peek--locations)
     (citre--put-property loc 'total-lines
-                         (citre--file-total-lines
-                          (citre--get-property
-                           loc 'ext-abspath 'from-record)))
+                         (or (citre--file-total-lines
+                              (citre--get-property
+                               loc 'ext-abspath 'from-record))
+                             ;; Display 1 line when the file doesn't exist.
+                             1))
     (citre--put-property loc 'buffer-exist-p
                          (find-buffer-visiting
                           (citre--get-property
