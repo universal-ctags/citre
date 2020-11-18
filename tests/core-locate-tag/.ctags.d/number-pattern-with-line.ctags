@@ -1,0 +1,4 @@
+--excmd=number
+--fields=s{scope}{line}
+-L .ctags.d/src.list
+-o number-pattern-with-line-tags

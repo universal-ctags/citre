@@ -1,0 +1,5 @@
+-B
+--excmd=combine
+--fields=s{scope}
+-L .ctags.d/src.list
+-o combined-backward-pattern-tags

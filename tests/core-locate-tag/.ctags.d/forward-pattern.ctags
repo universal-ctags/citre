@@ -1,0 +1,4 @@
+--excmd=pattern
+--fields=s{scope}
+-L .ctags.d/src.list
+-o forward-pattern-tags

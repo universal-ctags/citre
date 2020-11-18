@@ -1,0 +1,4 @@
+--excmd=number
+--fields=s{scope}
+-L .ctags.d/src.list
+-o number-pattern-tags
