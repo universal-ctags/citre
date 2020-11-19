@@ -32,12 +32,10 @@ error()
 
 for f in $SRC_FILES; do
     [ ! -e $f ] && error "Cannot find $f."
-    elc="${f}c"
     info "$f";
     (emacs -Q --batch --eval "(setq byte-compilation-error-on-warn t)" \
            -L . -f batch-byte-compile $f 2>&1 \
-         | grep . && rm $elc && error "Failed compiling $f." \
-             || rm $elc && exit 0
+         | grep . && error "Failed compiling $f." || exit 0
     ) || exit 1
 done
 

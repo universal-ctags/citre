@@ -13,3 +13,7 @@ test:
 .PHONY: compile
 compile:
 	$(SHELL) scripts/compile.sh
+
+.PHONY: clean
+clean:
+	rm ./*.elc
