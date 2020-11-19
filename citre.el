@@ -282,13 +282,6 @@ In the terminal version of Emacs, a dashed pattern is used as the
 border, and only the background property of this face is used, as
 the color of the dashes.")
 
-(defface citre-peek-current-location-face
-  '((((background light))
-     :background "#c0c0c0" :extend t)
-    (t
-     :background "#666666" :extend t))
-  "Face used for the current location in the peek window.")
-
 (defface citre-definition-annotation-face
   '((((background light))
      :foreground "#666666" :slant italic)
@@ -991,6 +984,9 @@ killed after `citre-peek-abort'.")
 (defvar citre-peek--bg-alt nil
   "Background color used for unselected locations when peeking.")
 
+(defvar citre-peek--bg-selected nil
+  "Background color used for selected locations when peeking.")
+
 ;; Actually we can make Emacs believe our temp buffer is visiting FILENAME (by
 ;; setting `buffer-file-name' and `buffer-file-truename'), but then the buffer
 ;; is not hidden (Emacs hides buffers whose name begin with a space, but those
@@ -1137,7 +1133,9 @@ N can be negative."
         (let ((line (concat (nth n displayed-locs) "\n")))
           (if (eq n displayed-index)
               (setf (nth n displayed-locs)
-                    (citre--add-face line 'citre-peek-current-location-face))
+                    (citre--add-face line
+                                     (list :background citre-peek--bg-selected
+                                           :extend t)))
             (setf (nth n displayed-locs)
                   (citre--add-face line
                                    (list :background citre-peek--bg-alt
@@ -1192,10 +1190,12 @@ N can be negative."
     (cond
      ((eq bg-mode 'dark)
       (setq citre-peek--bg (citre--color-blend "#ffffff" bg 0.03))
-      (setq citre-peek--bg-alt (citre--color-blend "#ffffff" bg 0.1)))
+      (setq citre-peek--bg-alt (citre--color-blend "#ffffff" bg 0.2))
+      (setq citre-peek--bg-selected (citre--color-blend "#ffffff" bg 0.4)))
      (t
-      (setq citre-peek--bg (citre--color-blend "#000000" bg 0.03))
-      (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.1)))))
+      (setq citre-peek--bg (citre--color-blend "#000000" bg 0.02))
+      (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.12))
+      (setq citre-peek--bg-selected (citre--color-blend "#000000" bg 0.06)))))
   (add-hook 'post-command-hook #'citre-peek--post-command-function nil 'local))
 
 (defun citre-peek-function ()
@@ -1247,6 +1247,7 @@ N can be negative."
   (setq citre-peek--location-index nil)
   (setq citre-peek--bg nil)
   (setq citre-peek--bg-alt nil)
+  (setq citre-peek--bg-selected nil)
   (citre-peek-mode -1)
   (remove-hook 'post-command-hook #'citre-peek--post-command-function 'local))
 
