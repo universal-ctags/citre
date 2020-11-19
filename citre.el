@@ -37,6 +37,7 @@
 
 (require 'citre-readtags)
 (require 'cl-lib)
+(require 'color)
 (require 'project)
 (require 'ring)
 (require 'subr-x)
@@ -902,20 +903,42 @@ at the end."
                 "...")
       str)))
 
-;; Ref: https://oremacs.com/2015/04/28/blending-faces/
+;; Ref: https://www.w3.org/TR/WCAG20/#relativeluminancedef
+(defun citre--color-srgb-to-rgb (c)
+  "Convert an sRGB component C to an RGB one."
+  (if (<= c 0.03928)
+      (/ c 12.92)
+    (expt (/ (+ c 0.055) 1.055) 2.4)))
+
+(defun citre--color-rgb-to-srgb (c)
+  "Convert an RGB component C to an sRGB one."
+  (if (<= c (/ 0.03928 12.92))
+      (* c 12.92)
+    (- (* 1.055 (expt c (/ 1 2.4))) 0.055)))
+
 (defun citre--color-blend (c1 c2 alpha)
   "Blend two colors C1 and C2 with ALPHA.
 C1 and C2 are hexadecimal strings.  ALPHA is a number between 0.0
-and 1.0 which is the influence of C1 on the result."
-  (apply (lambda (r g b)
-           (format "#%02x%02x%02x"
-                   (ash r -8)
-                   (ash g -8)
-                   (ash b -8)))
-         (cl-mapcar
-          (lambda (x y)
-            (round (+ (* x alpha) (* y (- 1 alpha)))))
-          (color-values c1) (color-values c2))))
+and 1.0 which is the influence of C1 on the result.
+
+The blending is done in the sRGB space, which should make ALPHA
+feels more linear to human eyes."
+  (pcase-let ((`(,r1 ,g1 ,b1)
+               (mapcar #'citre--color-rgb-to-srgb
+                       (color-name-to-rgb c1)))
+              (`(,r2 ,g2 ,b2)
+               (mapcar #'citre--color-rgb-to-srgb
+                       (color-name-to-rgb c2)))
+              (blend-and-to-rgb
+               (lambda (x y)
+                 (citre--color-srgb-to-rgb
+                  (+ (* alpha x)
+                     (* (- 1 alpha) y))))))
+    (color-rgb-to-hex
+     (funcall blend-and-to-rgb r1 r2)
+     (funcall blend-and-to-rgb g1 g2)
+     (funcall blend-and-to-rgb b1 b2)
+     2)))
 
 ;;;;;; Internals
 
