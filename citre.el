@@ -289,6 +289,14 @@ the color of the dashes.")
      :background "#666666" :extend t))
   "Face used for the current location in the peek window.")
 
+(defface citre-definition-annotation-face
+  '((((background light))
+     :foreground "#666666" :slant italic)
+    (t
+     :foreground "#c0c0c0" :slant italic))
+  "Face used for annotations when presenting a definition.
+Annotations include kind, type, etc.")
+
 ;;;;; Options: Eldoc & citre-peek-function related
 
 (defcustom citre-find-function-name-limit 1500
@@ -701,7 +709,7 @@ The result is a list of records, with the fields `ext-abspath',
                        :sorter (citre-readtags-build-sorter
                                 'input '(length name +) 'name)
                        :require '(name ext-abspath pattern)
-                       :optional '(kind line))))
+                       :optional '(ext-kind-full line typeref))))
 
 ;; TODO: make this pluggable?
 (defun citre-generate-location-str (record)
@@ -723,13 +731,22 @@ tools."
          (str (if str
                   (concat ": " (string-trim str))
                 ""))
+         (kind (citre-readtags-get-field 'ext-kind-full record))
+         (type (citre-readtags-get-field 'typeref record))
+         (type (when type (substring type (1+ (string-match ":" type)))))
+         (annotation (propertize (concat
+                                  (or kind "")
+                                  (if (and kind type) "/" "")
+                                  (or type "")
+                                  (if (or kind type) " " ""))
+                                 'face 'citre-definition-annotation-face))
          (path (propertize
                 (citre--relative-path
                  (citre-readtags-get-field 'ext-abspath record))
                 'face 'font-lock-function-name-face))
          (file-missing-p (if (file-exists-p path) "" "*")))
-    ;; TODO: Thinking of modifing the `citre--propertize'.
-    (citre--propertize (concat file-missing-p path line str) record)))
+    (citre--propertize (concat annotation file-missing-p path line str)
+                       record)))
 
 (defun citre--goto-tag
     (record &optional window)
