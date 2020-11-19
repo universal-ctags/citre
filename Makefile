@@ -4,8 +4,12 @@
 SHELL = /bin/sh
 
 .PHONY: check
-check: test
+check: compile test
 
 .PHONY: test
 test:
 	$(SHELL) scripts/test.sh
+
+.PHONY: compile
+compile:
+	$(SHELL) scripts/compile.sh
