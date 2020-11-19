@@ -1622,6 +1622,9 @@ correctly."
 ;; Local Variables:
 ;; indent-tabs-mode: nil
 ;; outline-regexp: ";;;;* "
+;; fill-column: 79
+;; emacs-lisp-docstring-fill-column: 65
+;; sentence-end-double-space: t
 ;; End:
 
 ;;; citre.el ends here
