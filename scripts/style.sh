@@ -37,11 +37,10 @@ for f in *.el tests/common.el tests/*/test.el; do
     grep -n '.\{80,\}' $f \
         | grep -v "\(^1:\)\|\(http://\)\|\(https://\)\|\(^[0-9]\+:  \"\)" \
         && error "Long line found in $f."
-    (if ! $EMACS -Q --batch \
+    # The if-let series of macros are defined in subr-x, and has their own
+    # indent declarations.
+    (if ! $EMACS -Q --batch -l subr-x\
           --eval "(setq inhibit-message t)" \
-          # The if-let series of macros are defined in subr-x, and has their
-          # own indent declarations.
-          --eval "(require 'subr-x)" \
           --eval "(find-file \"$f\")" \
           --eval "(indent-region (point-min) (point-max))" \
           --eval "(when (buffer-modified-p) (kill-emacs 1))"; then
