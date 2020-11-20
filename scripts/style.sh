@@ -11,7 +11,7 @@ NORMAL_FACE="\e[0m"
 
 info()
 {
-    printf '[style] %s\n' "$@"
+    printf '%s\n' "$@"
 }
 
 pass()
@@ -29,17 +29,32 @@ error()
     exit 1
 }
 
-# TODO: checkdoc, check indent.
+## Check long lines
+
 for f in *.el tests/common.el tests/*/test.el; do
-    info "$f"
+    info "[style, longline] $f"
     # Allow long lines that are the first lines of the file, contains web
     # links, or are the first lines of docstrings.
     grep -n '.\{80,\}' $f \
         | grep -v "\(^1:\)\|\(http://\)\|\(https://\)\|\(^[0-9]\+:  \"\)" \
         && error "Long line found in $f."
+done
+
+for f in scripts/*.sh; do
+    info "[style, longline] $f"
+    grep -n '.\{80,\}' $f | grep -v "\(http://\)\|\(https://\)" \
+        && error "Lone line found in $f";
+done
+
+# TODO: Check long lines for docs.
+
+## Check indentation
+
+for f in *.el tests/common.el tests/*/test.el; do
+    info "[style, indent] $f"
     # The if-let series of macros are defined in subr-x, and has their own
-    # indent declarations.
-    (if ! $EMACS -Q --batch -l subr-x\
+    # indent declarations, so we have to load it.
+    (if ! $EMACS -Q --batch -l subr-x \
           --eval "(setq inhibit-message t)" \
           --eval "(find-file \"$f\")" \
           --eval "(indent-region (point-min) (point-max))" \
@@ -50,13 +65,19 @@ for f in *.el tests/common.el tests/*/test.el; do
     ) || exit 1
 done
 
-for f in scripts/*.sh; do
-    info "$f"
-    grep -n '.\{80,\}' $f | grep -v "\(http://\)\|\(https://\)" \
-        && error "Lone line found in $f";
-done
+## Checkdoc
 
-# TODO: Check long lines for docs.
+for f in *.el; do
+    info "[style, checkdoc] $f"
+    (if $EMACS -Q --batch \
+               --eval "(setq checkdoc-verb-check-experimental-flag nil)" \
+               --eval "(checkdoc-file \"$f\")" 2>&1 \
+            | grep .; then
+         error "Checkdoc failed in $f."
+     fi
+     exit 0
+    ) || exit 1
+done
 
 pass "Style check passed :)"
 exit 0
