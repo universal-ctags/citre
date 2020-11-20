@@ -16,7 +16,7 @@
   (should (equal (citre-readtags--split-pattern "15;?pat\\??;\"")
                  '(15 "?pat\\??")))
   (should (equal (condition-case e
-                     (citre-readtags--split-pattern "pat") (t e))
+                     (citre-readtags--split-pattern "pat") (error e))
                  '(error "Invalid PATTERN"))))
 
 (ert-deftest test-parse-pattern ()
@@ -26,5 +26,5 @@
   (should (equal (citre-readtags--parse-search-pattern "?pat\\\\$\\?\\$?")
                  '("pat\\$?$" nil nil)))
   (should (equal (condition-case e
-                     (citre-readtags--parse-search-pattern "/\\?/") (t e))
+                     (citre-readtags--parse-search-pattern "/\\?/") (error e))
                  '(error "Invalid escape sequence"))))
