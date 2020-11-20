@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-ctags:
+    name: 'Build ctags & readtags'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Universal Ctags repo
+        uses: actions/checkout@v2
+        with:
+          repository: 'universal-ctags/ctags'
+      - name: Build ctags & readtags
+        run: |
+          sudo apt-get update
+          sudo apt-get install automake libjansson-dev libyaml-dev \
+               libseccomp-dev libxml2-dev
+          ./autogen.sh
+          ./configure
+          make
+      - name: Cache binaries
+        uses: actions/upload-artifact@v2
+        with:
+          name: uctags
+          path: |
+            ctags
+            readtags
+          if-no-files-found: error
+
+  test:
+    name: 'Compilation & unit test'
+    runs-on: ubuntu-latest
+    needs: build-ctags
+    env:
+      READTAGS: '${{ github.workspace }}/uctags-bin/readtags'
+    strategy:
+      matrix:
+        emacs_version:
+          - 26.1
+          - 26.2
+          - 26.3
+          - 27.1
+          - snapshot
+    steps:
+      - name: Install Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+      - name: Download ctags binaries
+        uses: actions/download-artifact@v2
+        with:
+          name: uctags
+          path: 'uctags-bin'
+      # Permissions of artifacts are not keeped.
+      - name: Set permissions for ctags binaries
+        run: |
+          chmod +x uctags-bin/ctags
+          chmod +x uctags-bin/readtags
+      - name: Checkout Citre repo
+        uses: actions/checkout@v2
+        with:
+          # We have to specify a path here, or the GITHUB_WORKSPACE folder will
+          # be cleaned first.
+          path: 'citre'
+      - name: Unit tests
+        working-directory: "citre"
+        run: make test
+      - name: Byte compilation tests
+        working-directory: 'citre'
+        run: make compile
+
+  check-style:
+    name: 'Code style check'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: 27.1
+      - name: Checkout Citre repo
+        uses: actions/checkout@v2
+      - name: Style check
+        run: make style
