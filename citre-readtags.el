@@ -472,8 +472,6 @@ names, cdrs are the values."
 (defvar citre-readtags--ext-fields-dependency-alist
   '((ext-abspath   . ((input)
                       (path)))
-    (ext-lang      . ((language input)
-                      nil))
     (ext-kind-full . ((kind language input)
                       (kind))))
   "Alist of extension fields and their dependencies.
@@ -490,8 +488,6 @@ of two elements:
      data
      (ext-abspath
       citre-readtags--get-ext-abspath
-      ext-lang
-      citre-readtags--get-ext-lang
       ext-kind-full
       citre-readtags--get-ext-kind-full))
   "Hash table of extension fields and the methods to get them.
@@ -511,7 +507,10 @@ signal an error, rather than return nil.
 The needed DEP-RECORD and TAGSFILE-INFO are specified by
 `citre-readtags--ext-fields-dependency-alist'.
 `citre-readtags--get-ext-field' takes care to pass the needed
-arguments to the functions.")
+arguments to the functions.
+
+If the function only needs DEP-RECORD, consider make it an extra
+extension field (see `citre-readtags-extra-ext-fields-table').")
 
 (defun citre-readtags--get-ext-field
     (dep-record field tagsfile-info)
@@ -549,27 +548,6 @@ signaled."
                        (error no-input-field-error))))
         (expand-file-name input cwd))))))
 
-;;;;;; ext-lang
-
-(defun citre-readtags--get-ext-lang (dep-record _)
-  "Return the language.
-If `language' field is presented in DEP-RECORD, it's returned
-directly.  Otherwise, the language is guessed based on the file
-extension of the `input' field in DEP-RECORD (if there's no
-extension, the file name is used).  If the language can't be
-guessed, the file extension is returned."
-  (let ((lang (gethash 'language dep-record))
-        (input (gethash 'input dep-record)))
-    (cond
-     (lang lang)
-     (input (let ((extension (or (file-name-extension input)
-                                 (file-name-nondirectory input))))
-              (or (gethash (downcase extension)
-                           citre-readtags--lang-extension-table)
-                  extension)))
-     (t (error "Ext-lang field required, but neither language field\
-nor input field is found in DEP-RECORD")))))
-
 ;;;;;; ext-kind-full
 
 (defun citre-readtags--get-ext-kind-full (dep-record tagsfile-info)
@@ -589,8 +567,8 @@ If this fails, the single-letter kind is returned directly."
     (if (null (car kind-info))
         (gethash 'kind dep-record)
       (if-let* ((kind (gethash 'kind dep-record))
-                (lang (citre-readtags--get-ext-lang
-                       dep-record tagsfile-info))
+                (lang (citre-readtags--get-lang-from-record
+                       dep-record))
                 (table (or (cdr kind-info)
                            citre-readtags--kind-name-table))
                 (table (gethash lang table))
@@ -828,7 +806,9 @@ LINES, see `citre-readtags-get-records'."
      (extra-line
       citre-readtags--get-line-from-record
       extra-matched-str
-      citre-readtags--get-matched-str-from-record))
+      citre-readtags--get-matched-str-from-record
+      extra-lang
+      citre-readtags--get-lang-from-record))
   "Hash table for getting extra extension fields from records.
 It's used by `citre-readtags-get-field'. Its keys will be valid
 FIELD argument values for `citre-readtags-get-field', and values
@@ -849,16 +829,44 @@ in this table, and the added keys should be prefixed by the name
 of the library to avoid naming conflict.")
 
 (defun citre-readtags--get-line-from-record (record)
-  "Get the line number from RECORD."
+  "Get the line number from RECORD.
+It tries these in turn:
+
+- Use the line field directly.
+- Use the pattern field if it contains the line number.
+- Return nil."
   (let ((line (car (citre-readtags--split-pattern
                     (citre-readtags-get-field 'pattern record)))))
     (or (citre-readtags-get-field 'line record) line)))
 
 (defun citre-readtags--get-matched-str-from-record (record)
-  "Get the string contained by the pattern field from RECORD."
+  "Get the string contained by the pattern field from RECORD.
+Returns nil if the pattern field doesn't exist or contain a
+search pattern."
   (let ((pat (nth 1 (citre-readtags--split-pattern
                      (citre-readtags-get-field 'pattern record)))))
     (when pat (car (citre-readtags--parse-search-pattern pat)))))
+
+(defun citre-readtags--get-lang-from-record (record)
+  "Get language from RECORD.
+It tries these in turn:
+
+- Use the `language' field directly.
+- Guess the language based on the `input' field.  See
+  `citre-readtags--lang-extension-table'.
+- Return the file extension, or the filename if it doesn't have
+  an extension.
+- Return nil."
+  (let ((lang (gethash 'language record))
+        (input (gethash 'input record)))
+    (cond
+     (lang lang)
+     (input (let ((extension (or (file-name-extension input)
+                                 (file-name-nondirectory input))))
+              (or (gethash (downcase extension)
+                           citre-readtags--lang-extension-table)
+                  extension)))
+     (t nil))))
 
 ;;;; APIs
 
@@ -1119,15 +1127,6 @@ them, Citre offers its own extension fields:
 
   Needs `input' field to be presented in the tags file.
 
-- `ext-lang': The language.  It uses the `language' field if it's
-  presented, or it guesses the language by the file extension.
-
-  Needs `language' or `input' fields to be presented in the tags
-  file.
-
-  When this fails, the file extension (or the file name, if it
-  doesn't have an extension) is used.
-
 - `ext-kind-full': The full name of `kind'. It uses the `kind'
   field if it's not single-letter, or it guesses the full name by
   `kind' and the language (which is also guessed by `input' if
@@ -1187,6 +1186,13 @@ real-time based on RECORD.  The built-in ones are:
   field directly, and if it's not presented, get the line number
   from the pattern field if it's a combined field.  If both can't
   be done, return nil.
+
+- `extra-lang': The language.  It uses the `language' field if
+  it's presented, or guesses the language by the file extension.
+  When both fails, the file extension (or the file name, if it
+  doesn't have an extension) is returned.  If this also
+  fails (i.e. RECORD doesn't contain an `input' field), return
+  nil.
 
 - `extra-matched-str': The substring in the source file that's
   matched by ctags when generating the tag.  It's often the whole
