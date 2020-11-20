@@ -520,8 +520,8 @@ DEP-RECORD is a hash table containing the fields that FIELD
 depends on.  TAGSFILE-INFO is the additional info that FIELD
 depends on."
   (if-let ((method (gethash field citre-readtags--ext-fields-method-table)))
-        (funcall method dep-record tagsfile-info)
-      (error "Invalid FIELD")))
+      (funcall method dep-record tagsfile-info)
+    (error "Invalid FIELD")))
 
 ;;;;;; ext-abspath
 
@@ -711,7 +711,7 @@ above, we still have:
              (string-join
               (mapcar #'symbol-name
                       (cl-set-difference require
-                                          (hash-table-keys record)))
+                                         (hash-table-keys record)))
               ", ")))
     (dolist (field require-ext)
       (puthash field
@@ -781,9 +781,9 @@ LINES, see `citre-readtags-get-records'."
                     (cl-set-difference optional ext-fields)))
          (exclude (cl-delete-duplicates exclude))
          (kinds (cl-delete-duplicates
-                (apply #'append
-                       (mapcar find-info-depends
-                               (append require-ext optional-ext)))))
+                 (apply #'append
+                        (mapcar find-info-depends
+                                (append require-ext optional-ext)))))
          (info (apply #'citre-readtags--get-tags-file-info
                       tagsfile kinds)))
     (when (cl-intersection exclude ext-fields)
