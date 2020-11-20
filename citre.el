@@ -1337,7 +1337,8 @@ completion framework), this falls back to the default
            (completion-ignore-case (string= str (downcase str)))
            (candidates
             (nconc
-             (completion-all-completions str collection predicate (- end start))
+             (completion-all-completions str collection predicate
+                                         (- end start))
              nil))
            (completion nil))
       (pcase (length candidates)

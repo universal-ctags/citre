@@ -279,7 +279,8 @@ fields of info are updated."
                        recent-modification)
           (setf (citre-readtags--tags-file-info info field)
                 (cons recent-modification
-                      (citre-readtags--detect-tags-file-info tagsfile field)))))
+                      (citre-readtags--detect-tags-file-info
+                       tagsfile field)))))
       info)))
 
 ;;;;; Info: path
