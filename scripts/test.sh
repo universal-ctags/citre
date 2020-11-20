@@ -36,8 +36,8 @@ error()
 
 for p in $PRELOAD; do
     [ ! -e  $p ] && error "Cannot find $p."
-    # Convert to complete file path
-    if [ ${p:0:1} != '/' ]; then
+    # If p doesn't start with "/" (i.e. is relative), convert to absolute path.
+    if [ "$p" = "${p#/}" ]; then
         p=${d}/$p
     fi
     preload_options="${preload_options} -l $p "
