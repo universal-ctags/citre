@@ -4,15 +4,19 @@
 SHELL = /bin/sh
 
 .PHONY: check
-check: compile test
+check: style compile test
 
-.PHONY: test
-test:
-	$(SHELL) scripts/test.sh
+.PHONY: style
+style:
+	$(SHELL) scripts/style.sh
 
 .PHONY: compile
 compile:
 	$(SHELL) scripts/compile.sh
+
+.PHONY: test
+test:
+	$(SHELL) scripts/test.sh
 
 .PHONY: clean
 clean:
