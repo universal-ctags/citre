@@ -1,4 +1,5 @@
 /.*
 !.gitignore
+!.github
 *.elc
 tags
