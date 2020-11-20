@@ -3,6 +3,8 @@
 # Copyright (C) 2020 Hao WANG
 # License: GPL v3, or (at your option) any later version
 
+EMACS=${EMACS:=emacs}
+
 PASSED_FACE="\e[1;32m"
 ERROR_FACE="\e[1;31m"
 NORMAL_FACE="\e[0m"
@@ -34,7 +36,19 @@ for f in *.el tests/common.el tests/*/test.el; do
     # links, or are the first lines of docstrings.
     grep -n '.\{80,\}' $f \
         | grep -v "\(^1:\)\|\(http://\)\|\(https://\)\|\(^[0-9]\+:  \"\)" \
-        && error "Long line found in $f.";
+        && error "Long line found in $f."
+    (if ! $EMACS -Q --batch \
+          --eval "(setq inhibit-message t)" \
+          # The if-let series of macros are defined in subr-x, and has their
+          # own indent declarations.
+          --eval "(require 'subr-x)" \
+          --eval "(find-file \"$f\")" \
+          --eval "(indent-region (point-min) (point-max))" \
+          --eval "(when (buffer-modified-p) (kill-emacs 1))"; then
+         error "Wrong indentation in $f."
+     fi
+     exit 0
+    ) || exit 1
 done
 
 for f in scripts/*.sh; do
