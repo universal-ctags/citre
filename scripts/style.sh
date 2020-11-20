@@ -52,11 +52,11 @@ done
 
 for f in *.el tests/common.el tests/*/test.el; do
     info "[style, indent] $f"
-    # The if-let series of macros are defined in subr-x, and has their own
-    # indent declarations, so we have to load it.
-    (if ! $EMACS -Q --batch -l subr-x \
+    # Some macros may have indent declarations. We (eval-buffer) to apply them.
+    (if ! $EMACS -Q --batch -L . \
           --eval "(setq inhibit-message t)" \
           --eval "(find-file \"$f\")" \
+          --eval "(eval-buffer)" \
           --eval "(indent-region (point-min) (point-max))" \
           --eval "(when (buffer-modified-p) (kill-emacs 1))"; then
          error "Wrong indentation in $f."
