@@ -6,9 +6,9 @@
 EMACS=${EMACS:=emacs}
 SRC_FILES="citre-readtags-tables.el citre-readtags.el citre.el"
 
-PASSED_FACE="\e[1;32m"
-ERROR_FACE="\e[1;31m"
-NORMAL_FACE="\e[0m"
+PASSED_FACE="\033[1;32m"
+ERROR_FACE="\033[1;31m"
+NORMAL_FACE="\033[0m"
 
 info()
 {
