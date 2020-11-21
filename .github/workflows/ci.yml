@@ -10,14 +10,41 @@ on:
 
 jobs:
   build-ctags:
-    name: 'Build ctags & readtags'
+    name: 'Get ctags & readtags'
     runs-on: ubuntu-latest
+    env:
+      UCTAGS_REV: 0
     steps:
-      - name: Checkout Universal Ctags repo
+      - name: '[cache] Get current revision'
+        run: |
+          UCTAGS_REV=`git ls-remote \
+            https://github.com/universal-ctags/ctags master \
+            | cut -f1`
+          echo "UCTAGS_REV=$UCTAGS_REV" >> $GITHUB_ENV
+          echo $UCTAGS_REV > uctags-rev
+      # No way to share variable between jobs other than using artifacts.
+      - name: '[cache] Store revision as artifact'
+        uses: actions/upload-artifact@v2
+        with:
+          name: uctags
+          path: uctags-rev
+          if-no-files-found: error
+      - name: '[cache] Check cache'
+        id: cache
+        uses: actions/cache@v2
+        with:
+          path: 'uctags-bin'
+          key: ${{ env.UCTAGS_REV }}
+      - name: '[build] Checkout repo'
+        if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
           repository: 'universal-ctags/ctags'
-      - name: Build ctags & readtags
+          # Maybe the uctags repo just updated after we checked its newest
+          # revision.
+          ref: ${{ env.UCTAGS_REV }}
+      - name: '[build] Build'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install automake libjansson-dev libyaml-dev \
@@ -25,21 +52,17 @@ jobs:
           ./autogen.sh
           ./configure
           make
-      - name: Cache binaries
-        uses: actions/upload-artifact@v2
-        with:
-          name: uctags
-          path: |
-            ctags
-            readtags
-          if-no-files-found: error
+          mkdir -p uctags-bin
+          mv ctags uctags-bin
+          mv readtags uctags-bin
 
   test:
-    name: 'Compilation & unit test'
+    name: 'Compile & unit test'
     runs-on: ubuntu-latest
     needs: build-ctags
     env:
       READTAGS: '${{ github.workspace }}/uctags-bin/readtags'
+      UCTAGS_REV: 0
     strategy:
       matrix:
         emacs_version:
@@ -49,30 +72,37 @@ jobs:
           - 27.1
           - snapshot
     steps:
-      - name: Install Emacs
-        uses: purcell/setup-emacs@master
-        with:
-          version: ${{ matrix.emacs_version }}
-      - name: Download ctags binaries
+      - name: '[dep] Get cached ctags revision'
         uses: actions/download-artifact@v2
         with:
           name: uctags
-          path: 'uctags-bin'
-      # Permissions of artifacts are not keeped.
-      - name: Set permissions for ctags binaries
+      - name: '[dep] Write revision to env variable'
         run: |
-          chmod +x uctags-bin/ctags
-          chmod +x uctags-bin/readtags
-      - name: Checkout Citre repo
+          UCTAGS_REV=`cat uctags-rev`
+          echo "UCTAGS_REV=$UCTAGS_REV" >> $GITHUB_ENV
+      - name: '[dep] Download ctags binaries'
+        uses: actions/cache@v2
+        id: cache
+        with:
+          path: 'uctags-bin'
+          key: ${{ env.UCTAGS_REV }}
+      - name: '[dep] Check if download failed'
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: exit 1
+      - name: '[dep] Install Emacs'
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+      - name: '[citre] Checkout Citre repo'
         uses: actions/checkout@v2
         with:
           # We have to specify a path here, or the GITHUB_WORKSPACE folder will
           # be cleaned first.
           path: 'citre'
-      - name: Unit tests
+      - name: '[citre] Unit tests'
         working-directory: "citre"
         run: make test
-      - name: Byte compilation tests
+      - name: '[citre] Byte compilation tests'
         working-directory: 'citre'
         run: make compile
 
@@ -80,11 +110,11 @@ jobs:
     name: 'Code style check'
     runs-on: ubuntu-latest
     steps:
-      - name: Install Emacs
+      - name: '[dep] Install Emacs'
         uses: purcell/setup-emacs@master
         with:
           version: 27.1
-      - name: Checkout Citre repo
+      - name: '[citre] Checkout Citre repo'
         uses: actions/checkout@v2
-      - name: Style check
+      - name: '[citre] Style check'
         run: make style
