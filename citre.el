@@ -613,14 +613,16 @@ project root PROJECT is specified, use that project instead."
 (defun citre--tags-file-path (&optional project)
   "Find tags file in PROJECT and return its path.
 If PROJECT is not specified, use current project in buffer.  This
-looks up `citre-tags-files' to find the tags file needed."
-  (cl-some
-   (lambda (file)
-     (let ((tags-file (expand-file-name file
-                                        (or project
-                                            (citre--project-root)))))
-       (when (file-exists-p tags-file) tags-file)))
-   citre-tags-files))
+looks up `citre-tags-files' to find the tags file needed, and
+throws an user error if no tags file was found."
+  (or (cl-some
+       (lambda (file)
+         (let ((tags-file (expand-file-name
+                           file
+                           (or project (citre--project-root)))))
+           (when (file-exists-p tags-file) tags-file)))
+       citre-tags-files)
+      (user-error "tags file not found")))
 
 ;;;;; Utils: Tags generation & update
 
