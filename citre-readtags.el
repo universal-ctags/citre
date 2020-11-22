@@ -589,11 +589,11 @@ If this fails, the single-letter kind is returned directly."
          (delimiters-in-pattern 0)
          (tabs-in-pattern 0)
          (result nil))
-    ;; There are at least 4 fields in a normal tag, so we can tell if something
+    ;; There are at least 3 fields in a normal tag, so we can tell if something
     ;; is wrong based on the number of tabs.  Sometimes readtags exits normally
     ;; when an error actually occurs.  By doing this we can capture the error
     ;; messages in the output (as long as there aren't many tabs).
-    (when (< (length tab-idx) 3)
+    (when (< (length tab-idx) 2)
       (error (format "Invalid LINE: %s" line)))
     (setq pattern-delimiter
           (pcase (aref line (1+ start))
