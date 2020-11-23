@@ -35,7 +35,7 @@
 
 ;;;; Libraries
 
-(require 'citre-readtags)
+(require 'citre-core)
 (require 'cl-lib)
 (require 'color)
 (require 'project)
@@ -234,7 +234,7 @@ them.  This is used for `citre-jump'.
 The strings are in the format of \"relative-file-path:
 line-content\", and the function should show it to the user. Each
 string also has `kind' and `line' properties (see
-`citre-readtags-get-field'), which can be read by
+`citre-core-get-field'), which can be read by
 `citre--get-property'.  The function can choose to also show them
 to the user.
 
@@ -354,16 +354,16 @@ getting records for auto-completion."
                  (const :tag "Insensitive" insensitive)
                  (const :tag "Smart" smart)))
 
-;;;; Readtags API wrappers
+;;;; Core API wrappers
 
-;; Wrappers around the APIs offered by citre-readtags.el.
+;; Wrappers around the APIs offered by citre-core.el.
 
 (cl-defun citre-get-records
     (&optional tagsfile name match
                &key filter sorter
                require optional exclude parse-all-fields lines)
   "Get records of tags in tags file TAGSFILE that match NAME.
-This is like `citre-readtags-get-records', except that:
+This is like `citre-core-get-records', except that:
 
 - TAGSFILE could be nil, and it will be find automatically under
   current project root.
@@ -372,11 +372,11 @@ This is like `citre-readtags-get-records', except that:
 
 TAGSFILE is the canonical path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
-see `citre-readtags-get-records'.
+see `citre-core-get-records'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
-`citre-readtags-get-field'."
+`citre-core-get-field'."
   (let* ((tagsfile- (or tagsfile (citre--tags-file-path)))
          (case-fold- (pcase citre-case-sensitivity
                        ('sensitive nil)
@@ -386,12 +386,12 @@ and some of its fields, which can be utilized by
                                  (if (and name
                                           (string= (downcase name) name))
                                      t nil))))))
-    (citre-readtags-get-records tagsfile- name match case-fold-
-                                :filter filter :sorter sorter
-                                :require require :optional optional
-                                :exclude exclude
-                                :parse-all-fields parse-all-fields
-                                :lines lines)))
+    (citre-core-get-records tagsfile- name match case-fold-
+                            :filter filter :sorter sorter
+                            :require require :optional optional
+                            :exclude exclude
+                            :parse-all-fields parse-all-fields
+                            :lines lines)))
 
 ;;;; Utils layer
 
@@ -449,7 +449,7 @@ Notice that this is destructive, which is different from
         (dolist (field fields)
           (put-text-property 0 len
                              (intern (concat "citre-" (symbol-name field)))
-                             (citre-readtags-get-field field record)
+                             (citre-core-get-field field record)
                              str))
       (put-text-property 0 len 'citre-record record str))
     str))
@@ -463,7 +463,7 @@ When FIELD is non-nil and FROM-RECORD is nil, what it actually
 does is prefix FIELD by `citre-', and get that text property.
 
 When FIELD and FROM-RECORD are both non-nil, it gets the record
-first, then get FIELD from it using `citre-readtags-get-field'.
+first, then get FIELD from it using `citre-core-get-field'.
 
 When FIELD is nil and FROM-RECORD is non-nil, it gets the record
 from STR, stored in the `citre-record' text property."
@@ -473,7 +473,7 @@ from STR, stored in the `citre-record' text property."
    ((and (null field) from-record)
     (get-text-property 0 'citre-record str))
    ((and field from-record)
-    (citre-readtags-get-field field (get-text-property 0 'citre-record str)))
+    (citre-core-get-field field (get-text-property 0 'citre-record str)))
    (t
     (error "Invalid combination of FIELD and FROM-RECORD"))))
 
@@ -622,7 +622,7 @@ throws an user error if no tags file was found."
                            (or project (citre--project-root)))))
            (when (file-exists-p tags-file) tags-file)))
        citre-tags-files)
-      (user-error "tags file not found")))
+      (user-error "Tags file not found")))
 
 ;;;;; Utils: Tags generation & update
 
@@ -676,13 +676,13 @@ It returns nil when the completion can't be done."
         (candidate-str-generator
          (lambda (record)
            (citre--propertize
-            (citre-readtags-get-field 'name record)
+            (citre-core-get-field 'name record)
             ;; TODO: Maybe in the future we want to get ext-kind-full instead.
             record 'kind 'signature))))
     (when symbol
       (mapcar candidate-str-generator
               (citre-get-records tagsfile symbol match
-                                 :sorter (citre-readtags-build-sorter
+                                 :sorter (citre-core-build-sorter
                                           '(length name +) 'name)
                                  :require '(name)
                                  :optional '(kind signature))))))
@@ -701,7 +701,7 @@ The result is a list of records, with the fields `ext-abspath',
     (unless symbol
       (user-error "No symbol at point"))
     (citre-get-records tagsfile symbol 'exact
-                       :sorter (citre-readtags-build-sorter
+                       :sorter (citre-core-build-sorter
                                 'input '(length name +) 'name)
                        :require '(name ext-abspath pattern)
                        :optional '(ext-kind-full line typeref))))
@@ -716,18 +716,18 @@ property `citre-record'.
 
 This is for showing the results for \"finding definition\"
 tools."
-  (let* ((line (citre-readtags-get-field 'extra-line record))
+  (let* ((line (citre-core-get-field 'extra-line record))
          (line (if line
                    (concat "("
                            (propertize (number-to-string line) 'face 'warning)
                            ")")
                  ""))
-         (str (citre-readtags-get-field 'extra-matched-str record))
+         (str (citre-core-get-field 'extra-matched-str record))
          (str (if str
                   (concat ": " (string-trim str))
                 ""))
-         (kind (citre-readtags-get-field 'ext-kind-full record))
-         (type (citre-readtags-get-field 'typeref record))
+         (kind (citre-core-get-field 'ext-kind-full record))
+         (type (citre-core-get-field 'typeref record))
          (type (when type (substring type (1+ (string-match ":" type)))))
          (annotation (propertize (concat
                                   (or kind "")
@@ -737,7 +737,7 @@ tools."
                                  'face 'citre-definition-annotation-face))
          (path (propertize
                 (citre--relative-path
-                 (citre-readtags-get-field 'ext-abspath record))
+                 (citre-core-get-field 'ext-abspath record))
                 'face 'font-lock-function-name-face))
          (file-missing-p (if (file-exists-p path) "" "*")))
     (citre--propertize (concat annotation file-missing-p path line str)
@@ -754,7 +754,7 @@ WINDOW can be:
   ;; TODO: I actually don't know well about this whole display-buffer,
   ;; pop-to-buffer and switch-to-buffer thing.  Will come back and see if this
   ;; docstring describes the behavior well.
-  (let ((path (citre-readtags-get-field 'ext-abspath record)))
+  (let ((path (citre-core-get-field 'ext-abspath record)))
     (unless path
       (error "RECORD doesn't have the ext-abspath field"))
     (unless (file-exists-p path)
@@ -764,7 +764,7 @@ WINDOW can be:
       (if window
           (pop-to-buffer buf)
         (switch-to-buffer buf))
-      (goto-char (citre-readtags-locate-tag record))
+      (goto-char (citre-core-locate-tag record))
       (run-hooks 'citre-after-jump-hook)
       (when (eq window 'other-window-noselect)
         (pop-to-buffer current-buf)))))
@@ -802,33 +802,33 @@ number.  This is because we don't want to fail an xref session
 only because one file is lost, and users may manually use the
 line number if they know the file is renamed/moved to which
 file."
-  (let* ((path (citre-readtags-get-field 'ext-abspath record))
+  (let* ((path (citre-core-get-field 'ext-abspath record))
          (buf-opened (find-buffer-visiting path))
          buf linum)
     (if (not (file-exists-p path))
-        (or (citre-readtags-get-field 'extra-line record) 0)
+        (or (citre-core-get-field 'extra-line record) 0)
       (if buf-opened
           (setq buf buf-opened)
         (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
         (with-current-buffer buf
           (insert-file-contents path)))
       (with-current-buffer buf
-        (setq linum (citre-readtags-locate-tag record 'use-linum)))
+        (setq linum (citre-core-locate-tag record 'use-linum)))
       (unless buf-opened
         (kill-buffer buf))
       linum)))
 
 (defun citre-xref--make-object (record)
   "Make xref object of RECORD."
-  (let* ((kind (citre-readtags-get-field 'kind record))
+  (let* ((kind (citre-core-get-field 'kind record))
          (kind (if kind
                    (concat (propertize kind 'face 'warning) " ")
                  ""))
-         (path (citre-readtags-get-field 'ext-abspath record))
+         (path (citre-core-get-field 'ext-abspath record))
          (file-existance
           (if (file-exists-p path) "" "*missing*"))
          (line (citre-xref--get-linum record))
-         (str (citre-readtags-get-field 'extra-matched-str record)))
+         (str (citre-core-get-field 'extra-matched-str record)))
     (xref-make
      (concat kind str)
      (xref-make-file-location (concat file-existance path) line 0))))
@@ -855,7 +855,7 @@ file."
   "Return a function for xref to find all completions of a prefix."
   (lambda (str pred action)
     (let ((collection
-           (mapcar (lambda (record) (citre-readtags-get-field 'name record))
+           (mapcar (lambda (record) (citre-core-get-field 'name record))
                    (citre-get-records nil "" nil :require '(name)))))
       (complete-with-action action collection str pred))))
 
@@ -1013,7 +1013,7 @@ is because we want to display a one-line message about the
 missing file in the peek window."
   ;; TODO: is this `delay-mode-hooks' needed?
   (delay-mode-hooks
-    (let* ((path (citre-readtags-get-field 'ext-abspath record))
+    (let* ((path (citre-core-get-field 'ext-abspath record))
            (buf-opened (citre-peek--find-buffer-visiting path))
            (buf nil))
       (if (not (file-exists-p path))
@@ -1029,7 +1029,7 @@ missing file in the peek window."
                 (set-auto-mode))))
           (push (cons path buf) citre-peek--temp-buffer-alist))
         (with-current-buffer buf
-          (citre-readtags-locate-tag record 'use-linum))))))
+          (citre-core-locate-tag record 'use-linum))))))
 
 (defun citre-peek--get-content (path line n)
   "Get file contents for peeking.
@@ -1571,7 +1571,7 @@ and can be used as eldoc message."
      (propertize func-name 'face 'font-lock-function-name-face)
      " "
      (cl-dolist (record records)
-       (when-let ((signature (citre-readtags-get-field 'signature record)))
+       (when-let ((signature (citre-core-get-field 'signature record)))
          (cl-return signature))))))
 
 ;;;;; Tool: misc commands

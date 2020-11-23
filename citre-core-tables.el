@@ -1,4 +1,4 @@
-;;; citre-readtags-tables.el --- Lookup tables for citre-readtags -*- lexical-binding: t -*-
+;;; citre-core-tables.el --- Lookup tables for citre-core -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2020 Hao Wang
 
@@ -35,7 +35,7 @@
 
 ;;;; For ext-lang field
 
-(defvar citre-readtags--lang-extension-table
+(defvar citre-core--lang-extension-table
   #s(hash-table
      test equal
      data
@@ -188,7 +188,7 @@ this table.")
 
 ;;;; For ext-kind-full field
 
-(defvar citre-readtags--kind-name-table
+(defvar citre-core--kind-name-table
   #s(hash-table
      test equal
      data
@@ -902,13 +902,13 @@ presented, and TAG_KIND_DESCRIPTION pseudo tags are not presented
 too.")
 
 ;; Run this snippet to generate a kind name table from the help info of ctags.
-;; This is used for updating `citre-readtags--kind-name-table'.  The result
-;; will be shown in a *Pp Eval Output* buffer, and it can be directly copied
-;; into the variable definition.  Make sure to indent them!
+;; This is used for updating `citre-core--kind-name-table'.  The result will be
+;; shown in a *Pp Eval Output* buffer, and it can be directly copied into the
+;; variable definition.  Make sure to indent them!
 
 ;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
-;;                 (citre-readtags--build-shell-command
+;;                 (citre-core--build-shell-command
 ;;                  ctags-program
 ;;                  "--quiet" "--options=NONE"
 ;;                  "--machinable" "--list-kinds-full")))
@@ -960,7 +960,7 @@ too.")
 ;;   (whitespace-cleanup)
 ;;   (goto-char (point-min)))
 
-(provide 'citre-readtags-tables)
+(provide 'citre-core-tables)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -970,4 +970,4 @@ too.")
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre-readtags-tables.el ends here
+;;; citre-core-tables.el ends here

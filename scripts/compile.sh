@@ -4,7 +4,7 @@
 # License: GPL v3, or (at your option) any later version
 
 EMACS=${EMACS:=emacs}
-SRC_FILES="citre-readtags-tables.el citre-readtags.el citre.el"
+SRC_FILES="citre-core-tables.el citre-core.el citre.el"
 
 PASSED_FACE="\033[1;32m"
 ERROR_FACE="\033[1;31m"
