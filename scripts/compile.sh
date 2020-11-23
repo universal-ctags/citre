@@ -4,7 +4,6 @@
 # License: GPL v3, or (at your option) any later version
 
 EMACS=${EMACS:=emacs}
-SRC_FILES="citre-core-tables.el citre-core.el citre.el"
 
 PASSED_FACE="\033[1;32m"
 ERROR_FACE="\033[1;31m"
@@ -30,8 +29,7 @@ error()
     exit 1
 }
 
-for f in $SRC_FILES; do
-    [ ! -e $f ] && error "Cannot find $f."
+for f in *.el; do
     info "$f"
     ($EMACS -Q --batch --eval "(setq byte-compilation-error-on-warn t)" \
             -L . -f batch-byte-compile $f 2>&1 \
