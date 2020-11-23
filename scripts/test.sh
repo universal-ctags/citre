@@ -5,7 +5,8 @@
 
 # NOTE: READTAGS is also useable. It's handled in tests/common.el.
 EMACS=${EMACS:=emacs}
-PRELOAD="citre-core-tables.el citre-core.el citre-util.el citre.el"
+PRELOAD="citre-core-tables.el citre-core.el citre-util.el \
+citre-basic-tools.el citre-peek.el citre.el"
 
 PASSED_FACE="\033[1;32m"
 ERROR_FACE="\033[1;31m"
