@@ -58,12 +58,23 @@
   :type 'integer
   :group 'citre)
 
+(defcustom citre-peek-ace-keys '(?a ?s ?d ?f ?j ?k ?l ?\;)
+  "Keys used for `citre-peek-through'."
+  :type '(repeat :tag "Keys" character)
+  :group 'citre)
+
+(defcustom citre-peek-cancel-ace-keys '(?\C-g ?q)
+  "Keys used for cancel an ace session."
+  :type '(repeat :tag "Keys" character)
+  :group 'citre)
+
 (defcustom citre-peek-keymap
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "M-n") 'citre-peek-next-line)
     (define-key map (kbd "M-p") 'citre-peek-prev-line)
     (define-key map (kbd "M-N") 'citre-peek-next-location)
     (define-key map (kbd "M-P") 'citre-peek-prev-location)
+    (define-key map (kbd "M-o t") 'citre-peek-through)
     (define-key map [remap keyboard-quit] 'citre-peek-abort)
     map)
   "Keymap used for `citre-peek' sessions."
@@ -93,7 +104,17 @@ the color of the dashes."
 Annotations include kind, type, etc."
   :group 'citre)
 
+(defface citre-peek-ace-str-face
+  '((((background light))
+     :foreground "#dddddd" :background "#666666")
+    (t
+     :foreground "#222222" :background "#c0c0c0"))
+  "Face used for ace strings."
+  :group 'citre)
+
 ;;;; Helpers
+
+;;;;; "Circular" sequences
 
 (defun citre--subseq (seq interval)
   "Return the subsequence of SEQ in INTERVAL.
@@ -128,12 +149,138 @@ to cdr (not included)."
       (when (< index len)
         index))))
 
-(defun citre--file-total-lines (path)
-  "Return the total number of lines of file PATH."
-  (when (file-exists-p path)
-    (with-temp-buffer
-      (insert-file-contents path)
-      (line-number-at-pos (point-max)))))
+;;;;; Ace jump
+
+(defun citre--after-comment-or-str-p ()
+  "Non-nil if current position is after/in a comment or string."
+  (unless (bobp)
+    (let* ((pos (1- (point))))
+      ;; `syntax-ppss' is not always reliable, so we only use it when font lock
+      ;; mode is disabled.
+      (if font-lock-mode
+          (let ((pos-faces (get-text-property pos 'face)))
+            (unless (listp pos-faces)
+              (setq pos-faces (list pos-faces)))
+            (cl-intersection '(font-lock-comment-face
+                               font-lock-comment-delimiter-face
+                               font-lock-doc-face
+                               font-lock-string-face)
+                             pos-faces))
+        (save-excursion
+          (or (nth 4 (syntax-ppss pos))
+              (nth 3 (syntax-ppss pos))))))))
+
+(defun citre--search-symbols (line)
+  "Search for symbols from current position to LINEs after.
+The search jumps over comments/strings.
+
+The returned value is a list of cons pairs (START . END), the
+start/end position of each symbol.  Point will not be moved."
+  (let ((bound (save-excursion
+                 (forward-line (1- line))
+                 (line-end-position)))
+        (symbol-list))
+    (save-excursion
+      (cl-loop
+       while
+       (forward-symbol 1)
+       do
+       (when (> (point) bound)
+         (cl-return))
+       (unless (citre--after-comment-or-str-p)
+         (push (cons (save-excursion
+                       (forward-symbol -1)
+                       (point))
+                     (point))
+               symbol-list))))
+    (nreverse symbol-list)))
+
+(defun citre--search-symbols-in-buf (buf line n)
+  "Search symbols in BUF, from LINE to N lines after.
+This is a wrapper of `citre--search-symbols'.  The returned value
+is a cons pair, whose car is the bound offset, and cdr is a list
+of the symbol bounds."
+  (with-current-buffer buf
+    (save-excursion
+      (widen)
+      (goto-char 1)
+      (forward-line (1- line))
+      (cons (point)
+            (citre--search-symbols n)))))
+
+(defun citre--ace-key-seqs (n)
+  "Make ace key sequences for N symbols.
+N can be the length of the list returned by
+`citre--search-symbols'.  The keys used are
+`citre-peek-ace-keys'."
+  (unless (and (listp citre-peek-ace-keys)
+               (null (cl-remove-if #'integerp citre-peek-ace-keys))
+               (eq (cl-remove-duplicates citre-peek-ace-keys)
+                   citre-peek-ace-keys))
+    (user-error "Invalid `citre-peek-ace-keys'"))
+  (let* ((key-num (length citre-peek-ace-keys))
+         (key-seq-length (pcase n
+                           (0 0)
+                           (1 1)
+                           ;; Though `log' is a float-point operation, this is
+                           ;; accurate for sym-num in a huge range.
+                           (_ (ceiling (log n key-num)))))
+         (key-seq (make-list n nil))
+         nth-ace-key)
+    (dotimes (nkey key-seq-length)
+      (setq nth-ace-key -1)
+      (dotimes (nsym n)
+        (when (eq (% nsym (expt key-num nkey)) 0)
+          (setq nth-ace-key (% (1+ nth-ace-key) key-num)))
+        (push (nth nth-ace-key citre-peek-ace-keys) (nth nsym key-seq))))
+    key-seq))
+
+(defun citre--pop-ace-key-seqs (seqs char)
+  "Modify ace key sequences SEQS as CHAR is pressed.
+This sets elements in SEQS which not begin with CHAR to nil, and
+pop the element which begin with CHAR.  When the only non-nil
+element in seqs is poped, this returns its index, as the element
+is hit by user input.
+
+The modified SEQS is returned.  When CHAR is not the car of any
+element in SEQS, this does nothing, and returns the original
+list."
+  (if (not (memq char (mapcar #'car seqs)))
+      seqs
+    (let (last-poped-idx)
+      (dotimes (n (length seqs))
+        (if (eq (car (nth n seqs)) char)
+            (progn
+              (pop (nth n seqs))
+              (setq last-poped-idx n))
+          (setf (nth n seqs) nil)))
+      (if (null (cl-remove-if #'null seqs))
+          last-poped-idx
+        seqs))))
+
+(defun citre--attach-ace-str (str sym-bounds bound-offset ace-seqs)
+  "Return a copy of STR with ace strings attached.
+SYM-BOUNDS specifies the symbols in STR, as returned by
+`citre--search-symbols'.  BOUND-OFFSET is the starting point of
+STR in the buffer.  ACE-SEQS is the ace key sequences, as
+returned by `citre--ace-key-seqs' or `citre--pop-ace-key-seqs'.
+The beginnings of each symbol are replaced by ace strings with
+`citre-ace-string-face' attached."
+  (let* ((nsyms (length sym-bounds))
+         (new-str (copy-sequence str)))
+    (dotimes (n nsyms)
+      (when (nth n ace-seqs)
+        (let* ((beg (- (car (nth n sym-bounds)) bound-offset))
+               (end (- (cdr (nth n sym-bounds)) bound-offset))
+               (ace-seq (nth n ace-seqs))
+               (ace-str-len (min (length ace-seq) (- end beg))))
+          (dotimes (idx ace-str-len)
+            (aset new-str (+ beg idx) (nth idx ace-seq)))
+          (put-text-property beg (+ beg ace-str-len)
+                             'face 'citre-peek-ace-str-face new-str))))
+    new-str))
+
+;;;;; Display
 
 (defun citre--fit-line (str)
   "Fit STR in current window.
@@ -225,6 +372,17 @@ location, and cdr is the index of the last one plus one.")
 Its keys are file paths, values are buffers.  The buffers will be
 killed after `citre-peek-abort'.")
 
+(defvar-local citre-peek--symbol-bounds nil
+  "Symbol bounds for current peek session.
+Its car is the bound offset, cdr is a list of the symbol
+bounds.")
+
+(defvar-local citre-peek--ace-seqs nil
+  "Ace key sequences for current peek session.")
+
+(defvar-local citre-peek--symbol-hist nil
+  "List of symbols in the `peek-through' history.")
+
 (defvar citre-peek--bg nil
   "Background color used for file contents when peeking.")
 
@@ -240,41 +398,60 @@ killed after `citre-peek-abort'.")
 ;; visiting a file are not hidden), and Emacs ask you to confirm when killing
 ;; it because its content are modified.  Rather than trying to workaround these
 ;; issues, it's better to create this function instead.
-(defun citre-peek--find-buffer-visiting (filename)
-  "Return the buffer visiting file FILENAME.
-This is like `find-buffer-visiting', but it also searches
-`citre-peek--temp-buffer-alist', so it can handle temporary
-buffers created during peeking."
-  (or (alist-get filename citre-peek--temp-buffer-alist)
-      (find-buffer-visiting filename)))
 
-(defun citre-peek--get-linum (record)
-  "Get the line number of tag RECORD.
-If there's no buffer visiting PATH currently, create a new
-temporary buffer for it.  It will be killed by `citre-abort'.
+(defun citre-peek--find-file-buffer (path)
+  "Return the buffer visiting file PATH.
+PATH is a canonical path.  This is like `find-buffer-visiting',
+but it also searches `citre-peek--temp-buffer-alist', so it can
+handle temporary buffers created during peeking.
 
-If the file pointed to by RECORD doesn't exist, returns 1.  This
-is because we want to display a one-line message about the
-missing file in the peek window."
-  ;; TODO: is this `delay-mode-hooks' needed?
-  (delay-mode-hooks
-    (let* ((path (citre-core-get-field 'ext-abspath record))
-           (buf-opened (citre-peek--find-buffer-visiting path))
-           (buf nil))
-      (if (not (file-exists-p path))
-          1
-        (if buf-opened
-            (setq buf buf-opened)
-          (setq buf (generate-new-buffer (format " *citre-peek-%s*" path)))
+When the file is not opened, this creates a temporary buffer for
+it, sets its project root to current project root (for
+`citre-peek-through' to work) and major mode.  These buffers will
+be killed afterwards by `citre-abort'.
+
+When PATH doesn't exist, this returns nil."
+  (if (not (file-exists-p path))
+      nil
+    (or (alist-get path citre-peek--temp-buffer-alist
+                   nil nil #'equal)
+        (find-buffer-visiting path)
+        (let ((buf (generate-new-buffer (format " *citre-peek-%s*" path)))
+              (current-project (citre-project-root)))
           (with-current-buffer buf
             (insert-file-contents path)
             ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
             (let ((buffer-file-name path))
               (delay-mode-hooks
-                (set-auto-mode))))
-          (push (cons path buf) citre-peek--temp-buffer-alist))
-        (with-current-buffer buf
-          (citre-core-locate-tag record 'use-linum))))))
+                (set-auto-mode)))
+            ;; NOTE: For some weird reason, if you put this before the above
+            ;; form, `citre-project-root' will be cleared.
+            (setq citre-project-root current-project))
+          (push (cons path buf) citre-peek--temp-buffer-alist)
+          buf))))
+
+(defun citre--file-total-lines (path)
+  "Return the total number of lines of file PATH."
+  (when (file-exists-p path)
+    (with-temp-buffer
+      (insert-file-contents path)
+      (line-number-at-pos (point-max)))))
+
+(defun citre-peek--get-linum (record)
+  "Get the line number of tag RECORD.
+If there's no buffer visiting PATH currently, create a new
+temporary buffer for it, and set `citre-project-root' to current
+project root (for `citre-peek-through' to work).  It will be
+killed afterwards by `citre-abort'.
+
+If the file pointed to by RECORD doesn't exist, returns 1.  This
+is because we want to display a one-line message about the
+missing file in the peek window."
+  (let ((buf (citre-peek--find-file-buffer
+              (citre-core-get-field 'ext-abspath record))))
+    (if buf (with-current-buffer buf
+              (citre-core-locate-tag record 'use-linum))
+      1)))
 
 (defun citre-peek--get-content (path line n)
   "Get file contents for peeking.
@@ -285,12 +462,13 @@ This must be called when a record pointing to PATH is already
 processed by `citre-peek--get-linum' earlier in a `citre-peek'
 session, or it may think the file doesn't exist and returns a
 message about the missing file."
-  (if-let ((buf (citre-peek--find-buffer-visiting path)))
+  (if-let ((buf (citre-peek--find-file-buffer path)))
       (with-current-buffer buf
+        (widen)
         (let ((beg nil)
               (end nil))
           (save-excursion
-            (goto-char (point-min))
+            (goto-char 1)
             (forward-line (1- line))
             (setq beg (point))
             (forward-line (1- n))
@@ -298,6 +476,37 @@ message about the missing file."
             (font-lock-fontify-region beg end)
             (concat (buffer-substring beg end) "\n"))))
     (propertize "This file doesn't exist.\n" 'face 'error)))
+
+(defun citre-peek--set-locations (buf point)
+  "Set up location-related variables for peek session.
+It grabs the definitions of the symbol in BUF under POINT, and
+set variables according to it."
+  (let (locations
+        symbol)
+    (with-current-buffer buf
+      (save-excursion
+        (goto-char point)
+        (setq locations (mapcar #'citre-make-location-str
+                                (citre-get-definitions)))
+        ;; TODO: could we make the get definitions API also return the symbol?
+        (setq symbol (thing-at-point 'symbol))))
+    (if (null locations)
+        (user-error "Can't find definition"))
+    (setq citre-peek--symbol-hist
+          (nconc citre-peek--symbol-hist
+                 (list symbol)))
+    (setq citre-peek--locations locations)
+    (setq citre-peek--displayed-locations-interval
+          (cons 0 (min citre-peek-locations-height
+                       (length citre-peek--locations))))
+    (setq citre-peek--location-index 0)
+    (dolist (loc citre-peek--locations)
+      (citre-put-property loc 'total-lines
+                          (or (citre--file-total-lines
+                               (citre-get-property
+                                loc 'ext-abspath 'from-record))
+                              ;; Display 1 line when the file doesn't exist.
+                              1)))))
 
 (defun citre-peek--location-index-forward (n)
   "In a peek window, move current location N steps forward.
@@ -339,7 +548,7 @@ N can be negative."
                  (face-attribute 'citre-peek-border-face
                                  :background)))))
 
-(defun citre-peek--post-command-function ()
+(defun citre-peek--update-display ()
   "Deal with the update of contents in peek windows."
   (unless (minibufferp)
     (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
@@ -363,8 +572,11 @@ N can be negative."
            (displayed-locs (citre--subseq
                             citre-peek--locations
                             citre-peek--displayed-locations-interval))
-           (count-info (format "(%s/%s)\n"
-                               (1+ citre-peek--location-index) loc-numbers))
+           (session-info (concat
+                          (format "(%s/%s) "
+                                  (1+ citre-peek--location-index) loc-numbers)
+                          (string-join citre-peek--symbol-hist " -> ")
+                          "\n"))
            (displayed-index
             (citre--index-in-interval citre-peek--location-index
                                       citre-peek--displayed-locations-interval
@@ -387,46 +599,41 @@ N can be negative."
                   (citre--add-face line
                                    (list :background citre-peek--bg-alt
                                          :extend t))))))
-      (citre--add-face count-info
+      ;; In an active peek session, show ace strings.
+      (when (and citre-peek--symbol-bounds citre-peek--ace-seqs)
+        (setq file-content
+              (citre--attach-ace-str file-content
+                                     (cdr citre-peek--symbol-bounds)
+                                     (car citre-peek--symbol-bounds)
+                                     citre-peek--ace-seqs)))
+      (citre--add-face session-info
                        (list :background citre-peek--bg-alt
                              :extend t))
       ;; And peek it!
       (overlay-put citre-peek--ov 'after-string
                    (concat initial-newline border file-content
-                           (string-join displayed-locs) count-info
+                           (string-join displayed-locs) session-info
                            border)))))
 
 ;;;; Commands
 
-(defun citre-peek ()
-  "Peek the definition of the symbol at point."
+(defun citre-peek (&optional buf point)
+  "Peek the definition of the symbol at point.
+If BUF and POINT is give, peek the definition of the symbol in
+BUF under POINT."
   (interactive)
+  (let ((buf (or (when (and buf point) buf)
+                 (current-buffer)))
+        (point (or (when (and buf point) point)
+                   (point))))
+    ;; Setup location related variables.
+    (citre-peek--set-locations buf point))
   ;; Quit existing peek sessions.
   (when (overlayp citre-peek--ov)
     (citre-peek-abort))
-  ;; Fetch informations to show.
-  (setq citre-peek--locations (mapcar #'citre-make-location-str
-                                      (citre-get-definitions)))
-  (when (null citre-peek--locations)
-    (user-error "Can't find definition"))
-  (dolist (loc citre-peek--locations)
-    (citre-put-property loc 'total-lines
-                        (or (citre--file-total-lines
-                             (citre-get-property
-                              loc 'ext-abspath 'from-record))
-                            ;; Display 1 line when the file doesn't exist.
-                            1))
-    (citre-put-property loc 'buffer-exist-p
-                        (find-buffer-visiting
-                         (citre-get-property
-                          loc 'ext-abspath 'from-record))))
   ;; Setup environment for peeking.
   (citre-peek-mode)
   (setq citre-peek--ov (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
-  (setq citre-peek--displayed-locations-interval
-        (cons 0 (min citre-peek-locations-height
-                     (length citre-peek--locations))))
-  (setq citre-peek--location-index 0)
   (let* ((bg-mode (frame-parameter nil 'background-mode))
          (bg-unspecified-p (string= (face-background 'default)
                                     "unspecified-bg"))
@@ -443,8 +650,9 @@ N can be negative."
       (setq citre-peek--bg (citre--color-blend "#000000" bg 0.02))
       (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.12))
       (setq citre-peek--bg-selected (citre--color-blend "#000000" bg 0.06)))))
-  (add-hook 'post-command-hook #'citre-peek--post-command-function nil 'local))
+  (add-hook 'post-command-hook #'citre-peek--update-display nil 'local))
 
+;; TODO: Throw error when not in a peek session.
 (defun citre-peek-next-line ()
   "Scroll to the next line in a peek window."
   (interactive)
@@ -458,23 +666,50 @@ N can be negative."
 (defun citre-peek-next-location ()
   "Peek the next location of definition."
   (interactive)
-  (unless (citre-get-property (nth citre-peek--location-index
-                                   citre-peek--locations)
-                              'buffer-exist-p))
   (citre-peek--location-index-forward 1))
 
 (defun citre-peek-prev-location ()
   "Peek the previous location of definition."
   (interactive)
-  (unless (citre-get-property (nth citre-peek--location-index
-                                   citre-peek--locations)
-                              'buffer-exist-p))
   (citre-peek--location-index-forward -1))
+
+(defun citre-peek-through ()
+  "Peek through a symbol in current peek window."
+  (interactive)
+  (let* ((loc (nth citre-peek--location-index citre-peek--locations))
+         (peek-line (citre-get-property loc 'peek-line))
+         (buf (citre-peek--find-file-buffer
+               (citre-get-property loc 'ext-abspath 'from-record)))
+         key)
+    (unless buf
+      (user-error "The file doesn't exist"))
+    (setq citre-peek--symbol-bounds
+          (citre--search-symbols-in-buf
+           buf peek-line citre-peek-file-content-height))
+    (setq citre-peek--ace-seqs (citre--ace-key-seqs
+                                (length (cdr citre-peek--symbol-bounds))))
+    (citre-peek--update-display)
+    (cl-block nil
+      (while (setq key (read-key "Ace char:"))
+        (when (memq key citre-peek-cancel-ace-keys)
+          (setq citre-peek--symbol-bounds nil)
+          (setq citre-peek--ace-seqs nil)
+          (citre-peek--update-display)
+          (cl-return))
+        (pcase (citre--pop-ace-key-seqs citre-peek--ace-seqs key)
+          ((and (pred integerp) i)
+           (let ((pos (car (nth i (cdr citre-peek--symbol-bounds)))))
+             (citre-peek--set-locations buf pos))
+           (setq citre-peek--symbol-bounds nil)
+           (setq citre-peek--ace-seqs nil)
+           (cl-return))
+          (_ (citre-peek--update-display)))))))
 
 (defun citre-peek-abort ()
   "Abort peeking."
   (interactive)
-  (delete-overlay citre-peek--ov)
+  (when citre-peek--ov
+    (delete-overlay citre-peek--ov))
   (mapc (lambda (pair)
           (kill-buffer (cdr pair)))
         citre-peek--temp-buffer-alist)
@@ -486,8 +721,12 @@ N can be negative."
   (setq citre-peek--bg nil)
   (setq citre-peek--bg-alt nil)
   (setq citre-peek--bg-selected nil)
+  (setq citre-peek--symbol-hist nil)
+  ;; In case they are not cleaned up by `citre-peek-through'
+  (setq citre-peek--ace-seqs nil)
+  (setq citre-peek--symbol-bounds nil)
   (citre-peek-mode -1)
-  (remove-hook 'post-command-hook #'citre-peek--post-command-function 'local))
+  (remove-hook 'post-command-hook #'citre-peek--update-display 'local))
 
 (defun citre-peek-jump ()
   "Jump to the definition that is currently peeked."
