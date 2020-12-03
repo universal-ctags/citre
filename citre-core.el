@@ -348,20 +348,55 @@ value.  It is a valid value field of the `kind' field."
 
 ;;;;; Get lines
 
+;; The shell command in this function is a bit hard to understand.  I'll
+;; explain it.  An example of `cmd' would be like:
+;;
+;; { readtags -l || printf "\n$?\n" 1>&2; } | head -n 1; echo "$?"
+;;
+;; It runs readtags, and if an error happens, write the exit code ($?) to
+;; stderr.  We add a newline before $?, since the error message of readtags is
+;; hard coded in its code, and I've seen missing trailing newlines in some of
+;; them.  It's also redirected to stderr, so it won't be filtered by "head".
+;;
+;; The output of readtags is piped into "head" to get the first N lines.  Then
+;; the exit code of "head" is echoed.  At the end we get something like:
+;;
+;; ...readtags output or error message...
+;; when readtags fails, the exit code of it
+;; the exit code of head
+;;
+;; If the exit code of readtags appears, we have to deal with it.  Here we
+;; consider a value > 128 to be successful, since it indicates that readtags is
+;; terminated by a signal, and that does happen: when readtags outputs a lot,
+;; since "head" will close the pipe after it reads the first N lines, readtags
+;; will receive a SIGPIPE signal, but we already get the line we want, and this
+;; is preferred as we don't need to wait for readtags to finish all its output.
+;;
+;; There's no reliable way to get the exit code corresponding to SIGPIPE: its
+;; signal number is 13, and POSIX standard says when a command is terminated by
+;; a signal, the exit code should be > 128, but nothing more.  In practice,
+;; most shell gives you 13 + 128, but at least ksh93 adds it by 256.
+;;
+;; If the inferior shell is bash, we have the PIPESTATUS variable to get the
+;; exit code of the command before a pipe.  But we want the command to be
+;; POSIX-compliant, so we have to take this uglier way.
+
 (defun citre-core--get-lines
     (tagsfile &optional name match case-fold filter sorter lines)
   "Get lines in tags file TAGSFILE using readtags.
 See `citre-core-get-records' to know about NAME, MATCH,
 CASE-FOLD, FILTER, SORTER and LINES."
-  (let* ((parts nil)
-         (match (or match 'exact))
+  ;; Prevents shell injection.
+  (when lines (cl-assert (natnump lines)))
+  (let* ((match (or match 'exact))
          (extras (concat
                   "-Ene"
                   (pcase match
                     ('exact "")
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
-                  (if case-fold "i" ""))))
+                  (if case-fold "i" "")))
+         parts cmd)
     ;; Program name
     (push (or citre-readtags-program "readtags") parts)
     ;; Read from this tags file
@@ -382,23 +417,35 @@ CASE-FOLD, FILTER, SORTER and LINES."
         (push "-l" parts)
       (push "-" parts)
       (push name parts))
+    (setq
+     cmd
+     (format
+      "{ %s || printf \"\n$?\n\" 1>&2; }%s"
+      (apply #'citre-core--build-shell-command
+             (nreverse parts))
+      (if lines
+          (format " | head -n %s; echo \"$?\"" lines)
+        ;; The filtering succeeded because we did nothing (equivalent to
+        ;; filtering by an "identity" function).
+        "; echo \"0\"")))
     (let* ((result (split-string
-                    (shell-command-to-string
-                     (concat
-                      (apply #'citre-core--build-shell-command
-                             (nreverse parts))
-                      ;; "$?" is for getting the exit status.  In case the
-                      ;; output of readtags is not terminated by newline, we
-                      ;; add an extra one.
-                      "; printf \"\n$?\n\""))
+                    (shell-command-to-string cmd)
                     "\n" t))
-           (status (car (last result)))
-           (output (cl-subseq result 0 -1)))
-      (if (string= status "0")
-          (if (or (null lines) (> lines (length output)))
-              output
-            (cl-subseq output 0 lines))
-        (error "Readtags: %s" (string-join output "\n"))))))
+           (len (length result))
+           (pipe-code (nth (- len 1) result))
+           (readtags-code (nth (- len 2) result))
+           (readtags-code (when (string-match-p "^\[0-9]+$" readtags-code)
+                            readtags-code))
+           (output (cl-subseq result 0 (if readtags-code -2 -1))))
+      (if (and (string= pipe-code "0")
+               (or (null readtags-code)
+                   ;; TODO: test this on a large tags file?  It's not very
+                   ;; realistic because a user doesn't want to clone a huge
+                   ;; repo to use a Emacs package.
+                   (> (string-to-number readtags-code) 128)))
+          output
+        (error "Readtags exits %s.  Head exits %s.\n%s"
+               readtags-code pipe-code (string-join output "\n"))))))
 
 ;;;;; Parse fields
 
