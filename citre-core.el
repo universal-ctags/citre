@@ -283,24 +283,32 @@ fields of info are updated."
 
 ;;;;; Info: path
 
-(defun citre-core--tags-file-use-relative-path-p (tagsfile)
-  "Detect if file paths in tags file TAGSFILE are relative.
-TAGSFILE is the path to the tags file.  This is done by
-inspecting the first line of regular tags."
-  (let* ((record (car (citre-core-get-records
-                       tagsfile nil nil nil
-                       :require '(input) :lines 1))))
-    (if (null record)
-        (error "Invalid tags file")
-      (not (file-name-absolute-p (citre-core-get-field 'input record))))))
-
+;; TODO: Test this on Windows.
 (defun citre-core--get-path-info (tagsfile)
   "Get path info of tags file TAGSFILE.
 See `citre-core--tags-file-info-alist' to know about the return
 value.  It is a valid value field of the `path' field."
-  (cons (citre-core--tags-file-use-relative-path-p tagsfile)
-        (nth 1 (car (citre-core-get-pseudo-tags
-                     "TAG_PROC_CWD" tagsfile)))))
+  (let* ((record (car (citre-core-get-records
+                       tagsfile nil nil nil
+                       :filter (not (citre-core-build-filter
+                                     'input "/" 'prefix))
+                       :require '(input) :lines 1)))
+         (cwd-ptag (nth 1 (car (citre-core-get-pseudo-tags
+                                "TAG_PROC_CWD" tagsfile))))
+         (cwd-guessed (file-name-directory tagsfile)))
+    (if (null record)
+        (cons nil cwd-ptag)
+      (cons t (or cwd-ptag
+                  ;; This is not 100% reliable, but there's little chance that
+                  ;; an irrelevant file happens to exist in the directory of
+                  ;; TAGSFILE, to which its relative path equals the input
+                  ;; field.
+                  (when (file-exists-p
+                         (expand-file-name (gethash 'input record)
+                                           cwd-guessed))
+                    cwd-guessed)
+                  (read-directory-name
+                   (format "Root dir of tags file %s: " tagsfile)))))))
 
 ;;;;; Info: kind
 
@@ -577,20 +585,11 @@ used.  If the `path' info doesn't contain the current working
 directory when generating the tags file, an error will be
 signaled."
   (let ((path-info (citre-core--tags-file-info tagsfile-info 'path 'value))
-        (no-cwd-error "Can't get absolute path.  You can:\n\
-1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
-2. Regenerate the tags file using absolute paths in the command")
-        (no-input-field-error "\"input\" field not found in DEP-RECORD"))
-    (cond
-     ((null (car path-info))
-      (or (gethash 'input dep-record)
-          (error no-input-field-error)))
-     (t
-      (let ((cwd (or (cdr path-info)
-                     (error no-cwd-error)))
-            (input (or (gethash 'input dep-record)
-                       (error no-input-field-error))))
-        (expand-file-name input cwd))))))
+        (input (or (gethash 'input dep-record)
+                   (error "\"input\" field not found in DEP-RECORD"))))
+    (if (null (car path-info))
+        input
+      (expand-file-name input (cdr path-info)))))
 
 ;;;;;; ext-kind-full
 
