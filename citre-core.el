@@ -369,8 +369,8 @@ value.  It is a valid value field of the `kind' field."
 ;; The output of readtags is piped into "head" to get the first N lines.  Then
 ;; the exit code of "head" is echoed.  At the end we get something like:
 ;;
-;; ...readtags output or error message...
-;; when readtags fails, the exit code of it
+;; ...readtags output or error message (can be empty)...
+;; when readtags fails, the exit code of it (can be empty)
 ;; the exit code of head
 ;;
 ;; If the exit code of readtags appears, we have to deal with it.  Here we
@@ -428,7 +428,7 @@ CASE-FOLD, FILTER, SORTER and LINES."
     (setq
      cmd
      (format
-      "{ %s || printf \"\n$?\n\" 1>&2; }%s"
+      "{ %s || printf \"\\n$?\\n\" 1>&2; }%s"
       (apply #'citre-core--build-shell-command
              (nreverse parts))
       (if lines
@@ -441,9 +441,9 @@ CASE-FOLD, FILTER, SORTER and LINES."
                     "\n" t))
            (len (length result))
            (pipe-code (nth (- len 1) result))
-           (readtags-code (nth (- len 2) result))
-           (readtags-code (when (string-match-p "^\[0-9]+$" readtags-code)
-                            readtags-code))
+           (readtags-code
+            (when-let ((code (when (> len 1) (nth (- len 2) result))))
+              (when (string-match-p "^\[0-9]+$" code) code)))
            (output (cl-subseq result 0 (if readtags-code -2 -1))))
       (if (and (string= pipe-code "0")
                (or (null readtags-code)
