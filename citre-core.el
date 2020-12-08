@@ -133,6 +133,9 @@ If STRING doesn't contain a colon, it will be (nil . STRING)."
               (substring string (1+ sep)))
       (cons nil string))))
 
+;; NOTE: My test shows even for matching a char in string, using regexp is
+;; faster than take the string as a list, and search the char in it (e.g. using
+;; `cl-position' or write a loop and compare by `aref').
 (defun citre-core--string-match-all (regexp string &optional start)
   "Find all occurences of REGEXP in STRING.
 The return value is a list of their indexes, or nil.  If START is
@@ -164,21 +167,6 @@ backslash is \"\\\\\"."
       ;; performance.
       (setq start (cl-incf idx 2)))
     (nreverse result)))
-
-(defun citre-core--count-string-match (regexp string &optional start end)
-  "Count occurences of REGEXP in STRING.
-If START is non-nil, start search at that index in STRING.  If
-END is non-nil, end search before that index in STRING.
-
-This function internally calls `string-match'."
-  (let ((result 0)
-        (start (or start 0))
-        (idx nil))
-    (while (and (setq idx (string-match regexp string start))
-                (or (null end) (< idx end)))
-      (cl-incf result)
-      (setq start (1+ idx)))
-    result))
 
 ;;;; Internals: Additional information handling
 
@@ -605,70 +593,80 @@ it's returned directly.  If not, then:
   `citre-core--kind-name-table' if it's not presented.
 
 If this fails, the single-letter kind is returned directly."
-  (let ((kind-info (citre-core--tags-file-info tagsfile-info 'kind 'value)))
-    (if (null (car kind-info))
-        (gethash 'kind dep-record)
-      (if-let* ((kind (gethash 'kind dep-record))
-                (lang (citre-core--get-lang-from-record dep-record))
-                (table (or (cdr kind-info) citre-core--kind-name-table))
-                (table (gethash lang table))
-                (kind-full (gethash kind table)))
-          kind-full
-        kind))))
+  (let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info))
+        (kind-table (gethash 'kind-table tagsfile-info)))
+    (if one-letter-kind-p
+        (if-let* ((kind (gethash 'kind dep-record))
+                  (lang (citre-core--get-lang-from-record dep-record))
+                  (table (or kind-table citre-core--kind-name-table))
+                  (table (gethash lang table))
+                  (kind-full (gethash kind table)))
+            kind-full
+          kind)
+      (gethash 'kind dep-record))))
 
 ;;;;; Parse lines
 
 (defun citre-core--split-tags-line (line)
-  "Split LINE from a tags file into fields."
-  (let* ((tab-idx (citre-core--string-match-all "\t" line))
-         ;; This is the tab before the pattern
-         (start (nth 1 tab-idx))
-         (end nil)
-         (pattern-delimiter nil)
-         (delimiters-in-pattern 0)
-         (tabs-in-pattern 0)
-         (result nil))
-    ;; There are at least 3 fields in a normal tag, so we can tell if something
-    ;; is wrong based on the number of tabs.  Sometimes readtags exits normally
-    ;; when an error actually occurs.  By doing this we can capture the error
-    ;; messages in the output (as long as there aren't many tabs).
-    (when (< (length tab-idx) 2)
-      (error (format "Invalid LINE: %s" line)))
-    (setq pattern-delimiter
-          (pcase (aref line (1+ start))
-            ((guard (string-match "^[0-9]+;\""
-                                  (substring line (1+ start))))
-             nil)
-            ;; Make sure there are an even number of backslashes before a
-            ;; delimiter, so we won't match escaped slashes or question marks.
-            ((or ?/ (guard (string-match "^[0-9]+;/"
-                                         (substring line (1+ start)))))
-             ;; We always start the search on a tab, so no need to deal with
-             ;; the situation where it starts with a slash.  A regexp which
-             ;; deals with this would be \\([^\\\\]\\|^\\)\\(\\\\\\\\\\)*/
-             "[^\\\\]\\(\\\\\\\\\\)*/")
-            ((or ?? (guard (string-match "^[0-9]+;\\?"
-                                         (substring line (1+ start)))))
-             "[^\\\\]\\(\\\\\\\\\\)*\\?")
+  "Split LINE from a tags file into fields.
+DELIMITER is a regexp to match the closing delimiter in the
+pattern field, see `citre-core--delimiter-regexp-alist' for valid
+ones.  When nil, it's inferred based on LINE, but specifying it
+increases the performance."
+  (let* (;; There are at least 3 fields in a normal tag, so we know something
+         ;; is wrong if there are less than 2 tabs.  Sometimes readtags exits
+         ;; normally when an error actually occurs.  By doing this we can
+         ;; capture the error messages in its output (as long as there aren't
+         ;; many tabs).
+         (1st-tab (or (string-match "\t" line)
+                      (error (format "Invalid LINE: %s" line))))
+         (2nd-tab (or (string-match "\t" line (1+ 1st-tab))
+                      (error (format "Invalid LINE: %s" line))))
+         tab-idx
+         pat-end-regexp
+         ;; This is basically a pointer when we parsing the pattern field.
+         ;; Keep track of it, now it's at the beginning of the pattern.
+         (ptr (1+ 2nd-tab))
+         end result)
+    ;; If pattern begins with a number, it will be like
+    ;;
+    ;; - 20;"
+    ;; - 20;/pattern/;"
+    ;; - 20;?pattern?;"
+    ;;
+    ;; We jump after the first semicolon.
+    (when (<= ?0 (aref line ptr) ?9)
+      (setq ptr (1+ (string-match ";" line ptr))))
+    ;; We want a regexp that takes us to near the end of the pattern.  Since
+    ;; tabs can appear in the search pattern, "near the end" means if we search
+    ;; for a tab after it, we get the tab after the pattern field.
+    (setq pat-end-regexp
+          (pcase (aref line ptr)
+            (?\" nil)
+            ;; Search for an unescaped slash.  It must be the ending delimiter.
+            (?/ "[^\\\\]\\(\\\\\\\\\\)*/")
+            ;; The same.
+            (?? "[^\\\\]\\(\\\\\\\\\\)*\\?")
             (_ (error "Invalid pattern field"))))
-    (when pattern-delimiter
-      (cl-dolist (end (nthcdr 2 tab-idx))
-        (cl-incf delimiters-in-pattern
-                 (citre-core--count-string-match
-                  pattern-delimiter (substring line start end)))
-        (if (eq (% delimiters-in-pattern 2) 0)
-            (cl-return)
-          (cl-incf tabs-in-pattern)
-          (setq start end))))
+    ;; We jump after the opening delimiter (or if there's no search pattern, we
+    ;; are at the end of the pattern field.)
+    (cl-incf ptr)
+    (when pat-end-regexp
+      (setq ptr (string-match pat-end-regexp line ptr))
+      (setq ptr (string-match "\t" line ptr)))
+    ;; Now we are at the end of the pattern field.  Cut the rest of the line by
+    ;; tabs.
+    (setq tab-idx
+          (citre-core--string-match-all "\t" line ptr))
     ;; We make `tab-idx' include all tabs that's not in the pattern, and also
     ;; the length of `line'. This makes it easier to split the whole line.
-    (setq tab-idx (nconc (list (car tab-idx) (cadr tab-idx))
-                         (nthcdr (+ 2 tabs-in-pattern) tab-idx)
+    (setq tab-idx (nconc (list 1st-tab 2nd-tab)
+                         tab-idx
                          (list (length line))))
-    (setq start 0)
+    (setq ptr 0)
     (while (setq end (pop tab-idx))
-      (push (substring line start end) result)
-      (setq start (1+ end)))
+      (push (substring line ptr end) result)
+      (setq ptr (1+ end)))
     (nreverse result)))
 
 (defun citre-core--parse-line (line &optional tagsfile-info
