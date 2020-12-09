@@ -469,27 +469,21 @@ names, cdrs are the values."
     (0 `((name . ,(citre-core--read-field-value field))))
     (1 `((input . ,(citre-core--read-field-value field))))
     (2 `((pattern . ,field)))
-    (3 (let* ((parts (citre-core--split-at-1st-colon field))
-              (field-name (car parts))
-              (field-name (pcase field-name
-                            ('nil 'kind)
-                            (_ (intern field-name))))
-              (field-value (citre-core--read-field-value (cdr parts))))
-         `((,field-name . ,field-value))))
-    (_
-     (let* ((parts (citre-core--split-at-1st-colon field))
-            (field-name (car parts))
-            (field-value (citre-core--read-field-value (cdr parts))))
-       (pcase field-name
-         ("scope"
-          (let ((value (citre-core--split-at-1st-colon field-value)))
-            `((scope-kind . ,(car value))
-              (scope-name . ,(cdr value)))))
-         ((or "class" "struct")
-          `((scope-kind . ,field-name)
-            (scope-name . ,field-value)))
-         (_
-          `((,(intern field-name) . ,field-value))))))))
+    (_ (let* ((parts (citre-core--split-at-1st-colon field))
+              (name (car parts))
+              (name (or (when name (intern name))
+                        'kind))
+              (value (cdr parts)))
+         (pcase name
+           ('scope
+            (let ((value (citre-core--split-at-1st-colon value)))
+              `((scope-kind . ,(car value))
+                (scope-name . ,(citre-core--read-field-value (cdr value))))))
+           ((or 'class 'struct)
+            `((scope-kind . ,(symbol-name name))
+              (scope-name . ,(citre-core--read-field-value value))))
+           (_
+            `((,name . ,(citre-core--read-field-value value)))))))))
 
 ;;;;; Extension fields
 
