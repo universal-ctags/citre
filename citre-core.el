@@ -200,127 +200,43 @@ This alist looks like:
 
   (alist of:
    tags file -> hash table of additional info:
-                (info field -> (time . value)))
+                (info field -> value))
 
-TIME is the last update time of the info field, in the style
-of (current-time).  Info fields and their corresponding VALUEs
-are:
+Info fields and their corresponding values are:
 
-- `path': The value is a cons pair.  Its car is t when relative
-  paths are used in the tags file, or nil when not.  Its cdr is
-  the current working directory when generating the tags file.
-- `kind': The value is a cons pair.  Its car is t when
-  single-letter kinds are used in the tags file, or nil when not.
-  Its cdr is a hash table for getting full-length kinds from
+- `time': The last update time of the file info, which is, the
+  hash table.  It's in the style of (current-time).
+- `relative-path-p': Whether there's relative path used in the
+  tags file.
+- `dir': the current working directory when generating the tags
+  file.  This can be nil when `use-relative-path' is t, since
+  `path' would be useless in this situation.
+- `one-letter-kind-p': Whether the tags file uses single-letter
+  kind field.
+- `kind-table': A hash table for getting full-length kinds from
   single-letter kinds, like `citre-core--kind-name-table', or nil
   if the TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
-(defmacro citre-core--tags-file-info (info field &optional key)
-  "Return the place form of additional info FIELD in INFO.
-INFO is a valid value in `citre-core--tags-file-info-alist', For
-possible values of FIELD, see `citre-core--get-tags-file-info'.
-KEY could be `time' or `value' to return the last update time of
-FIELD, or the value of it.  When nil, (TIME . VALUE) is
-returned."
-  (let ((form `(gethash ,field ,info)))
-    `(pcase ,key
-       ('time (car ,form))
-       ('value (cdr ,form))
-       ('nil ,form)
-       (_ (error "Invalid KEY")))))
+(defun citre--core-get-dir (tag ptag-cwd tagsfile relative-path-p)
+  "Get the `dir' info of TAGSFILE.
+TAG is a tag from the file, PTAG-CWD is the value of TAG_PROC_CWD
+pseudo tag.  RELATIVE-PATH-P indicates whether the tags file uses
+relative path."
+  (or ptag-cwd
+      ;; Further inspect it only when relative path is used.
+      (let ((cwd-guess (file-name-directory tagsfile)))
+        (when relative-path-p
+          (or (when (file-exists-p
+                     (expand-file-name (gethash 'input tag)
+                                       cwd-guess))
+                cwd-guess)
+              (read-directory-name
+               (format "Root dir of tags file %s: " tagsfile)))))))
 
-;; TODO: In many situations, we require the file path is not only absolute
-;; (i.e., `file-name-absolute-p' returns t), but also "canonical" (i.e., AND it
-;; doesn't start with "~"). We should make this definition clear in the
-;; documentations for developers, and make the requirement clear in all the
-;; docstrings.
-(defun citre-core--get-tags-file-info (tagsfile &rest fields)
-  "Return the additional info FIELDS of tags file TAGSFILE.
-TAGSFILE is the canonical path to the tags file, and the return
-value is the additional info of it.  This return value is a valid
-value in `citre--tags-file-info-alist', see its docstring for
-details.
-
-FIELDS is a list of symbols representing the additional info
-fields needed by the caller.  Presented ones are updated when:
-
-- The tags file has not been registered in
-  `citre--tags-file-info-alist'.
-- The tags file has been updated since this field of info is
-  asked last time.
-
-For valid values in FIELDS, see
-`citre-core--tags-file-info-alist'.  When FIELDS is nil, all
-fields of info are updated."
-  (unless (file-exists-p tagsfile)
-    (error "%s doesn't exist" tagsfile))
-  (let ((recent-modification (file-attribute-modification-time
-                              (file-attributes tagsfile))))
-    (cl-symbol-macrolet ((info (alist-get tagsfile
-                                          citre-core--tags-file-info-alist
-                                          nil nil #'equal)))
-      (unless info
-        (setf info (make-hash-table :test #'eq)))
-      (dolist (field fields)
-        (unless (equal (citre-core--tags-file-info info field 'time)
-                       recent-modification)
-          (setf (citre-core--tags-file-info info field)
-                (cons recent-modification
-                      (citre-core--detect-tags-file-info tagsfile field)))))
-      info)))
-
-;;;;; Info: path
-
-;; TODO: Test this on Windows.
-(defun citre-core--get-path-info (tagsfile)
-  "Get path info of tags file TAGSFILE.
-See `citre-core--tags-file-info-alist' to know about the return
-value.  It is a valid value field of the `path' field."
-  (let* ((record (car (citre-core-get-records
-                       tagsfile nil nil nil
-                       :filter (not (citre-core-build-filter
-                                     'input "/" 'prefix))
-                       :require '(input) :lines 1)))
-         (cwd-ptag (nth 1 (car (citre-core-get-pseudo-tags
-                                "TAG_PROC_CWD" tagsfile))))
-         (cwd-guessed (file-name-directory tagsfile)))
-    (if (null record)
-        (cons nil cwd-ptag)
-      (cons t (or cwd-ptag
-                  ;; This is not 100% reliable, but there's little chance that
-                  ;; an irrelevant file happens to exist in the directory of
-                  ;; TAGSFILE, to which its relative path equals the input
-                  ;; field.
-                  (when (file-exists-p
-                         (expand-file-name (gethash 'input record)
-                                           cwd-guessed))
-                    cwd-guessed)
-                  (read-directory-name
-                   (format "Root dir of tags file %s: " tagsfile)))))))
-
-;;;;; Info: kind
-
-(defun citre-core--tags-file-use-single-letter-kind-p
-    (tagsfile)
-  "Detect if kinds in tags file TAGSFILE are single-letter.
-TAGSFILE is the path to the tags file.  This is done by
-inspecting the first line of regular tags."
-  (let ((record (car (citre-core-get-records
-                      tagsfile nil nil nil
-                      :require '(kind) :lines 1))))
-    (if (null record)
-        (error "Invalid tags file")
-      (eq 1 (length (citre-core-get-field 'kind record))))))
-
-(defun citre-core--tags-file-kind-name-table (tagsfile)
-  "Generate a kind name table for tags file TAGSFILE.
-This is done by using the TAG_KIND_DESCRIPTION pseudo tags.  The
-generated table is like `citre-core--kind-name-table'.
-
-If the required pseudo tags are not presented, nil is returned."
-  (let ((kind-descs (citre-core-get-pseudo-tags
-                     "TAG_KIND_DESCRIPTION" tagsfile 'prefix))
-        (prefix-len (length "!_TAG_KIND_DESCRIPTION!"))
+(defun citre--core-get-kind-table (kind-descs)
+  "Get the `kind-table' info.
+KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
+  (let ((prefix-len (length "!_TAG_KIND_DESCRIPTION!"))
         (table (make-hash-table :test #'equal)))
     (when kind-descs
       (dolist (kind-desc kind-descs)
@@ -333,12 +249,78 @@ If the required pseudo tags are not presented, nil is returned."
           (puthash kind kind-full (gethash lang table))))
       table)))
 
-(defun citre-core--get-kind-info (tagsfile)
-  "Get kind info of tags file TAGSFILE.
-See `citre-core--tags-file-info-alist' to know about the return
-value.  It is a valid value field of the `kind' field."
-  (cons (citre-core--tags-file-use-single-letter-kind-p tagsfile)
-        (citre-core--tags-file-kind-name-table tagsfile)))
+;; NOTE: Since we call the `citre-core-get-records' API to get sample records
+;; for analysis, and that in turn requires tags file info, we must prevent
+;; infinite loop from happening.  We use the following rules:
+;;
+;; - We must not ask for extension fields (i.e., fields that don't exists in
+;;   the tags file, but defined by Citre) here to get tags file info.
+;; - `citre-core-get-records', when used to get only regular fields (i.e.,
+;;   non-extension fields), must not ask for tags file info (which is what we
+;;   are doing).
+
+(defun citre-core--fetch-tags-file-info (tagsfile)
+  "Write the additional info of TAGSFILE to `citre--tags-file-info-alist'.
+TAGSFILE is the canonical path of the tags file.  The info is
+returned."
+  (let* ((recent-mod (file-attribute-modification-time
+                      (file-attributes tagsfile)))
+         (info (make-hash-table :test #'eq))
+         ;; Get a tag with relative path.  TODO: Make it work on Windows.
+         (tag (car (citre-core-get-records
+                    tagsfile nil nil nil
+                    :filter (not (citre-core-build-filter
+                                  'input "/" 'prefix))
+                    :require '(input pattern kind) :lines 1)))
+         (relative-path-p (when tag t))
+         (tag (or tag
+                  ;; If tags file uses relative path, get its first tag.
+                  (car (citre-core-get-records
+                        tagsfile nil nil nil
+                        :require '(input pattern kind) :lines 1))
+                  (error "Invalid tags file")))
+         (ptag-cwd (nth 1 (car (citre-core-get-pseudo-tags
+                                "TAG_PROC_CWD" tagsfile))))
+         (kind-descs (citre-core-get-pseudo-tags
+                      "TAG_KIND_DESCRIPTION" tagsfile 'prefix)))
+    (puthash 'time recent-mod info)
+    ;; path
+    (puthash 'relative-path-p relative-path-p info)
+    (puthash 'dir (citre--core-get-dir tag ptag-cwd tagsfile relative-path-p)
+             info)
+    ;; kind
+    (puthash 'one-letter-kind-p
+             (eq 1 (length (citre-core-get-field 'kind tag)))
+             info)
+    (puthash 'kind-table
+             (citre--core-get-kind-table kind-descs)
+             info)
+    info))
+
+;; TODO: In many situations, we require the file path is not only absolute
+;; (i.e., `file-name-absolute-p' returns t), but also "canonical" (i.e., AND it
+;; doesn't start with "~"). We should make this definition clear in the
+;; documentations for developers, and make the requirement clear in all the
+;; docstrings.
+(defun citre-core--tags-file-info (tagsfile)
+  "Return the additional info FIELDS of tags file TAGSFILE.
+TAGSFILE is the canonical path of the tags file.  The return
+value is a valid value in `citre--tags-file-info-alist'.
+
+This function caches the info, and uses the cache when possible."
+  (unless (file-exists-p tagsfile)
+    (error "%s doesn't exist" tagsfile))
+  (let ((recent-mod (file-attribute-modification-time
+                     (file-attributes tagsfile)))
+        (info (alist-get tagsfile
+                         citre-core--tags-file-info-alist
+                         nil nil #'equal)))
+    (if (and info (equal (gethash 'time info) recent-mod))
+        info
+      (setf (alist-get tagsfile
+                       citre-core--tags-file-info-alist
+                       nil nil #'equal)
+            (citre-core--fetch-tags-file-info tagsfile)))))
 
 ;;;; Internals: Tags file filtering & parsing
 
@@ -512,17 +494,11 @@ names, cdrs are the values."
 ;;;;; Extension fields
 
 (defvar citre-core--ext-fields-dependency-alist
-  '((ext-abspath   . ((input)
-                      (path)))
-    (ext-kind-full . ((kind language input)
-                      (kind))))
+  '((ext-abspath   . (input))
+    (ext-kind-full . (kind language input)))
   "Alist of extension fields and their dependencies.
 Its keys are extension fields offered by Citre, values are lists
-of two elements:
-
-- A list of (normal) fields the the extension field depends on.
-- A list of kinds of additional info of tags file that the
-  extension field depends on.")
+of (normal) fields the the extension field depends on.")
 
 (defvar citre-core--ext-fields-method-table
   #s(hash-table
@@ -572,12 +548,12 @@ if it's value is a relative path, `path' info in TAGSFILE-INFO is
 used.  If the `path' info doesn't contain the current working
 directory when generating the tags file, an error will be
 signaled."
-  (let ((path-info (citre-core--tags-file-info tagsfile-info 'path 'value))
+  (let ((dir (gethash 'dir tagsfile-info))
         (input (or (gethash 'input dep-record)
                    (error "\"input\" field not found in DEP-RECORD"))))
-    (if (null (car path-info))
+    (if (file-name-absolute-p input)
         input
-      (expand-file-name input (cdr path-info)))))
+      (expand-file-name input dir))))
 
 ;;;;;; ext-kind-full
 
@@ -795,14 +771,7 @@ LINES, see `citre-core-get-records'."
   (let* ((optional (cl-set-difference optional require))
          (find-field-depends
           (lambda (field)
-            (car (alist-get field
-                            citre-core--ext-fields-dependency-alist
-                            nil nil #'equal))))
-         (find-info-depends
-          (lambda (field)
-            (nth 1 (alist-get field
-                              citre-core--ext-fields-dependency-alist
-                              nil nil #'equal))))
+            (alist-get field citre-core--ext-fields-dependency-alist)))
          (ext-fields (mapcar #'car citre-core--ext-fields-dependency-alist))
          (require-ext (cl-intersection require ext-fields))
          (optional-ext (cl-intersection optional ext-fields))
@@ -816,11 +785,8 @@ LINES, see `citre-core-get-records'."
          (optional (cl-delete-duplicates
                     (cl-set-difference optional ext-fields)))
          (exclude (cl-delete-duplicates exclude))
-         (kinds (cl-delete-duplicates
-                 (apply #'append
-                        (mapcar find-info-depends
-                                (append require-ext optional-ext)))))
-         (info (apply #'citre-core--get-tags-file-info tagsfile kinds)))
+         (info (when ext-dep
+                 (citre-core--tags-file-info tagsfile))))
     (when (cl-intersection exclude ext-fields)
       (error "EXCLUDE shouldn't contain extension fields"))
     (mapcar (lambda (line)
@@ -980,15 +946,15 @@ canonical (relative) path.  TAGSFILE is a canonical path."
 If KIND is single-letter (or full-length), but the tags file
 TAGSFILE uses full-length (or single-letter) kinds, then `true'
 will be returned.  TAGSFILE is a canonical path."
-  (let ((tags-file-kind-single-letter-p
-         (car (citre-core--tags-file-info
-               (citre-core--get-tags-file-info tagsfile 'kind)
-               'kind 'value)))
-        (arg-kind-single-letter-p (eq (length kind) 1)))
-    (if (or (and tags-file-kind-single-letter-p
-                 arg-kind-single-letter-p)
-            (and (not tags-file-kind-single-letter-p)
-                 (not arg-kind-single-letter-p)))
+  (let ((tags-file-one-letter-kind-p
+         (gethash 'one-letter-kind-p
+                  (alist-get tagsfile citre-core--tags-file-info-alist
+                             nil nil #'equal)))
+        (arg-one-letter-kind-p (eq (length kind) 1)))
+    (if (or (and tags-file-one-letter-kind-p
+                 arg-one-letter-kind-p)
+            (and (not tags-file-one-letter-kind-p)
+                 (not arg-one-letter-kind-p)))
         `(eq? $kind ,kind)
       'true)))
 
