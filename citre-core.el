@@ -913,31 +913,6 @@ non-nil, also keep lines where FIELD is missing."
       (setq filter `(or (not ,field) ,filter)))
     filter))
 
-(defun citre-core-filter-match-input (tagsfile input)
-  "Return a filter expression that matches the input field by INPUT.
-INPUT can be canonical or relative, and it will be converted to
-canonical (relative) path if the tags file TAGSFILE uses
-canonical (relative) path.  TAGSFILE is a canonical path."
-  (let* ((pathinfo (citre-core--tags-file-info
-                    (citre-core--get-tags-file-info tagsfile 'path)
-                    'path 'value))
-         (tags-file-input-relative-p (car pathinfo))
-         (arg-input-relative-p (not (file-name-absolute-p input)))
-         (cwd (cdr pathinfo))
-         (no-cwd-error "Can't get absolute path.  You can:\n\
-1. Regenerate the tags file with \"TAG_PROC_CWD\" pseudo tag enabled, or\n\
-2. Regenerate the tags file using absolute paths in the command"))
-    (cond
-     ((and tags-file-input-relative-p (not arg-input-relative-p))
-      (unless cwd
-        (error no-cwd-error))
-      (setq input (substring input (length cwd))))
-     ((and (not tags-file-input-relative-p) arg-input-relative-p)
-      (unless cwd
-        (error no-cwd-error))
-      (setq input (concat cwd input))))
-    `(eq? $input ,input)))
-
 ;; TODO: Should we convert between single-letter and full-length kinds here?
 ;; The implementation would be messy since it also involves the language field,
 ;; and we need to match the file extension if the language field is missing.
