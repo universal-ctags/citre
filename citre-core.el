@@ -127,11 +127,10 @@ commands."
   "Split STRING at the first colon in it.
 A cons cell of the part before and after the colon is returned.
 If STRING doesn't contain a colon, it will be (nil . STRING)."
-  (let ((sep (string-match ":" string)))
-    (if sep
-        (cons (substring string 0 sep)
-              (substring string (1+ sep)))
-      (cons nil string))))
+  (if-let ((sep (string-match ":" string)))
+      (cons (substring string 0 sep)
+            (substring string (1+ sep)))
+    (cons nil string)))
 
 ;; NOTE: My test shows even for matching a char in string, using regexp is
 ;; faster than take the string as a list, and search the char in it (e.g. using
@@ -147,6 +146,9 @@ This function internally calls `string-match'."
         (idx nil))
     (while (setq idx (string-match regexp string start))
       (push idx result)
+      ;; Ideally we should add the lenght of matched part to `idx', but this is
+      ;; a performance-sensitive function, and for now we only use it to find
+      ;; all tabs in a line, so we do this for now.
       (setq start (1+ idx)))
     (nreverse result)))
 
@@ -162,10 +164,11 @@ backslash is \"\\\\\"."
         (idx nil))
     (while (setq idx (string-match "\\\\" string start))
       (push idx result)
-      ;; NOTE: This may cause an "args out of range" error, but only on string
-      ;; containing invalid trailing backslashes.  We don't check it for
-      ;; performance.
-      (setq start (cl-incf idx 2)))
+      ;; Jump over the char after the backslash to search for next escaping
+      ;; sequence.  NOTE: This may cause an "args out of range" error, but only
+      ;; on string containing invalid trailing backslashes.  We don't check it
+      ;; for performance.
+      (setq start (+ idx 2)))
     (nreverse result)))
 
 ;;;; Internals: Additional information handling
@@ -236,9 +239,9 @@ relative path."
 (defun citre--core-get-kind-table (kind-descs)
   "Get the `kind-table' info.
 KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
-  (let ((prefix-len (length "!_TAG_KIND_DESCRIPTION!"))
-        (table (make-hash-table :test #'equal)))
-    (when kind-descs
+  (when kind-descs
+    (let ((prefix-len (length "!_TAG_KIND_DESCRIPTION!"))
+          (table (make-hash-table :test #'equal)))
       (dolist (kind-desc kind-descs)
         (let* ((lang (substring (car kind-desc) prefix-len))
                (kind-pair (split-string (nth 1 kind-desc) ","))
@@ -542,12 +545,11 @@ if it's value is a relative path, `path' info in TAGSFILE-INFO is
 used.  If the `path' info doesn't contain the current working
 directory when generating the tags file, an error will be
 signaled."
-  (let ((dir (gethash 'dir tagsfile-info))
-        (input (or (gethash 'input dep-record)
+  (let ((input (or (gethash 'input dep-record)
                    (error "\"input\" field not found in DEP-RECORD"))))
     (if (file-name-absolute-p input)
         input
-      (expand-file-name input dir))))
+      (expand-file-name input (gethash 'dir tagsfile-info)))))
 
 ;;;;;; ext-kind-full
 
@@ -563,17 +565,16 @@ it's returned directly.  If not, then:
   `citre-core--kind-name-table' if it's not presented.
 
 If this fails, the single-letter kind is returned directly."
-  (let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info))
-        (kind-table (gethash 'kind-table tagsfile-info)))
-    (if one-letter-kind-p
-        (if-let* ((kind (gethash 'kind dep-record))
-                  (lang (citre-core--get-lang-from-record dep-record))
-                  (table (or kind-table citre-core--kind-name-table))
-                  (table (gethash lang table))
-                  (kind-full (gethash kind table)))
-            kind-full
-          kind)
-      (gethash 'kind dep-record))))
+  (if-let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info)))
+      (if-let* ((kind (gethash 'kind dep-record))
+                (lang (citre-core--get-lang-from-record dep-record))
+                (table (or (gethash 'kind-table tagsfile-info)
+                           citre-core--kind-name-table))
+                (table (gethash lang table))
+                (kind-full (gethash kind table)))
+          kind-full
+        kind)
+    (gethash 'kind dep-record)))
 
 ;;;;; Parse lines
 
@@ -630,9 +631,7 @@ increases the performance."
           (citre-core--string-match-all "\t" line ptr))
     ;; We make `tab-idx' include all tabs that's not in the pattern, and also
     ;; the length of `line'. This makes it easier to split the whole line.
-    (setq tab-idx (nconc (list 1st-tab 2nd-tab)
-                         tab-idx
-                         (list (length line))))
+    (setq tab-idx `(,1st-tab ,2nd-tab ,@tab-idx ,(length line)))
     (setq ptr 0)
     (while (setq end (pop tab-idx))
       (push (substring line ptr end) result)
@@ -675,8 +674,8 @@ we still have:
 
 - All lists specifying needed fields should not contain
   duplicated elements.
-- REQUIRE and EXCLUDE shouldn't intersect.
-- OPTIONAL and EXCLUDE shouldn't intersect.
+- REQUIRE, OPTIONAL and EXCLUDE shouldn't intersect with each
+  other.
 - OPTIONAL and EXCLUDE should not be used together."
   (let* ((elts (citre-core--split-tags-line line))
          (record (make-hash-table :test #'eq :size 20))
@@ -831,17 +830,17 @@ It tries these in turn:
 - Use the line field directly.
 - Use the pattern field if it contains the line number.
 - Return nil."
-  (let ((line (car (citre-core--split-pattern
-                    (citre-core-get-field 'pattern record)))))
-    (or (citre-core-get-field 'line record) line)))
+  (or (citre-core-get-field 'line record)
+      (car (citre-core--split-pattern
+            (citre-core-get-field 'pattern record)))))
 
 (defun citre-core--get-matched-str-from-record (record)
   "Get the string contained by the pattern field from RECORD.
 Returns nil if the pattern field doesn't exist or contain a
 search pattern."
-  (let ((pat (nth 1 (citre-core--split-pattern
-                     (citre-core-get-field 'pattern record)))))
-    (when pat (car (citre-core--parse-search-pattern pat)))))
+  (when-let ((pat (nth 1 (citre-core--split-pattern
+                          (citre-core-get-field 'pattern record)))))
+    (car (citre-core--parse-search-pattern pat))))
 
 (defun citre-core--get-lang-from-record (record)
   "Get language from RECORD.
@@ -853,16 +852,12 @@ It tries these in turn:
 - Return the file extension, or the filename if it doesn't have
   an extension.
 - Return nil."
-  (let ((lang (gethash 'language record))
-        (input (gethash 'input record)))
-    (cond
-     (lang lang)
-     (input (let ((extension (or (file-name-extension input)
-                                 (file-name-nondirectory input))))
-              (or (gethash (downcase extension)
-                           citre-core--lang-extension-table)
-                  extension)))
-     (t nil))))
+  (or (gethash 'language record)
+      (when-let ((input (gethash 'input record))
+                 (extension (or (file-name-extension input)
+                                (file-name-nondirectory input))))
+        (or (gethash (downcase extension) citre-core--lang-extension-table)
+            extension))))
 
 ;;;; APIs
 
@@ -884,23 +879,22 @@ MATCH could be:
 If CASE-FOLD is non-nil, do case-insensitive matching.  If INVERT
 is non-nil, keep lines that doesn't match.  If IGNORE-MISSING is
 non-nil, also keep lines where FIELD is missing."
-  (let ((filter nil)
-        (field (intern (concat "$" (symbol-name field)))))
-    (pcase match
-      ('regexp
-       (setq filter
-             `((string->regexp ,string :case-fold
-                               ,(pcase case-fold
-                                  ('nil 'false)
-                                  (_ 'true)))
-               ,field)))
-      (_ (setq filter `(,(intern (concat (symbol-name match) "?"))
-                        ,(pcase case-fold
-                           ('nil field)
-                           (_ `(downcase ,field)))
-                        ,(pcase case-fold
-                           ('nil string)
-                           (_ (downcase string)))))))
+  (let ((field (intern (concat "$" (symbol-name field))))
+        (filter
+         (pcase match
+           ('regexp
+            `((string->regexp ,string :case-fold
+                              ,(pcase case-fold
+                                 ('nil 'false)
+                                 (_ 'true)))
+              ,field))
+           (_ `(,(intern (concat (symbol-name match) "?"))
+                ,(pcase case-fold
+                   ('nil field)
+                   (_ `(downcase ,field)))
+                ,(pcase case-fold
+                   ('nil string)
+                   (_ (downcase string))))))))
     (when invert
       (setq filter `(not ,filter)))
     (when ignore-missing
@@ -917,13 +911,10 @@ TAGSFILE uses full-length (or single-letter) kinds, then `true'
 will be returned.  TAGSFILE is a canonical path."
   (let ((tags-file-one-letter-kind-p
          (gethash 'one-letter-kind-p
-                  (alist-get tagsfile citre-core--tags-file-info-alist
-                             nil nil #'equal)))
+                  (citre-core--tags-file-info tagsfile)))
         (arg-one-letter-kind-p (eq (length kind) 1)))
-    (if (or (and tags-file-one-letter-kind-p
-                 arg-one-letter-kind-p)
-            (and (not tags-file-one-letter-kind-p)
-                 (not arg-one-letter-kind-p)))
+    (if (eq tags-file-one-letter-kind-p
+            arg-one-letter-kind-p)
         `(eq? $kind ,kind)
       'true)))
 
@@ -1009,7 +1000,7 @@ tabs in a pseudo tag line."
         (mapcar (lambda (line)
                   (split-string line "\t" t))
                 output)
-      (error "Readtags: %s" output))))
+      (error "Readtags exits %s.\n%s" status output))))
 
 (cl-defun citre-core-get-records
     (tagsfile &optional name match case-fold
@@ -1169,8 +1160,7 @@ real-time based on RECORD.  The built-in ones are:
   line containing the tag.  This depends on the `pattern' field,
   and returns nil if it doesn't record the matched
   string (e.g. in tags file generated using the -n option)."
-  (if-let ((method
-            (gethash field citre-core-extra-ext-fields-table)))
+  (if-let ((method (gethash field citre-core-extra-ext-fields-table)))
       (funcall method record)
     (pcase field
       ((or 'line 'end) (when-let ((val (gethash field record)))
