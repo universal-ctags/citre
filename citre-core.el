@@ -171,6 +171,17 @@ backslash is \"\\\\\"."
       (setq start (+ idx 2)))
     (nreverse result)))
 
+;; TODO: Do we need to support Windows style path?
+(defun citre-core--file-name-extension (file)
+  "Return the extension of FILE.
+If it doesn't have an extension, return the file name without
+directory.
+
+This is faster than `file-name-extension'."
+  (or (string-match "\\.\\([^./]+\\)$" file)
+      (string-match "/\\([^/]+\\)$" file))
+  (match-string 1 file))
+
 ;;;; Internals: Additional information handling
 
 (defvar citre-core--tags-file-info-method-alist
@@ -858,8 +869,7 @@ It tries these in turn:
 - Return nil."
   (or (gethash 'language record)
       (when-let ((input (gethash 'input record))
-                 (extension (or (file-name-extension input)
-                                (file-name-nondirectory input))))
+                 (extension (citre-core--file-name-extension input)))
         (or (gethash (downcase extension) citre-core--lang-extension-table)
             extension))))
 
