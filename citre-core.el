@@ -604,7 +604,6 @@ increases the performance."
          (2nd-tab (or (string-match "\t" line (1+ 1st-tab))
                       (error (format "Invalid LINE: %s" line))))
          tab-idx
-         pat-end-regexp
          ;; This is basically a pointer when we parsing the pattern field.
          ;; Keep track of it, now it's at the beginning of the pattern.
          (ptr (1+ 2nd-tab))
@@ -618,25 +617,23 @@ increases the performance."
     ;; We jump after the first semicolon.
     (when (<= ?0 (aref line ptr) ?9)
       (setq ptr (1+ (string-match ";" line ptr))))
-    ;; We want a regexp that takes us to near the end of the pattern.  Since
-    ;; tabs can appear in the search pattern, "near the end" means if we search
-    ;; for a tab after it, we get the tab after the pattern field.
-    (setq pat-end-regexp
-          (pcase (aref line ptr)
-            (?\" nil)
-            ;; Search for an unescaped slash.  It must be the ending delimiter.
-            (?/ "[^\\\\]\\(\\\\\\\\\\)*/")
-            ;; The same.
-            (?? "[^\\\\]\\(\\\\\\\\\\)*\\?")
-            (_ (error "Invalid pattern field"))))
-    ;; We jump after the opening delimiter (or if there's no search pattern, we
-    ;; are at the end of the pattern field.)
-    (cl-incf ptr)
-    (when pat-end-regexp
-      (setq ptr (string-match pat-end-regexp line ptr))
-      (setq ptr (string-match "\t" line ptr)))
-    ;; Now we are at the end of the pattern field.  Cut the rest of the line by
-    ;; tabs.
+    (pcase (aref line ptr)
+      (?\" nil)
+      (c (let ((;; We want a regexp that takes us to near the end of the
+                ;; pattern.  Since tabs can appear in the search pattern, "near
+                ;; the end" means if we search for a tab after it, we get the
+                ;; tab after the pattern field.
+                pat-end-regexp
+                (pcase c
+                  ;; Search for an unescaped slash.  It must be the ending
+                  ;; delimiter.
+                  (?/ "[^\\\\]\\(\\\\\\\\\\)*/")
+                  ;; The same.
+                  (?? "[^\\\\]\\(\\\\\\\\\\)*\\?")
+                  (_ (error "Invalid pattern field")))))
+           ;; Go after the opening delimiter.
+           (cl-incf ptr)
+           (setq ptr (string-match pat-end-regexp line ptr)))))
     (setq tab-idx
           (citre-core--string-match-all "\t" line ptr))
     ;; We make `tab-idx' include all tabs that's not in the pattern, and also
