@@ -510,53 +510,52 @@ Its keys are extension fields offered by Citre, and values are
 functions that return the value of the extension field.  The
 arguments of the functions are:
 
-- DEP-RECORD: A hash table containing the fields that the
-  extension field depends on.
+- RECORD: A hash table containing the fields that the extension
+  field depends on.
 - TAGSFILE-INFO: The additional info of the tags file.  See
   `citre-core--tags-file-info' to know how to make use of it.
 
 If the extension field can't be calculated, the functions should
 signal an error, rather than return nil.
 
-The needed DEP-RECORD and TAGSFILE-INFO are specified by
+The needed RECORD and TAGSFILE-INFO are specified by
 `citre-core--ext-fields-dependency-alist'.
-`citre-core--get-ext-field' takes care to pass the needed
+`citre-core--write-ext-field' takes care to pass the needed
 arguments to the functions.
 
-If the function only needs DEP-RECORD, consider make it an extra
+If the function only needs RECORD, consider make it an extra
 extension field (see `citre-core-extra-ext-fields-table').")
 
-(defun citre-core--get-ext-field
-    (dep-record field tagsfile-info)
-  "Calculate the value of extension field FIELD.
-DEP-RECORD is a hash table containing the fields that FIELD
-depends on.  TAGSFILE-INFO is the additional info that FIELD
-depends on."
+(defun citre-core--write-ext-field
+    (record field tagsfile-info)
+  "Write the value of extension field FIELD to RECORD.
+RECORD should contain the fields that FIELD depends on.
+TAGSFILE-INFO is the additional info that FIELD depends on."
   (if-let ((method (gethash field citre-core--ext-fields-method-table)))
-      (funcall method dep-record tagsfile-info)
+      (puthash field (funcall method record tagsfile-info) record)
     (error "Invalid FIELD")))
 
 ;;;;;; ext-abspath
 
-(defun citre-core--get-ext-abspath (dep-record tagsfile-info)
+(defun citre-core--get-ext-abspath (record tagsfile-info)
   "Return the absolute path of the input file.
-This needs the `input' field to be presented in DEP-RECORD, and
-if it's value is a relative path, `path' info in TAGSFILE-INFO is
+This needs the `input' field to be presented in RECORD, and if
+it's value is a relative path, `path' info in TAGSFILE-INFO is
 used.  If the `path' info doesn't contain the current working
 directory when generating the tags file, an error will be
 signaled."
-  (let ((input (or (gethash 'input dep-record)
-                   (error "\"input\" field not found in DEP-RECORD"))))
+  (let ((input (or (gethash 'input record)
+                   (error "\"input\" field not found in RECORD"))))
     (if (file-name-absolute-p input)
         input
       (expand-file-name input (gethash 'dir tagsfile-info)))))
 
 ;;;;;; ext-kind-full
 
-(defun citre-core--get-ext-kind-full (dep-record tagsfile-info)
+(defun citre-core--get-ext-kind-full (record tagsfile-info)
   "Return full-length kind name.
-This needs the `kind' field to be presented in DEP-RECORD.  If
-the tags file uses full-length kind name (told by TAGSFILE-INFO),
+This needs the `kind' field to be presented in RECORD.  If the
+tags file uses full-length kind name (told by TAGSFILE-INFO),
 it's returned directly.  If not, then:
 
 - The language is guessed first, see `citre-core--get-ext-lang'.
@@ -566,15 +565,15 @@ it's returned directly.  If not, then:
 
 If this fails, the single-letter kind is returned directly."
   (if-let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info)))
-      (if-let* ((kind (gethash 'kind dep-record))
-                (lang (citre-core--get-lang-from-record dep-record))
+      (if-let* ((kind (gethash 'kind record))
+                (lang (citre-core--get-lang-from-record record))
                 (table (or (gethash 'kind-table tagsfile-info)
                            citre-core--kind-name-table))
                 (table (gethash lang table))
                 (kind-full (gethash kind table)))
           kind-full
         kind)
-    (gethash 'kind dep-record)))
+    (gethash 'kind record)))
 
 ;;;;; Parse lines
 
@@ -660,7 +659,8 @@ fields:
   any field in it, if it can be get, it will be recorded; if
   can't, it's ignored, and no error will occur.
 
-The normal field they depend on should appear in EXT-DEP.
+The normal fields they depend on should appear in either REQUIRE,
+OPTIONAL or EXT-DEP to make sure they are captured.
 
 TAGSFILE-INFO is needed to offer additional information for these
 extension fields.  It is the additional info of the tags file
@@ -676,10 +676,10 @@ we still have:
   duplicated elements.
 - REQUIRE, OPTIONAL and EXCLUDE shouldn't intersect with each
   other.
+- EXT-DEP shouldn't intersect with REQUIRE or OPTIONAL.
 - OPTIONAL and EXCLUDE should not be used together."
   (let* ((elts (citre-core--split-tags-line line))
          (record (make-hash-table :test #'eq :size 20))
-         (dep-record (make-hash-table :test #'eq :size 10))
          (parse-all-fields (or exclude parse-all-fields))
          (require-num (length require))
          (require-counter 0)
@@ -693,20 +693,20 @@ we still have:
           (dolist (result results)
             (let* ((field (car result))
                    (value (cdr result))
-                   (in-require (memq field require))
-                   (in-optional (memq field optional))
-                   (in-exclude (memq field exclude))
-                   (in-ext-dep (memq field ext-dep)))
-              (when (or in-require in-optional
-                        (and parse-all-fields (null in-exclude)))
-                (puthash field value record)
-                (when in-require
-                  (cl-incf require-counter))
-                (when in-optional
-                  (cl-incf optional-counter)))
-              (when in-ext-dep
-                (puthash field value dep-record)
-                (cl-incf ext-dep-counter))
+                   (write (lambda () (puthash field value record))))
+              (cond
+               ((memq field require)
+                (funcall write)
+                (cl-incf require-counter))
+               ((memq field optional)
+                (funcall write)
+                (cl-incf optional-counter))
+               (t (or
+                   (when (memq field ext-dep)
+                     (funcall write)
+                     (cl-incf ext-dep-counter))
+                   (when (and parse-all-fields (null (memq field exclude)))
+                     (funcall write)))))
               (when (and (null parse-all-fields)
                          (eq require-counter require-num)
                          (eq optional-counter optional-num)
@@ -720,14 +720,16 @@ we still have:
                                          (hash-table-keys record)))
               ", ")))
     (dolist (field require-ext)
-      (puthash field
-               (citre-core--get-ext-field dep-record field tagsfile-info)
-               record))
+      (citre-core--write-ext-field record field tagsfile-info))
     (dolist (field optional-ext)
-      (when-let ((value (ignore-errors
-                          (citre-core--get-ext-field
-                           dep-record field tagsfile-info))))
-        (puthash field value record)))
+      (ignore-errors
+        (citre-core--write-ext-field record field tagsfile-info)))
+    (if parse-all-fields
+        ;; Excluded field may be written because it's in `ext-dep'.
+        (dolist (field exclude)
+          (remhash field record))
+      (dolist (field ext-dep)
+        (remhash field record)))
     record))
 
 ;;;;; Get records from tags files
@@ -773,12 +775,14 @@ LINES, see `citre-core-get-records'."
                           (append
                            (mapcar find-field-depends require-ext)
                            (mapcar find-field-depends optional-ext)))))
+         (ext-dep (cl-set-difference ext-dep require))
+         (ext-dep (cl-set-difference ext-dep optional))
          (require (cl-delete-duplicates
                    (cl-set-difference require ext-fields)))
          (optional (cl-delete-duplicates
                     (cl-set-difference optional ext-fields)))
          (exclude (cl-delete-duplicates exclude))
-         (info (when ext-dep
+         (info (when (or require-ext optional-ext)
                  (citre-core--tags-file-info tagsfile))))
     (when (cl-intersection exclude ext-fields)
       (error "EXCLUDE shouldn't contain extension fields"))
