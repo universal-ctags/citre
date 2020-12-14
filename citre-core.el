@@ -471,34 +471,6 @@ should be a field value in a tags file."
         (apply #'concat (nreverse parts)))
     value))
 
-(defun citre-core--parse-field (field nth)
-  "Parse FIELD from a line in readtags output.
-FIELD is a substring from the line, which can be get using
-`citre-core--split-tags-line'.  NTH is the position of the field
-in the line, counts from zero.
-
-The return value is a list of cons pairs, the cars are field
-names, cdrs are the values."
-  (pcase nth
-    (0 `((name . ,(citre-core--read-field-value field))))
-    (1 `((input . ,(citre-core--read-field-value field))))
-    (2 `((pattern . ,field)))
-    (_ (let* ((parts (citre-core--split-at-1st-colon field))
-              (name (car parts))
-              (name (or (when name (intern name))
-                        'kind))
-              (value (cdr parts)))
-         (pcase name
-           ('scope
-            (let ((value (citre-core--split-at-1st-colon value)))
-              `((scope-kind . ,(car value))
-                (scope-name . ,(citre-core--read-field-value (cdr value))))))
-           ((or 'class 'struct)
-            `((scope-kind . ,(symbol-name name))
-              (scope-name . ,(citre-core--read-field-value value))))
-           (_
-            `((,name . ,(citre-core--read-field-value value)))))))))
-
 ;;;;; Extension fields
 
 (defvar citre-core--ext-fields-dependency-alist
@@ -588,62 +560,98 @@ If this fails, the single-letter kind is returned directly."
 
 ;;;;; Parse lines
 
-(defun citre-core--split-tags-line (line)
-  "Split LINE from a tags file into fields.
-DELIMITER is a regexp to match the closing delimiter in the
-pattern field, see `citre-core--delimiter-regexp-alist' for valid
-ones.  When nil, it's inferred based on LINE, but specifying it
-increases the performance."
-  (let* (;; There are at least 3 fields in a normal tag, so we know something
-         ;; is wrong if there are less than 2 tabs.  Sometimes readtags exits
-         ;; normally when an error actually occurs.  By doing this we can
-         ;; capture the error messages in its output (as long as there aren't
-         ;; many tabs).
-         (1st-tab (or (string-match "\t" line)
-                      (error (format "Invalid LINE: %s" line))))
-         (2nd-tab (or (string-match "\t" line (1+ 1st-tab))
-                      (error (format "Invalid LINE: %s" line))))
-         tab-idx
-         ;; This is basically a pointer when we parsing the pattern field.
-         ;; Keep track of it, now it's at the beginning of the pattern.
-         (ptr (1+ 2nd-tab))
-         end result)
-    ;; If pattern begins with a number, it will be like
-    ;;
-    ;; - 20;"
-    ;; - 20;/pattern/;"
-    ;; - 20;?pattern?;"
-    ;;
+(defun citre-core--forward-pattern (line pos)
+  "Jump over the pattern field.
+LINE is a tag line, POS is the start position of the pattern
+field in it.  This returns its end position."
+  ;; If pattern begins with a number, it will be like one of
+  ;;
+  ;; - 20;"
+  ;; - 20;/pattern/;"
+  ;; - 20;?pattern?;"
+  (when (<= ?0 (aref line pos) ?9)
     ;; We jump after the first semicolon.
-    (when (<= ?0 (aref line ptr) ?9)
-      (setq ptr (1+ (string-match ";" line ptr))))
-    (pcase (aref line ptr)
-      (?\" nil)
-      (c (let ((;; We want a regexp that takes us to near the end of the
-                ;; pattern.  Since tabs can appear in the search pattern, "near
-                ;; the end" means if we search for a tab after it, we get the
-                ;; tab after the pattern field.
-                pat-end-regexp
-                (pcase c
-                  ;; Search for an unescaped slash.  It must be the ending
-                  ;; delimiter.
-                  (?/ "[^\\\\]\\(\\\\\\\\\\)*/")
-                  ;; The same.
-                  (?? "[^\\\\]\\(\\\\\\\\\\)*\\?")
-                  (_ (error "Invalid pattern field")))))
-           ;; Go after the opening delimiter.
-           (cl-incf ptr)
-           (setq ptr (string-match pat-end-regexp line ptr)))))
-    (setq tab-idx
-          (citre-core--string-match-all "\t" line ptr))
-    ;; We make `tab-idx' include all tabs that's not in the pattern, and also
-    ;; the length of `line'. This makes it easier to split the whole line.
-    (setq tab-idx `(,1st-tab ,2nd-tab ,@tab-idx ,(length line)))
-    (setq ptr 0)
-    (while (setq end (pop tab-idx))
-      (push (substring line ptr end) result)
-      (setq ptr (1+ end)))
-    (nreverse result)))
+    (setq pos (1+ (string-match ";" line pos))))
+  (pcase (aref line pos)
+    (?\" (1+ pos))
+    (c (let ((;; We want a regexp that takes us to near the end of the pattern,
+              ;; which means the end of the match should be the closing
+              ;; delimiter, so there's still a ;" between it and the end of the
+              ;; pattern.
+              pat-end-regexp
+              (pcase c
+                ;; Search for an unescaped slash.  It must be the ending
+                ;; delimiter.
+                (?/ "[^\\\\]\\(\\\\\\\\\\)*/")
+                ;; The same.
+                (?? "[^\\\\]\\(\\\\\\\\\\)*\\?")
+                (_ (error "Invalid pattern field")))))
+         (setq pos
+               ;; Search from after the opening delimiter.
+               (progn (string-match pat-end-regexp line (1+ pos))
+                      (match-end 0)))
+         (+ 2 pos)))))
+
+(defun citre-core--lexer-forward-field-name (line length lexer)
+  "Move the lexer forward the following field name.
+LINE is a tag line.  LENGTH is its length.  LEXER is a vector
+like [POS N], where POS is the beginning position of a field, and
+it's the Nth field in the line (N counts from 0).
+
+This sets POS to the beginning of the field value, and returns
+the field name as a symbol.  When there's no more field to parse,
+this returns nil, and the caller should stop parsing."
+  (let ((pos (aref lexer 0))
+        (n (aref lexer 1)))
+    (pcase n
+      (0 'name)
+      (1 'input)
+      (2 'pattern)
+      (_ (when (< pos length)
+           (let ((sep (string-match ":" line pos)))
+             (cond
+              ;; The kind field may not begin with "kind:".  It's always the
+              ;; 4th field (N=3), but the 4th field is not always the kind
+              ;; field.
+              ((and (eq n 3)
+                    (or (null sep)
+                        (when-let ((tab (string-match "\t" line pos)))
+                          (> sep tab))))
+               'kind)
+              (sep
+               (let ((field-name (intern (substring line pos sep))))
+                 (pcase field-name
+                   ((or 'class 'struct)
+                    'scope)
+                   (_
+                    (setf (aref lexer 0) (1+ sep))
+                    field-name))))
+              (t (error "Invalid LINE")))))))))
+
+(defun citre-core--lexer-forward-field-value
+    (line length lexer &optional parse-value)
+  "Move the lexer forward the following field value.
+LINE is a tag line.  LENGTH is its length.  LEXER is a vector
+like [POS N], where POS is the beginning position of a field
+value, and it's the Nth field in the line (N counts from 0).
+
+This sets POS to the beginning of the next field, and add 1 to N.
+If PARSE-VALUE is non-nil, returns the field value."
+  (let ((pos (aref lexer 0))
+        (nfield (aref lexer 1))
+        tab value)
+    (pcase nfield
+      (2 (setq tab (citre-core--forward-pattern line pos))
+         (when parse-value
+           (setq value (substring line pos tab))))
+      (_ (setq tab (or (string-match "\t" line pos)
+                       length))
+         (when parse-value
+           (setq value
+                 (citre-core--read-field-value (substring line pos tab))))))
+    (setf (aref lexer 0) (1+ tab))
+    (setf (aref lexer 1) (1+ nfield))
+    value))
 
 (defun citre-core--parse-line (line &optional tagsfile-info
                                     require optional exclude
@@ -686,40 +694,45 @@ we still have:
   other.
 - EXT-DEP shouldn't intersect with REQUIRE or OPTIONAL.
 - OPTIONAL and EXCLUDE should not be used together."
-  (let* ((elts (citre-core--split-tags-line line))
-         (record (make-hash-table :test #'eq :size 20))
+  (let* ((record (make-hash-table :test #'eq :size 20))
          (parse-all-fields (or exclude parse-all-fields))
          (require-num (length require))
          (require-counter 0)
          (optional-num (length optional))
          (optional-counter 0)
          (ext-dep-num (length ext-dep))
-         (ext-dep-counter 0))
+         (ext-dep-counter 0)
+         (lexer (vector 0 0))
+         (len (length line))
+         field
+         (write (lambda (field)
+                  (puthash field
+                           (citre-core--lexer-forward-field-value
+                            line len lexer t)
+                           record))))
     (cl-block nil
-      (dotimes (i (length elts))
-        (let ((results (citre-core--parse-field (nth i elts) i)))
-          (dolist (result results)
-            (let* ((field (car result))
-                   (value (cdr result))
-                   (write (lambda () (puthash field value record))))
-              (cond
-               ((memq field require)
-                (funcall write)
-                (cl-incf require-counter))
-               ((memq field optional)
-                (funcall write)
-                (cl-incf optional-counter))
-               (t (or
-                   (when (memq field ext-dep)
-                     (funcall write)
-                     (cl-incf ext-dep-counter))
-                   (when (and parse-all-fields (null (memq field exclude)))
-                     (funcall write)))))
-              (when (and (null parse-all-fields)
-                         (eq require-counter require-num)
-                         (eq optional-counter optional-num)
-                         (eq ext-dep-counter ext-dep-num))
-                (cl-return)))))))
+      (while (setq field (citre-core--lexer-forward-field-name line len lexer))
+        (cond
+         ((memq field require)
+          (funcall write field)
+          (cl-incf require-counter))
+         ((memq field optional)
+          (funcall write field)
+          (cl-incf optional-counter))
+         (t (or
+             (when (memq field ext-dep)
+               (funcall write field)
+               (cl-incf ext-dep-counter)
+               t)
+             (when (and parse-all-fields (null (memq field exclude)))
+               (funcall write field)
+               t)
+             (citre-core--lexer-forward-field-value line len lexer nil))))
+        (when (and (null parse-all-fields)
+                   (eq require-counter require-num)
+                   (eq optional-counter optional-num)
+                   (eq ext-dep-counter ext-dep-num))
+          (cl-return))))
     (when (< require-counter require-num)
       (error "Fields not found in tags file: %s"
              (string-join
