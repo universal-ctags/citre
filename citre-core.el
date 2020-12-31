@@ -132,26 +132,6 @@ If STRING doesn't contain a colon, it will be (nil . STRING)."
             (substring string (1+ sep)))
     (cons nil string)))
 
-;; NOTE: My test shows even for matching a char in string, using regexp is
-;; faster than take the string as a list, and search the char in it (e.g. using
-;; `cl-position' or write a loop and compare by `aref').
-(defun citre-core--string-match-all (regexp string &optional start)
-  "Find all occurences of REGEXP in STRING.
-The return value is a list of their indexes, or nil.  If START is
-non-nil, start search at that index in STRING.
-
-This function internally calls `string-match'."
-  (let ((result nil)
-        (start (or start 0))
-        (idx nil))
-    (while (setq idx (string-match regexp string start))
-      (push idx result)
-      ;; Ideally we should add the lenght of matched part to `idx', but this is
-      ;; a performance-sensitive function, and for now we only use it to find
-      ;; all tabs in a line, so we do this for now.
-      (setq start (1+ idx)))
-    (nreverse result)))
-
 (defun citre-core--string-match-all-escaping-backslash
     (string &optional start)
   "Find all occurence of escaping backslashes in STRING.
@@ -183,27 +163,6 @@ This is faster than `file-name-extension'."
   (match-string 1 file))
 
 ;;;; Internals: Additional information handling
-
-(defvar citre-core--tags-file-info-method-alist
-  '((path . citre-core--get-path-info)
-    (kind . citre-core--get-kind-info))
-  "Alist of additional info fields and the functions to get them.
-See `citre-core--tags-file-info-alist' to know about additional
-info.
-
-NOTICE: It's allowed for these functions to call
-`citre-core-get-records', but notice that if asking it for
-certain extension fields, it may in turn calls these functions
-again, causing a max eval depth error.")
-
-(defun citre-core--detect-tags-file-info (tagsfile field)
-  "Detect the value of additional info FIELD of TAGSFILE.
-TAGSFILE is the path to the tags file.  For valid FIELDs, see
-`citre-core--tags-file-info-alist'."
-  (if-let ((method
-            (alist-get field citre-core--tags-file-info-method-alist)))
-      (funcall method tagsfile)
-    (error "Invalid FIELD")))
 
 (defvar citre-core--tags-file-info-alist nil
   "Alist for storing additional info about tags files.
@@ -439,7 +398,7 @@ CASE-FOLD, FILTER, SORTER and LINES."
         (error "Readtags exits %s.  Head exits %s.\n%s"
                readtags-code pipe-code (string-join output "\n"))))))
 
-;;;;; Parse fields
+;;;;; Parse lines
 
 (defun citre-core--read-field-value (value)
   "Translate escaped sequences in VALUE.
@@ -470,95 +429,6 @@ should be a field value in a tags file."
         (push (substring value last) parts)
         (apply #'concat (nreverse parts)))
     value))
-
-;;;;; Extension fields
-
-(defvar citre-core--ext-fields-dependency-alist
-  '((ext-abspath   . (input))
-    (ext-kind-full . (kind language input)))
-  "Alist of extension fields and their dependencies.
-Its keys are extension fields offered by Citre, values are lists
-of (normal) fields the the extension field depends on.")
-
-(defvar citre-core--ext-fields-method-table
-  #s(hash-table
-     test eq
-     data
-     (ext-abspath
-      citre-core--get-ext-abspath
-      ext-kind-full
-      citre-core--get-ext-kind-full))
-  "Hash table of extension fields and the methods to get them.
-Its keys are extension fields offered by Citre, and values are
-functions that return the value of the extension field.  The
-arguments of the functions are:
-
-- RECORD: A hash table containing the fields that the extension
-  field depends on.
-- TAGSFILE-INFO: The additional info of the tags file.  See
-  `citre-core--tags-file-info' to know how to make use of it.
-
-If the extension field can't be calculated, the functions should
-signal an error, rather than return nil.
-
-The needed RECORD and TAGSFILE-INFO are specified by
-`citre-core--ext-fields-dependency-alist'.
-`citre-core--write-ext-field' takes care to pass the needed
-arguments to the functions.
-
-If the function only needs RECORD, consider make it an extra
-extension field (see `citre-core-extra-ext-fields-table').")
-
-(defun citre-core--write-ext-field
-    (record field tagsfile-info)
-  "Write the value of extension field FIELD to RECORD.
-RECORD should contain the fields that FIELD depends on.
-TAGSFILE-INFO is the additional info that FIELD depends on."
-  (if-let ((method (gethash field citre-core--ext-fields-method-table)))
-      (puthash field (funcall method record tagsfile-info) record)
-    (error "Invalid FIELD")))
-
-;;;;;; ext-abspath
-
-(defun citre-core--get-ext-abspath (record tagsfile-info)
-  "Return the absolute path of the input file.
-This needs the `input' field to be presented in RECORD, and if
-it's value is a relative path, `path' info in TAGSFILE-INFO is
-used.  If the `path' info doesn't contain the current working
-directory when generating the tags file, an error will be
-signaled."
-  (let ((input (or (gethash 'input record)
-                   (error "\"input\" field not found in RECORD"))))
-    (if (file-name-absolute-p input)
-        input
-      (expand-file-name input (gethash 'dir tagsfile-info)))))
-
-;;;;;; ext-kind-full
-
-(defun citre-core--get-ext-kind-full (record tagsfile-info)
-  "Return full-length kind name.
-This needs the `kind' field to be presented in RECORD.  If the
-tags file uses full-length kind name (told by TAGSFILE-INFO),
-it's returned directly.  If not, then:
-
-- The language is guessed first, see `citre-core--get-ext-lang'.
-- The single-letter kind is converted to full-length, based on
-  the TAG_KIND_DESCRIPTION pseudo tags, or
-  `citre-core--kind-name-table' if it's not presented.
-
-If this fails, the single-letter kind is returned directly."
-  (if-let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info)))
-      (if-let* ((kind (gethash 'kind record))
-                (lang (citre-core--get-lang-from-record record))
-                (table (or (gethash 'kind-table tagsfile-info)
-                           citre-core--kind-name-table))
-                (table (gethash lang table))
-                (kind-full (gethash kind table)))
-          kind-full
-        kind)
-    (gethash 'kind record)))
-
-;;;;; Parse lines
 
 (defun citre-core--forward-pattern (line pos)
   "Jump over the pattern field.
@@ -752,6 +622,93 @@ we still have:
       (dolist (field ext-dep)
         (remhash field record)))
     record))
+
+;;;;; Extension fields
+
+(defvar citre-core--ext-fields-dependency-alist
+  '((ext-abspath   . (input))
+    (ext-kind-full . (kind language input)))
+  "Alist of extension fields and their dependencies.
+Its keys are extension fields offered by Citre, values are lists
+of (normal) fields the the extension field depends on.")
+
+(defvar citre-core--ext-fields-method-table
+  #s(hash-table
+     test eq
+     data
+     (ext-abspath
+      citre-core--get-ext-abspath
+      ext-kind-full
+      citre-core--get-ext-kind-full))
+  "Hash table of extension fields and the methods to get them.
+Its keys are extension fields offered by Citre, and values are
+functions that return the value of the extension field.  The
+arguments of the functions are:
+
+- RECORD: A hash table containing the fields that the extension
+  field depends on.
+- TAGSFILE-INFO: The additional info of the tags file.  See
+  `citre-core--tags-file-info' to know how to make use of it.
+
+If the extension field can't be calculated, the functions should
+signal an error, rather than return nil.
+
+The needed RECORD and TAGSFILE-INFO are specified by
+`citre-core--ext-fields-dependency-alist'.
+`citre-core--write-ext-field' takes care to pass the needed
+arguments to the functions.
+
+If the function only needs RECORD, consider make it an extra
+extension field (see `citre-core-extra-ext-fields-table').")
+
+(defun citre-core--write-ext-field
+    (record field tagsfile-info)
+  "Write the value of extension field FIELD to RECORD.
+RECORD should contain the fields that FIELD depends on.
+TAGSFILE-INFO is the additional info that FIELD depends on."
+  (if-let ((method (gethash field citre-core--ext-fields-method-table)))
+      (puthash field (funcall method record tagsfile-info) record)
+    (error "Invalid FIELD")))
+
+;;;;;; ext-abspath
+
+(defun citre-core--get-ext-abspath (record tagsfile-info)
+  "Return the absolute path of the input file.
+This needs the `input' field to be presented in RECORD, and if
+it's value is a relative path, `path' info in TAGSFILE-INFO is
+used.  If the `path' info doesn't contain the current working
+directory when generating the tags file, an error will be
+signaled."
+  (let ((input (or (gethash 'input record)
+                   (error "\"input\" field not found in RECORD"))))
+    (if (file-name-absolute-p input)
+        input
+      (expand-file-name input (gethash 'dir tagsfile-info)))))
+
+;;;;;; ext-kind-full
+
+(defun citre-core--get-ext-kind-full (record tagsfile-info)
+  "Return full-length kind name.
+This needs the `kind' field to be presented in RECORD.  If the
+tags file uses full-length kind name (told by TAGSFILE-INFO),
+it's returned directly.  If not, then:
+
+- The language is guessed first, see `citre-core--get-ext-lang'.
+- The single-letter kind is converted to full-length, based on
+  the TAG_KIND_DESCRIPTION pseudo tags, or
+  `citre-core--kind-name-table' if it's not presented.
+
+If this fails, the single-letter kind is returned directly."
+  (if-let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info)))
+      (if-let* ((kind (gethash 'kind record))
+                (lang (citre-core--get-lang-from-record record))
+                (table (or (gethash 'kind-table tagsfile-info)
+                           citre-core--kind-name-table))
+                (table (gethash lang table))
+                (kind-full (gethash kind table)))
+          kind-full
+        kind)
+    (gethash 'kind record)))
 
 ;;;;; Get records from tags files
 
