@@ -123,14 +123,12 @@ commands."
            args)
    " "))
 
-(defun citre-core--split-at-1st-colon (string)
-  "Split STRING at the first colon in it.
-A cons cell of the part before and after the colon is returned.
-If STRING doesn't contain a colon, it will be (nil . STRING)."
+(defun citre-core--string-after-1st-colon (string)
+  "Return the part in STRING after the first colon in it.
+If STRING doesn't contain a colon, it will be returned directly."
   (if-let ((sep (string-match ":" string)))
-      (cons (substring string 0 sep)
-            (substring string (1+ sep)))
-    (cons nil string)))
+      (substring string (1+ sep))
+    string))
 
 (defun citre-core--string-match-all-escaping-backslash
     (string &optional start)
@@ -1111,7 +1109,7 @@ Other keyword arguments are:
 ;; difference if we use nil or empty string to represent it, so it's good to
 ;; directly use empty string in the records, or make `citre-get-field' not
 ;; return nil.
-(defun citre-core-get-field (field record)
+(defun citre-core-get-field (field record &optional after-colon)
   "Get FIELD from RECORD.
 RECORD is an output from `citre--core-parse-line'.  FIELD can be
 all valid normal and extension fields, see
@@ -1119,6 +1117,20 @@ all valid normal and extension fields, see
 
 When FIELD is `line' or `end', an integer is returned, instead of
 a string.
+
+When AFTER-COLON is non-nil, the field is splitted at the first
+colon, and the part after it is returned.  This is for fields
+like `scope' or `typeref'.  In a tag line they may look like
+this:
+
+    typeref:struct:structName
+
+when getting the `typeref' field from this record, a non-nil
+AFTER-COLON gives \"structName\", while nil gives
+\"struct:structName\".
+
+If you use this option on a field that doesn't contain a colon,
+the whole field is returned.
 
 `citre-core-extra-ext-fields-table' defines some extra fields
 that can be used as FIELD.  Their values are calculated in
@@ -1141,12 +1153,15 @@ real-time based on RECORD.  The built-in ones are:
   line containing the tag.  This depends on the `pattern' field,
   and returns nil if it doesn't record the matched
   string (e.g. in tags file generated using the -n option)."
-  (if-let ((method (gethash field citre-core-extra-ext-fields-table)))
-      (funcall method record)
-    (pcase field
-      ((or 'line 'end) (when-let ((val (gethash field record)))
-                         (string-to-number val)))
-      (_ (gethash field record)))))
+  (let ((maybe-split (if after-colon
+                         #'citre-core--string-after-1st-colon
+                       #'identity)))
+    (if-let ((method (gethash field citre-core-extra-ext-fields-table)))
+        (funcall maybe-split (funcall method record))
+      (pcase field
+        ((or 'line 'end) (when-let ((val (gethash field record)))
+                           (string-to-number val)))
+        (_ (funcall maybe-split (gethash field record)))))))
 
 ;;;;; Helper for finding the location of a tag
 

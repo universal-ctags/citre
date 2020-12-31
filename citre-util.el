@@ -306,8 +306,7 @@ tools."
                   (concat ": " (string-trim str))
                 ""))
          (kind (citre-core-get-field 'ext-kind-full record))
-         (type (citre-core-get-field 'typeref record))
-         (type (when type (substring type (1+ (string-match ":" type)))))
+         (type (citre-core-get-field 'typeref record 'after-colon))
          (annotation (propertize (concat
                                   (or kind "")
                                   (if (and kind type) "/" "")
