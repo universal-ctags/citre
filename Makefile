@@ -11,7 +11,7 @@ test:
 	$(SHELL) scripts/test.sh
 
 .PHONY: compile
-compile:
+compile: clean
 	$(SHELL) scripts/compile.sh
 
 .PHONY: style
@@ -20,4 +20,4 @@ style:
 
 .PHONY: clean
 clean:
-	rm ./*.elc
+	rm -f ./*.elc
