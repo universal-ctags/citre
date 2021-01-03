@@ -160,6 +160,22 @@ This is faster than `file-name-extension'."
       (string-match "/\\([^/]+\\)$" file))
   (match-string 1 file))
 
+(defun citre-core--string-non-empty-p (string)
+  "Test if string STRING is an non-empty string."
+  ;; We need to test it first since `string-empty-p' returns nil on nil.
+  (and (stringp string)
+       (not (string-empty-p string))))
+
+(defmacro citre-core--error-on-arg (arg test)
+  "Test ARG using TEST, and throw an error if it fails/throws an error.
+When calling the APIs, some arguments are calculated on the fly,
+and they may have problems like being empty, or not having the
+right type for being nil.  This should be used to test them."
+  `(unless (ignore-errors (funcall ,test ,arg))
+     (error "%s fails on %s.  It is a %s: %S"
+            (quote ,test) (upcase (symbol-name (quote ,arg)))
+            (type-of ,arg) ,arg)))
+
 ;;;; Internals: Additional information handling
 
 (defvar citre-core--tags-file-info-alist nil
@@ -858,6 +874,7 @@ MATCH could be:
 If CASE-FOLD is non-nil, do case-insensitive matching.  If INVERT
 is non-nil, keep lines that doesn't match.  If IGNORE-MISSING is
 non-nil, also keep lines where FIELD is missing."
+  (citre-core--error-on-arg string #'stringp)
   (let ((field (intern (concat "$" (symbol-name field))))
         (filter
          (pcase match
@@ -888,6 +905,10 @@ non-nil, also keep lines where FIELD is missing."
 If KIND is single-letter (or full-length), but the tags file
 TAGSFILE uses full-length (or single-letter) kinds, then `true'
 will be returned.  TAGSFILE is a canonical path."
+  (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
+  (unless (stringp tagsfile)
+    (error "TAGSFILE needs to be a string, but is a %s: %S"
+           (type-of tagsfile) tagsfile))
   (let ((tags-file-one-letter-kind-p
          (gethash 'one-letter-kind-p
                   (citre-core--tags-file-info tagsfile)))
@@ -963,6 +984,8 @@ NAME should not start with \"!_\".  Run
 to know the valid NAMEs.  The return value is a list, and each
 element of it is another list consists of the fields separated by
 tabs in a pseudo tag line."
+  (citre-core--error-on-arg name #'citre-core--string-non-empty-p)
+  (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
   (let* ((program (or citre-readtags-program "readtags"))
          (name (concat "!_" name))
          (op (if prefix 'prefix? 'eq?))
@@ -1086,6 +1109,9 @@ field, it must appear in REQUIRE or OPTIONAL.
 Other keyword arguments are:
 
 - LINES: When non-nil, get the first LINES of records at most."
+  (let ((nil-or-string-p (lambda (x) (or (null x) (stringp x)))))
+    (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
+    (citre-core--error-on-arg name nil-or-string-p))
   (let* ((name- (when (memq match '(nil exact prefix)) name))
          (match- (when (memq match '(nil exact prefix)) match))
          (filter- (when (and name (memq match '(suffix substr regexp)))
