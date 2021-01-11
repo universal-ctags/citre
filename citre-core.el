@@ -1181,13 +1181,16 @@ real-time based on RECORD.  The built-in ones are:
   string (e.g. in tags file generated using the -n option)."
   (let ((maybe-split (if after-colon
                          #'citre-core--string-after-1st-colon
-                       #'identity)))
+                       #'identity))
+        value)
     (if-let ((method (gethash field citre-core-extra-ext-fields-table)))
-        (funcall maybe-split (funcall method record))
-      (pcase field
-        ((or 'line 'end) (when-let ((val (gethash field record)))
-                           (string-to-number val)))
-        (_ (funcall maybe-split (gethash field record)))))))
+        (setq value (funcall method record))
+      (setq value (gethash field record))
+      (when value
+        (pcase field
+          ((or 'line 'end) (when-let ((val (gethash field record)))
+                             (string-to-number val)))
+          (_ (funcall maybe-split (gethash field record))))))))
 
 ;;;;; Helper for finding the location of a tag
 
