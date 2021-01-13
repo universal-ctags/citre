@@ -352,6 +352,8 @@ at the end."
   ;; Depending on the wrapping behavior, in some terminals, a line with exact
   ;; (window-body-width) characters can be wrapped. So we minus it by one.
   (let ((limit (1- (window-body-width))))
+    ;; TODO: When the line contains tabs, sometimes it's not trimmed properly,
+    ;; even if we replace this `length' by `string-width'.
     (if (> (length str) limit)
         (concat (substring str 0 (- limit 3))
                 "...")
@@ -498,10 +500,6 @@ any symbol."
 
 ;;;;; State variables
 
-(define-minor-mode citre-peek-mode
-  "Mode for `citre-peek'."
-  :keymap citre-peek-keymap)
-
 (defvar citre-peek--ov nil
   "Current overlay used for peeking.")
 
@@ -537,6 +535,55 @@ bounds.")
 
 (defvar citre-peek--bg-selected nil
   "Background color for selected definitions when peeking.")
+
+(define-minor-mode citre-peek--mode
+  "Mode for `citre-peek'.
+This mode is created merely for handling the UI (display, keymap,
+etc.), and is not for interactive use.  Users should use commands
+like `citre-peek', `citre-peek-abort', `citre-peek-restore',
+which take care of setting up other things."
+  :keymap citre-peek-keymap
+  (cond
+   (citre-peek--mode
+    (when citre-peek--ov (delete-overlay citre-peek--ov))
+    (setq citre-peek--ov
+          (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
+    (let* ((bg-mode (frame-parameter nil 'background-mode))
+           (bg-unspecified-p (string= (face-background 'default)
+                                      "unspecified-bg"))
+           (bg (cond
+                ((and bg-unspecified-p (eq bg-mode 'dark)) "#333333")
+                ((and bg-unspecified-p (eq bg-mode 'light)) "#dddddd")
+                (t (face-background 'default)))))
+      (cond
+       ((eq bg-mode 'dark)
+        (setq citre-peek--bg (citre--color-blend "#ffffff" bg 0.03))
+        (setq citre-peek--bg-alt (citre--color-blend "#ffffff" bg 0.2))
+        (setq citre-peek--bg-selected (citre--color-blend "#ffffff" bg 0.4)))
+       (t
+        (setq citre-peek--bg (citre--color-blend "#000000" bg 0.02))
+        (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.12))
+        (setq citre-peek--bg-selected
+              (citre--color-blend "#000000" bg 0.06)))))
+    (add-hook 'post-command-hook #'citre-peek--update-display nil 'local))
+   (t
+    (when citre-peek--ov (delete-overlay citre-peek--ov))
+    (mapc (lambda (pair)
+            (kill-buffer (cdr pair)))
+          citre-peek--temp-buffer-alist)
+    (setq citre-peek--temp-buffer-alist nil)
+    (setq citre-peek--ov nil)
+    (setq citre-peek--bg nil)
+    (setq citre-peek--bg-alt nil)
+    (setq citre-peek--bg-selected nil)
+    ;; In case they are not cleaned up by `citre-peek-through'
+    (setq citre-peek--ace-seqs nil)
+    (setq citre-peek--symbol-bounds nil)
+    ;; We don't clean up `citre-peek--session-root-list',
+    ;; `citre-peek--depth-in-def-list' and
+    ;; `citre-peek--displayed-defs-interval', so we can restore a session
+    ;; later.
+    (remove-hook 'post-command-hook #'citre-peek--update-display 'local))))
 
 ;;;;; Handle temp file buffer
 
@@ -578,7 +625,7 @@ When PATH doesn't exist, this returns nil."
           (push (cons path buf) citre-peek--temp-buffer-alist)
           buf))))
 
-;;;;; Fetch file content
+;;;;; Methods for `citre-peek--def-entry'
 
 (defun citre-peek--get-base-marker (entry)
   "Return the base marker of ENTRY.
@@ -645,10 +692,11 @@ doesn't exist, these 2 fields are all nil."
             (setq point (point))))))
     (cons buf point)))
 
-(defun citre-peek--get-content (entry n)
+(defun citre-peek--get-content (entry)
   "Get file contents for peeking from ENTRY.
-ENTRY is an instance of `citre-peek--def-entry'.  N is the number
-of lines to get.
+ENTRY is an instance of `citre-peek--def-entry'.
+`citre-peek-file-content-height' specifies the number of lines to
+get.
 
 This also modifies the `line-offset' slot of ENTRY for letting it
 not go beyond the start/end of the file."
@@ -663,13 +711,77 @@ not go beyond the start/end of the file."
                 ;; we don't check it.
                 (goto-char pos)
                 (setq beg (point))
-                (forward-line (1- n))
+                (forward-line (1- citre-peek-file-content-height))
                 (setq end (point-at-eol))
                 (font-lock-fontify-region beg end)
                 (concat (buffer-substring beg end) "\n")))))
       (propertize "This file doesn't exist.\n" 'face 'error))))
 
-;;;;; Manage session state
+;; (defun citre-peek--delete-branch-in-entry (entry)
+;;   "Delete the first branch in def entry ENTRY.")
+
+(defun citre-peek--line-forward (n &optional entry)
+  "Scroll the current browsed position in ENTRY N lines forward.
+ENTRY is an instance of `citre-peek--def-entry', N can be
+negative.  When ENTRY is nil, the currently browsed entry is
+used.
+
+Note: `citre-peek--get-buf-and-pos' could further modify the
+`citre-line-offset' property of current location.  It's
+responsible for not letting it get beyond the start/end of the
+file."
+  (let* ((entry (or entry (citre-peek--current-def-entry)))
+         (line-offset (citre-peek--def-entry-line-offset entry)))
+    (setf (citre-peek--def-entry-line-offset entry)
+          (+ line-offset n))))
+
+;;;;; Methods for `citre-peek--def-list'
+
+(defun citre-peek--def-list-length (deflist)
+  "Return the number of entries in DEFLIST.
+DEFLIST is an instance of `citre-peek--def-list'."
+  (length (citre-peek--def-list-entries deflist)))
+
+(defun citre-peek--current-entry-in-def-list (deflist)
+  "Return the currently browsed def entry in DEFLIST.
+DEFLIST is an instance of `citre-peek--def-list'."
+  (nth (citre-peek--def-list-index deflist)
+       (citre-peek--def-list-entries deflist)))
+
+;; (defun citre-peek--make-current-entry-first (deflist)
+;;   "Put the current entry in DEFLIST in the first position.")
+
+;; (defun citre-peek--move-current-entry-up (deflist)
+;;   "Move the current entry in DEFLIST one element backward.")
+
+;; (defun citre-peek--move-current-entry-down (deflist)
+;;   "Move the current entry in DEFLIST one element forward.")
+
+(defun citre-peek--push-branch-in-current-entry-in-def-list
+    (deflist branch)
+  "Push BRANCH into the `branches' slot of current browsed entry in DEFLIST.
+DEFLIST and BRANCH are instances of `citre-peek--def-list'."
+  (push branch
+        (citre-peek--def-entry-branches
+         (citre-peek--current-entry-in-def-list deflist))))
+
+;;;;; Find currently browsed item in the tree
+
+(defun citre-peek--current-def-list ()
+  "Return the currently browsed def list."
+  (let ((deflist citre-peek--session-root-list))
+    (dotimes (_ citre-peek--depth-in-def-list)
+      (let* ((entry (citre-peek--current-entry-in-def-list deflist))
+             (branches (citre-peek--def-entry-branches entry)))
+        (setq deflist (car branches))))
+    deflist))
+
+(defun citre-peek--current-def-entry ()
+  "Return the currently browsed def entry."
+  (citre-peek--current-entry-in-def-list
+   (citre-peek--current-def-list)))
+
+;;;;; Create def lists
 
 (defun citre-peek--make-def-list-of-current-location (name)
   "Return a def list of current location.
@@ -690,6 +802,21 @@ The returned def list is the root def list of the peek session."
     (when (null definitions)
       (user-error "Can't find definition"))
     deflist))
+
+(defun citre-peek--create-branch (buf point)
+  "Create new branch in the history.
+It grabs the definitions of the symbol in BUF under POINT, and
+put its def list into the branches of current def entry."
+  (with-current-buffer buf
+    (save-excursion
+      (goto-char point)
+      (let* ((branch (citre-peek--get-def-list)))
+        (citre-peek--push-branch-in-current-entry-in-def-list
+         (citre-peek--current-def-list) branch)
+        (cl-incf citre-peek--depth-in-def-list)
+        (citre-peek--setup-displayed-defs-interval branch)))))
+
+;;;;; Manage session state
 
 (defun citre-peek--setup-displayed-defs-interval (&optional deflist)
   "Set `citre-peek--displayed-defs-interval' based on DEFLIST.
@@ -720,81 +847,6 @@ set variables according to it."
         (setq citre-peek--session-root-list root-list)
         (setq citre-peek--depth-in-def-list 1)
         (citre-peek--setup-displayed-defs-interval branch)))))
-
-(defun citre-peek--create-branch (buf point)
-  "Create new branch in the history.
-It grabs the definitions of the symbol in BUF under POINT, and
-put its def list into the branches of current def entry."
-  (with-current-buffer buf
-    (save-excursion
-      (goto-char point)
-      (let* ((branch (citre-peek--get-def-list)))
-        (citre-peek--push-branch-in-current-entry-in-def-list
-         (citre-peek--current-def-list) branch)
-        (cl-incf citre-peek--depth-in-def-list)
-        (citre-peek--setup-displayed-defs-interval branch)))))
-
-;;;;; Manipulate def entries
-
-;; (defun citre-peek--delete-branch-in-entry (entry)
-;;   "Delete the first branch in def entry ENTRY.")
-
-(defun citre-peek--line-forward (n)
-  "In a peek window, scroll N lines forward.
-N can be negative.
-
-Note: `citre-peek--get-buf-and-pos' could further modify the
-`citre-line-offset' property of current location.  It's
-responsible for not letting it get beyond the start/end of the
-file."
-  (let* ((entry (citre-peek--current-def-entry))
-         (line-offset (citre-peek--def-entry-line-offset entry)))
-    (setf (citre-peek--def-entry-line-offset entry)
-          (+ line-offset n))))
-
-;;;;; Manipulate def lists
-
-(defun citre-peek--current-def-list ()
-  "Return the currently browsed def list."
-  (let ((deflist citre-peek--session-root-list))
-    (dotimes (_ citre-peek--depth-in-def-list)
-      (let* ((entry (citre-peek--current-entry-in-def-list deflist))
-             (branches (citre-peek--def-entry-branches entry)))
-        (setq deflist (car branches))))
-    deflist))
-
-(defun citre-peek--current-entry-in-def-list (deflist)
-  "Return the currently browsed def entry in DEFLIST.
-DEFLIST is an instance of `citre-peek--def-list'."
-  (nth (citre-peek--def-list-index deflist)
-       (citre-peek--def-list-entries deflist)))
-
-(defun citre-peek--current-def-entry ()
-  "Return the currently browsed def entry."
-  (citre-peek--current-entry-in-def-list
-   (citre-peek--current-def-list)))
-
-(defun citre-peek--def-list-length (deflist)
-  "Return the number of entries in DEFLIST.
-DEFLIST is an instance of `citre-peek--def-list'."
-  (length (citre-peek--def-list-entries deflist)))
-
-(defun citre-peek--push-branch-in-current-entry-in-def-list
-    (deflist branch)
-  "Push BRANCH into the `branches' slot of current browsed entry in DEFLIST.
-DEFLIST and BRANCH are instances of `citre-peek--def-list'."
-  (push branch
-        (citre-peek--def-entry-branches
-         (citre-peek--current-entry-in-def-list deflist))))
-
-;; (defun citre-peek--make-current-entry-first (deflist)
-;;   "Put the current entry in DEFLIST in the first position.")
-
-;; (defun citre-peek--move-current-entry-up (deflist)
-;;   "Move the current entry in DEFLIST one element backward.")
-
-;; (defun citre-peek--move-current-entry-down (deflist)
-;;   "Move the current entry in DEFLIST one element forward.")
 
 (defun citre-peek--location-index-forward (n)
   "In a peek window, move current location N steps forward.
@@ -832,7 +884,7 @@ N can be negative."
 DEFLIST is the currently browsed def list."
   (let* ((entry (citre-peek--current-entry-in-def-list deflist))
          (file-content
-          (citre-peek--get-content entry citre-peek-file-content-height)))
+          (citre-peek--get-content entry)))
     (citre--add-face file-content
                      (list :background citre-peek--bg
                            :extend t))
@@ -937,40 +989,37 @@ definitions, and the current chain in the code reading history."
 
 ;;;; Commands
 
+;;;;; Create/end/restore peek sessions
+
 (defun citre-peek (&optional buf point)
   "Peek the definition of the symbol at point.
 If BUF and POINT is given, peek the definition of the symbol in
 BUF under POINT."
   (interactive)
+  ;; Quit existing peek sessions.
+  (when citre-peek--mode
+    (citre-peek-abort))
   (let ((buf (or (when (and buf point) buf)
                  (current-buffer)))
         (point (or (when (and buf point) point)
                    (point))))
     ;; Setup location related variables.
     (citre-peek--setup-session buf point))
-  ;; Quit existing peek sessions.
-  (when (overlayp citre-peek--ov)
-    (citre-peek-abort))
   ;; Setup environment for peeking.
-  (citre-peek-mode)
-  (setq citre-peek--ov (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
-  (let* ((bg-mode (frame-parameter nil 'background-mode))
-         (bg-unspecified-p (string= (face-background 'default)
-                                    "unspecified-bg"))
-         (bg (cond
-              ((and bg-unspecified-p (eq bg-mode 'dark)) "#333333")
-              ((and bg-unspecified-p (eq bg-mode 'light)) "#dddddd")
-              (t (face-background 'default)))))
-    (cond
-     ((eq bg-mode 'dark)
-      (setq citre-peek--bg (citre--color-blend "#ffffff" bg 0.03))
-      (setq citre-peek--bg-alt (citre--color-blend "#ffffff" bg 0.2))
-      (setq citre-peek--bg-selected (citre--color-blend "#ffffff" bg 0.4)))
-     (t
-      (setq citre-peek--bg (citre--color-blend "#000000" bg 0.02))
-      (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.12))
-      (setq citre-peek--bg-selected (citre--color-blend "#000000" bg 0.06)))))
-  (add-hook 'post-command-hook #'citre-peek--update-display nil 'local))
+  (citre-peek--mode))
+
+(defun citre-peek-abort ()
+  "Abort peeking."
+  (interactive)
+  (citre-peek--mode -1))
+
+(defun citre-peek-restore ()
+  "Restore recent peek session."
+  (interactive)
+  (unless citre-peek--mode
+    (citre-peek--mode)))
+
+;;;;; Browse in file
 
 ;; TODO: Throw error when not in a peek session.
 (defun citre-peek-next-line ()
@@ -983,6 +1032,8 @@ BUF under POINT."
   (interactive)
   (citre-peek--line-forward -1))
 
+;;;;; Browse in def list
+
 (defun citre-peek-next-location ()
   "Peek the next location of definition."
   (interactive)
@@ -992,6 +1043,8 @@ BUF under POINT."
   "Peek the previous location of definition."
   (interactive)
   (citre-peek--location-index-forward -1))
+
+;;;;; Browse in the tree history
 
 (defun citre-peek-chain-forward ()
   "Move forward in the currently browsed chain.
@@ -1035,6 +1088,8 @@ that the depth is not less than 0."
       (setf (citre-peek--def-entry-branches entry)
             (nconc (cdr branches) (list (car branches)))))))
 
+;;;;; Others
+
 (defun citre-peek-through ()
   "Peek through a symbol in current peek window."
   (interactive)
@@ -1068,35 +1123,15 @@ that the depth is not less than 0."
            (cl-return))
           (_ (citre-peek--update-display)))))))
 
-(defun citre-peek-abort ()
-  "Abort peeking."
-  (interactive)
-  (when citre-peek--ov
-    (delete-overlay citre-peek--ov))
-  (mapc (lambda (pair)
-          (kill-buffer (cdr pair)))
-        citre-peek--temp-buffer-alist)
-  (setq citre-peek--temp-buffer-alist nil)
-  (setq citre-peek--ov nil)
-  (setq citre-peek--bg nil)
-  (setq citre-peek--bg-alt nil)
-  (setq citre-peek--bg-selected nil)
-  ;; In case they are not cleaned up by `citre-peek-through'
-  (setq citre-peek--ace-seqs nil)
-  (setq citre-peek--symbol-bounds nil)
-  ;; We don't clean up `citre-peek--session-root-list',
-  ;; `citre-peek--depth-in-def-list' and `citre-peek--displayed-defs-interval',
-  ;; so we can restore a session later.
-  (citre-peek-mode -1)
-  (remove-hook 'post-command-hook #'citre-peek--update-display 'local))
-
 ;; TODO: setup peek session in the new buffer
 (defun citre-peek-jump ()
   "Jump to the definition that is currently peeked."
   (interactive)
+  (citre-peek-abort)
   (citre-goto-tag
    (citre-peek--def-entry-tag
-    (citre-peek--current-def-entry))))
+    (citre-peek--current-def-entry)))
+  (citre-peek-restore))
 
 (provide 'citre-peek)
 
