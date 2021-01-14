@@ -82,7 +82,7 @@
     (define-key map (kbd "<M-right>") 'citre-peek-chain-forward)
     (define-key map (kbd "<M-left>") 'citre-peek-chain-backward)
     (define-key map (kbd "<M-up>") 'citre-peek-prev-branch)
-    (define-key map (kbd "<M-down>") 'citre-peek-prev-branch)
+    (define-key map (kbd "<M-down>") 'citre-peek-next-branch)
     ;; Modify history
     (define-key map (kbd "M-l p") 'citre-peek-through)
     (define-key map (kbd "M-l d") 'citre-peek-delete-branch)
