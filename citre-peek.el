@@ -46,6 +46,23 @@
 
 ;;;; User options
 
+;;;;; Behavior
+
+(defcustom citre-peek-auto-restore-after-jump t
+  "Non-nil means restore session after `citre-peek-jump'."
+  :type 'boolean
+  :group 'citre)
+
+(defcustom citre-peek-backward-in-chain-after-jump t
+  "Non-nil means move backward in the chain after `citre-peek-jump'.
+This means after you jump to a definition location, the peek
+window will show where it's used/called/referenced.
+
+This only works when `citre-peek-auto-restore-after-jump' is
+non-nil."
+  :type 'boolean
+  :group 'citre)
+
 ;;;;; Size of peek window
 
 (defcustom citre-peek-file-content-height 12
@@ -1236,7 +1253,10 @@ that the depth is not less than 0."
   (citre-goto-tag
    (citre-peek--def-entry-tag
     (citre-peek--current-def-entry)))
-  (citre-peek-restore))
+  (when citre-peek-auto-restore-after-jump
+    (citre-peek-restore)
+    (when citre-peek-backward-in-chain-after-jump
+      (citre-peek-chain-backward))))
 
 (provide 'citre-peek)
 
