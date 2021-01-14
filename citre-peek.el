@@ -602,6 +602,7 @@ which take care of setting up other things."
     (when citre-peek--ov (delete-overlay citre-peek--ov))
     (setq citre-peek--ov
           (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
+    (overlay-put citre-peek--ov 'window (selected-window))
     (let* ((bg-mode (frame-parameter nil 'background-mode))
            (bg-unspecified-p (string= (face-background 'default)
                                       "unspecified-bg"))
