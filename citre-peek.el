@@ -99,17 +99,17 @@ non-nil."
     (define-key map (kbd "M-N") 'citre-peek-next-definition)
     (define-key map (kbd "M-P") 'citre-peek-prev-definition)
     ;; Browse in the history
-    (define-key map (kbd "<M-right>") 'citre-peek-chain-forward)
-    (define-key map (kbd "<M-left>") 'citre-peek-chain-backward)
-    (define-key map (kbd "<M-up>") 'citre-peek-prev-branch)
-    (define-key map (kbd "<M-down>") 'citre-peek-next-branch)
+    (define-key map (kbd "<right>") 'citre-peek-chain-forward)
+    (define-key map (kbd "<left>") 'citre-peek-chain-backward)
+    (define-key map (kbd "<up>") 'citre-peek-prev-branch)
+    (define-key map (kbd "<down>") 'citre-peek-next-branch)
     ;; Modify history
     (define-key map (kbd "M-l p") 'citre-peek-through)
     (define-key map (kbd "M-l d") 'citre-peek-delete-branch)
     (define-key map (kbd "M-l D") 'citre-peek-delete-branches)
     ;; Rearrange definition list
-    (define-key map (kbd "<M-S-up>") 'citre-peek-move-current-def-up)
-    (define-key map (kbd "<M-S-down>") 'citre-peek-move-current-def-down)
+    (define-key map (kbd "S-<up>") 'citre-peek-move-current-def-up)
+    (define-key map (kbd "S-<down>") 'citre-peek-move-current-def-down)
     (define-key map (kbd "M-l f") 'citre-peek-make-current-def-first)
     ;; Jump
     (define-key map (kbd "M-l j") 'citre-peek-jump)
