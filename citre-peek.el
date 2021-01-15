@@ -399,10 +399,10 @@ at the end."
   ;; Depending on the wrapping behavior, in some terminals, a line with exact
   ;; (window-body-width) characters can be wrapped. So we minus it by one.
   (let ((limit (1- (window-body-width))))
-    ;; TODO: When the line contains tabs, sometimes it's not trimmed properly,
-    ;; even if we replace this `length' by `string-width'.
     (if (> (length str) limit)
-        (concat (substring str 0 (- limit (length citre-peek-ellipsis)))
+        (concat (truncate-string-to-width
+                 str
+                 (- limit (string-width citre-peek-ellipsis)))
                 citre-peek-ellipsis)
       str)))
 
