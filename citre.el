@@ -33,15 +33,6 @@
 (require 'citre-basic-tools)
 (require 'citre-peek)
 
-;;;; User options
-
-(defgroup citre nil
-  "Code editing & reading solution based on Universal Ctags."
-  :group 'convenience
-  :group 'tools
-  :prefix "citre-"
-  :link '(url-link "https://github.com/AmaiKinono/citre"))
-
 (provide 'citre)
 
 ;; Local Variables:

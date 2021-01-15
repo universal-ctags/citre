@@ -44,14 +44,20 @@
 
 ;;;; User options
 
+(defgroup citre nil
+  "Code editing & reading solution based on Universal Ctags."
+  :group 'convenience
+  :group 'tools
+  :prefix "citre-"
+  :link '(url-link "https://github.com/AmaiKinono/citre"))
+
 (defcustom citre-readtags-program nil
   "The name or path of the readtags program.
 Set this if readtags is not in your PATH, or its name is not
 \"readtags\".
 
 Citre requires the readtags program provided by Universal Ctags."
-  :type 'string
-  :group 'citre)
+  :type 'string)
 
 ;;;; Basic Helpers
 
