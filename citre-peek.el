@@ -256,11 +256,15 @@ This is for generating the \"entry\" point of the symbol chain."
           (let ((pos-faces (get-text-property pos 'face)))
             (unless (listp pos-faces)
               (setq pos-faces (list pos-faces)))
-            (cl-intersection '(font-lock-comment-face
-                               font-lock-comment-delimiter-face
-                               font-lock-doc-face
-                               font-lock-string-face)
-                             pos-faces))
+            ;; Use `cl-subsetp' rather than `cl-intersection', so that
+            ;; highlighted symbols in docstrings/comments can be captured. For
+            ;; example, symbols in Elisp comments/docstrings has both
+            ;; `font-lock-constant-face' and `font-lock-comment/doc-face'.
+            (cl-subsetp pos-faces
+                        '(font-lock-comment-face
+                          font-lock-comment-delimiter-face
+                          font-lock-doc-face
+                          font-lock-string-face)))
         (save-excursion
           (or (nth 4 (syntax-ppss pos))
               (nth 3 (syntax-ppss pos))))))))
