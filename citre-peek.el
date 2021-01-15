@@ -28,9 +28,7 @@
 
 ;;; TODOs:
 
-;; - History management
-;; - Ace peek
-;;   (for situations like peeking function definition when inside its arglist)
+;; - Session history management
 
 ;;; Code:
 
@@ -84,6 +82,11 @@ non-nil."
 
 (defcustom citre-peek-cancel-ace-keys '(?\C-g ?q)
   "Keys used for cancel an ace session."
+  :type '(repeat :tag "Keys" character)
+  :group 'citre)
+
+(defcustom citre-peek-ace-pick-symbol-at-point-keys '(?\C-m)
+  "Keys used for pick symbol at point in `citre-ace-peek'."
   :type '(repeat :tag "Keys" character)
   :group 'citre)
 
@@ -365,6 +368,37 @@ The beginnings of each symbol are replaced by ace strings with
           (put-text-property beg (+ beg ace-str-len)
                              'face 'citre-peek-ace-str-face new-str))))
     new-str))
+
+(defvar citre--ace-ov nil
+  "Overlays for ace strings.")
+
+(defun citre--clean-ace-ov ()
+  "Cleanup overlays for ace jump."
+  (dolist (ov citre--ace-ov)
+    (delete-overlay ov))
+  (setq citre--ace-ov nil))
+
+(defun citre--attach-ace-overlay (sym-bounds ace-seqs)
+  "Setup overlay in current buffer for ace strings.
+SYM-BOUNDS specifies the annotated symbols, as returned by
+`citre--search-symbols'.  ACE-SEQS is the ace key sequences, as
+returned by `citre--ace-key-seqs' or `citre--pop-ace-key-seqs'."
+  (let* ((nsyms (length sym-bounds))
+         ov)
+    (citre--clean-ace-ov)
+    (dotimes (n nsyms)
+      (when (nth n ace-seqs)
+        (let* ((beg (car (nth n sym-bounds)))
+               (end (cdr (nth n sym-bounds)))
+               (ace-seq (nth n ace-seqs))
+               (end (min end (+ beg (length ace-seq)))))
+          (setq ov (make-overlay beg end))
+          (overlay-put ov 'window (selected-window))
+          (overlay-put ov 'face 'citre-peek-ace-str-face)
+          (overlay-put ov 'display (substring
+                                    (mapconcat #'char-to-string ace-seq "")
+                                    0 (- end beg)))
+          (push ov citre--ace-ov))))))
 
 ;;;;; Display
 
@@ -1058,20 +1092,51 @@ recalculated."
 
 (defun citre-peek (&optional buf point)
   "Peek the definition of the symbol at point.
-If BUF and POINT is given, peek the definition of the symbol in
-BUF under POINT."
+When BUF or POINT is nil, it's set to the current buffer and
+point."
   (interactive)
-  ;; Quit existing peek sessions.
   (when citre-peek--mode
     (citre-peek-abort))
-  (let ((buf (or (when (and buf point) buf)
-                 (current-buffer)))
-        (point (or (when (and buf point) point)
-                   (point))))
-    ;; Setup location related variables.
+  (let ((buf (or buf (current-buffer)))
+        (point (or point (point))))
     (citre-peek--setup-session buf point))
-  ;; Setup environment for peeking.
   (citre-peek--mode))
+
+(defun citre-ace-peek ()
+  "Peek the definition of a symbol on screen using ace jump.
+Press a key in `citre-peek-ace-pick-symbol-at-point-keys' to pick
+the symbol under point.
+
+This command is useful when you want to see the definition of a
+function while filling its arglist."
+  (interactive)
+  (when citre-peek--mode
+    (citre-peek-abort))
+  (let* ((sym-bounds (save-excursion
+                       (goto-char (window-start))
+                       (citre--search-symbols
+                        (ceiling (window-screen-lines)))))
+         (ace-seqs (citre--ace-key-seqs
+                    (length sym-bounds)))
+         key pt)
+    (cl-block nil
+      (while (progn
+               (citre--attach-ace-overlay sym-bounds ace-seqs)
+               (setq key (read-key "Ace char:")))
+        (when (memq key citre-peek-cancel-ace-keys)
+          (citre--clean-ace-ov)
+          (cl-return))
+        (when (memq key citre-peek-ace-pick-symbol-at-point-keys)
+          (setq pt (point))
+          (citre--clean-ace-ov)
+          (cl-return))
+        (let ((i (citre--pop-ace-key-seqs ace-seqs key)))
+          (when (integerp i)
+            (setq pt (car (nth i sym-bounds)))
+            (citre--clean-ace-ov)
+            (cl-return)))))
+    (when pt
+      (citre-peek nil pt))))
 
 (defun citre-peek-abort ()
   "Abort peeking."
