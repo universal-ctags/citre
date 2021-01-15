@@ -570,6 +570,10 @@ any symbol."
 ;;   sure that the overlay is cleaned up correctly.  When other state variables
 ;;   are set up, enable `citre-peek-mode' sets up the UI, and disable
 ;;   `citre-peek--mode' hides the UI.
+;;
+;; - `citre-peek--content-update': Set this to t when the content in the peek
+;;   window is updated.  This variable is for preventing recalculate the
+;;   content after every command.
 
 (defvar citre-peek--session-root-list nil
   "The root def list of current peek session.")
@@ -598,6 +602,9 @@ bounds as returned by `citre--search-symbols'.")
 
 (defvar citre-peek--ov nil
   "Overlay used to display the citre-peek UI.")
+
+(defvar citre-peek--content-update nil
+  "Non-nil means the content in the peek window is updated.")
 
 (defvar citre-peek--bg nil
   "Background color used for file contents when peeking.")
@@ -638,6 +645,7 @@ which take care of setting up other things."
         (setq citre-peek--bg-alt (citre--color-blend "#000000" bg 0.12))
         (setq citre-peek--bg-selected
               (citre--color-blend "#000000" bg 0.06)))))
+    (setq citre-peek--content-update t)
     (add-hook 'post-command-hook #'citre-peek--update-display nil 'local))
    (t
     (when citre-peek--ov (delete-overlay citre-peek--ov))
@@ -803,7 +811,8 @@ file."
   (let* ((entry (or entry (citre-peek--current-def-entry)))
          (line-offset (citre-peek--def-entry-line-offset entry)))
     (setf (citre-peek--def-entry-line-offset entry)
-          (+ line-offset n))))
+          (+ line-offset n))
+    (setq citre-peek--content-update t)))
 
 ;;;;; Methods for `citre-peek--def-list'
 
@@ -907,7 +916,8 @@ set variables according to it."
          root-list branch)
         (setq citre-peek--session-root-list root-list)
         (setq citre-peek--depth-in-root-list 1)
-        (citre-peek--setup-displayed-defs-interval branch)))))
+        (citre-peek--setup-displayed-defs-interval branch)
+        (setq citre-peek--content-update t)))))
 
 (defun citre-peek--def-index-forward (n)
   "In a peek window, move N steps forward in the definition list.
@@ -928,7 +938,8 @@ N can be negative."
         (setcar citre-peek--displayed-defs-interval
                 (mod (+ offset start) len))
         (setcdr citre-peek--displayed-defs-interval
-                (mod (+ offset end) len))))))
+                (mod (+ offset end) len))))
+    (setq citre-peek--content-update t)))
 
 ;;;;; Display
 
@@ -1035,21 +1046,25 @@ definitions, and the current chain in the code reading history."
                            :extend t))
     session-info))
 
-(defun citre-peek--update-display ()
-  "Deal with the update of contents in peek windows."
+(defun citre-peek--update-display (&optional force)
+  "Deal with the update of contents in peek windows.
+When FORCE is non-nil, the content of the peek window is
+recalculated."
   (unless (minibufferp)
     (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
       (move-overlay citre-peek--ov overlay-pos overlay-pos))
-    (let* ((deflist (citre-peek--current-def-list))
-           (initial-newline (if (eq (line-end-position) (point-max))
-                                "\n" ""))
-           (border (citre-peek--make-border)))
-      (overlay-put citre-peek--ov 'after-string
-                   (concat initial-newline border
-                           (citre-peek--file-content deflist)
-                           (citre-peek--displayed-defs-str deflist)
-                           (citre-peek--session-info deflist)
-                           border)))))
+    (when (or citre-peek--content-update force)
+      (let* ((deflist (citre-peek--current-def-list))
+             (initial-newline (if (eq (line-end-position) (point-max))
+                                  "\n" ""))
+             (border (citre-peek--make-border)))
+        (overlay-put citre-peek--ov 'after-string
+                     (concat initial-newline border
+                             (citre-peek--file-content deflist)
+                             (citre-peek--displayed-defs-str deflist)
+                             (citre-peek--session-info deflist)
+                             border)))
+      (setq citre-peek--content-update nil))))
 
 ;;;; Commands
 
@@ -1119,7 +1134,8 @@ the depth is not greater than the maximum depth."
                             (citre-peek--current-def-entry)))))
     (unless max-depth-p
       (cl-incf citre-peek--depth-in-root-list)
-      (citre-peek--setup-displayed-defs-interval))))
+      (citre-peek--setup-displayed-defs-interval)
+      (setq citre-peek--content-update t))))
 
 (defun citre-peek-chain-backward ()
   "Move backward in the currently browsed chain.
@@ -1128,7 +1144,8 @@ that the depth is not less than 0."
   (interactive)
   (unless (eq citre-peek--depth-in-root-list 0)
     (cl-incf citre-peek--depth-in-root-list -1)
-    (citre-peek--setup-displayed-defs-interval)))
+    (citre-peek--setup-displayed-defs-interval)
+    (setq citre-peek--content-update t)))
 
 ;; NOTE: The direction of branch switching commands are decided so that when
 ;; the user created a new branch (by peeking through), and call `prev-branch',
@@ -1141,7 +1158,8 @@ that the depth is not less than 0."
          (branches (citre-peek--def-entry-branches entry)))
     (when branches
       (setf (citre-peek--def-entry-branches entry)
-            (nconc (last branches) (butlast branches))))))
+            (nconc (last branches) (butlast branches)))
+      (setq citre-peek--content-update t))))
 
 (defun citre-peek-prev-branch ()
   "Switch to the previous branch under current symbol."
@@ -1150,7 +1168,8 @@ that the depth is not less than 0."
          (branches (citre-peek--def-entry-branches entry)))
     (when branches
       (setf (citre-peek--def-entry-branches entry)
-            (nconc (cdr branches) (list (car branches)))))))
+            (nconc (cdr branches) (list (car branches))))
+      (setq citre-peek--content-update t))))
 
 ;;;;; Edit definition list
 
@@ -1199,7 +1218,8 @@ that the depth is not less than 0."
     (when (and branches
                (y-or-n-p
                 "Deleting the current branch under this symbol.  Continue? "))
-      (pop (citre-peek--def-entry-branches entry)))))
+      (pop (citre-peek--def-entry-branches entry))
+      (setq citre-peek--content-update t))))
 
 (defun citre-peek-delete-branches ()
   "Delete all branchs in currently browsed def entry."
@@ -1209,7 +1229,8 @@ that the depth is not less than 0."
     (when (and branches
                (y-or-n-p
                 "Deleting all branches under this symbol.  Continue? "))
-      (setf (citre-peek--def-entry-branches entry) nil))))
+      (setf (citre-peek--def-entry-branches entry) nil)
+      (setq citre-peek--content-update t))))
 
 ;;;;; Others
 
@@ -1229,13 +1250,13 @@ that the depth is not less than 0."
                     (citre--search-symbols citre-peek-file-content-height)))))
     (setq citre-peek--ace-seqs (citre--ace-key-seqs
                                 (length (cdr citre-peek--symbol-bounds))))
-    (citre-peek--update-display)
+    (citre-peek--update-display 'force)
     (cl-block nil
       (while (setq key (read-key "Ace char:"))
         (when (memq key citre-peek-cancel-ace-keys)
           (setq citre-peek--symbol-bounds nil)
           (setq citre-peek--ace-seqs nil)
-          (citre-peek--update-display)
+          (citre-peek--update-display 'force)
           (cl-return))
         (pcase (citre--pop-ace-key-seqs citre-peek--ace-seqs key)
           ((and (pred integerp) i)
@@ -1245,7 +1266,7 @@ that the depth is not less than 0."
            (setq citre-peek--symbol-bounds nil)
            (setq citre-peek--ace-seqs nil)
            (cl-return))
-          (_ (citre-peek--update-display)))))))
+          (_ (citre-peek--update-display 'force)))))))
 
 (defun citre-peek-jump ()
   "Jump to the definition that is currently peeked."
