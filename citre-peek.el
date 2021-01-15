@@ -631,6 +631,11 @@ which take care of setting up other things."
     ;; later.
     (remove-hook 'post-command-hook #'citre-peek--update-display 'local))))
 
+(defun citre-peek--error-if-not-peeking ()
+  "Throw an error if not in a peek session."
+  (unless citre-peek--mode
+    (user-error "Not in a peek session")))
+
 ;;;;; Handle temp file buffer
 
 ;; Actually we can make Emacs believe our temp buffer is visiting FILENAME (by
@@ -1066,19 +1071,22 @@ BUF under POINT."
   "Restore recent peek session."
   (interactive)
   (unless citre-peek--mode
-    (citre-peek--mode)))
+    (if citre-peek--session-root-list
+        (citre-peek--mode)
+      (user-error "No peek session to restore"))))
 
 ;;;;; Browse in file
 
-;; TODO: Throw error when not in a peek session.
 (defun citre-peek-next-line ()
   "Scroll to the next line in a peek window."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (citre-peek--line-forward 1))
 
 (defun citre-peek-prev-line ()
   "Scroll to the previous line in a peek window."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (citre-peek--line-forward -1))
 
 ;;;;; Browse in def list
@@ -1086,11 +1094,13 @@ BUF under POINT."
 (defun citre-peek-next-definition ()
   "Peek the next definition in list."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (citre-peek--def-index-forward 1))
 
 (defun citre-peek-prev-definition ()
   "Peek the previous definition in list."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (citre-peek--def-index-forward -1))
 
 ;;;;; Browse in the tree history
@@ -1100,6 +1110,7 @@ BUF under POINT."
 This adds 1 to the currently browsed depth.  It's ensured that
 the depth is not greater than the maximum depth."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let ((max-depth-p (null (citre-peek--def-entry-branches
                             (citre-peek--current-def-entry)))))
     (unless max-depth-p
@@ -1112,6 +1123,7 @@ the depth is not greater than the maximum depth."
 This subtracts 1 from the currently browsed depth.  It's ensured
 that the depth is not less than 0."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (unless (eq citre-peek--depth-in-root-list 0)
     (cl-incf citre-peek--depth-in-root-list -1)
     (citre-peek--setup-displayed-defs-interval)
@@ -1124,6 +1136,7 @@ that the depth is not less than 0."
 (defun citre-peek-next-branch ()
   "Switch to the next branch under current symbol."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((entry (citre-peek--current-def-entry))
          (branches (citre-peek--def-entry-branches entry)))
     (when branches
@@ -1134,6 +1147,7 @@ that the depth is not less than 0."
 (defun citre-peek-prev-branch ()
   "Switch to the previous branch under current symbol."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((entry (citre-peek--current-def-entry))
          (branches (citre-peek--def-entry-branches entry)))
     (when branches
@@ -1146,6 +1160,7 @@ that the depth is not less than 0."
 (defun citre-peek-make-current-def-first ()
   "Put the current def entry in the first position."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((deflist (citre-peek--current-def-list))
          (idx (citre-peek--def-list-index deflist))
          (entries (citre-peek--def-list-entries deflist))
@@ -1157,6 +1172,7 @@ that the depth is not less than 0."
 (defun citre-peek-move-current-def-up ()
   "Move the current def entry up."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((deflist (citre-peek--current-def-list))
          (idx (citre-peek--def-list-index deflist))
          (entries (citre-peek--def-list-entries deflist))
@@ -1172,6 +1188,7 @@ that the depth is not less than 0."
 (defun citre-peek-move-current-def-down ()
   "Move the current def entry down."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((deflist (citre-peek--current-def-list))
          (idx (citre-peek--def-list-index deflist))
          (entries (citre-peek--def-list-entries deflist))
@@ -1189,6 +1206,7 @@ that the depth is not less than 0."
 (defun citre-peek-delete-branch ()
   "Delete the first branch in currently browsed def entry."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((entry (citre-peek--current-def-entry))
          (branches (citre-peek--def-entry-branches entry)))
     (when (and branches
@@ -1200,6 +1218,7 @@ that the depth is not less than 0."
 (defun citre-peek-delete-branches ()
   "Delete all branchs in currently browsed def entry."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (let* ((entry (citre-peek--current-def-entry))
          (branches (citre-peek--def-entry-branches entry)))
     (when (and branches
@@ -1213,6 +1232,7 @@ that the depth is not less than 0."
 (defun citre-peek-through ()
   "Peek through a symbol in current peek window."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (pcase-let ((`(,buf . ,pos) (citre-peek--get-buf-and-pos
                                (citre-peek--current-def-entry)))
               (key nil))
@@ -1247,6 +1267,7 @@ that the depth is not less than 0."
 (defun citre-peek-jump ()
   "Jump to the definition that is currently peeked."
   (interactive)
+  (citre-peek--error-if-not-peeking)
   (citre-peek-abort)
   (citre-goto-tag
    (citre-peek--def-entry-tag
