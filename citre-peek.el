@@ -1161,10 +1161,13 @@ that the depth is not less than 0."
          (idx (citre-peek--def-list-index deflist))
          (entries (citre-peek--def-list-entries deflist))
          (entry (nth idx entries)))
-    (when (> idx 0)
+    (if (> idx 0)
+        (setf (citre-peek--def-list-entries deflist)
+              (citre--insert-nth entry (1- idx)
+                                 (citre--delete-nth idx entries)))
       (setf (citre-peek--def-list-entries deflist)
-            (citre--insert-nth entry (1- idx) (citre--delete-nth idx entries)))
-      (citre-peek--def-index-forward -1))))
+            (nconc (cdr entries) (list entry))))
+    (citre-peek--def-index-forward -1)))
 
 (defun citre-peek-move-current-def-down ()
   "Move the current def entry down."
@@ -1173,10 +1176,13 @@ that the depth is not less than 0."
          (idx (citre-peek--def-list-index deflist))
          (entries (citre-peek--def-list-entries deflist))
          (entry (nth idx entries)))
-    (when (< idx (1- (length entries)))
+    (if (< idx (1- (length entries)))
+        (setf (citre-peek--def-list-entries deflist)
+              (citre--insert-nth entry (1+ idx)
+                                 (citre--delete-nth idx entries)))
       (setf (citre-peek--def-list-entries deflist)
-            (citre--insert-nth entry (1+ idx) (citre--delete-nth idx entries)))
-      (citre-peek--def-index-forward 1))))
+            (nconc (list entry) (butlast entries))))
+    (citre-peek--def-index-forward 1)))
 
 ;;;;; Edit history
 
