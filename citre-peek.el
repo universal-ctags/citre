@@ -219,41 +219,6 @@ The modified list is returned."
   (setf (nthcdr n list) (push newelt (nthcdr n list)))
   list)
 
-;;;;; "Circular" sequences
-
-(defun citre--subseq (seq interval)
-  "Return the subsequence of SEQ in INTERVAL.
-INTERVAL is a cons pair of non-negative integers.  Its car is the
-starting index, cdr is the ending index (not included).  Cdr can
-be smaller than car, then the result will go from the index car,
-to the end of SEQ, then back to the start of SEQ, and end before
-the index cdr."
-  (let ((start (car interval))
-        (end (cdr interval)))
-    (if (<= start end)
-        (cl-subseq seq start end)
-      (append
-       (cl-subseq seq start)
-       (cl-subseq seq 0 end)))))
-
-(defun citre--index-in-interval (num interval wrapnum)
-  "Return the index of NUM inside INTERVAL, or nil if it's not inside.
-INTERVAL is a cons pair of integers.  The car is included, and
-cdr is not included.  Cdr can be smaller than car, which means
-the interval goes from car to WRAPNUM (not included), then from 0
-to cdr (not included)."
-  (let* ((start (car interval))
-         (end (cdr interval))
-         (len (if (<= start end)
-                  (- end start)
-                (+ (- wrapnum start) end)))
-         (index (- num start)))
-    (when (< num wrapnum)
-      (when (< index 0)
-        (setq index (+ index wrapnum)))
-      (when (< index len)
-        index))))
-
 ;;;;; Recording positions of lines/symbols
 
 (defun citre--make-tag-of-current-location (name)
@@ -584,7 +549,7 @@ any symbol."
 (defvar citre-peek--displayed-defs-interval nil
   "The interval of displayed def entries in currently browsed def list.
 This is a cons pair, its car is the index of the first displayed
-entry, and cdr is one plus the index of the last one.")
+entry, and cdr the index of the last one.")
 
 (defvar citre-peek--temp-buffer-alist nil
   "Files and their temporary buffers that don't exist before peeking.
@@ -895,10 +860,18 @@ is set so that it doesn't exceeds `citre-peek-locations-height',
 and also fits the number of entries in DEFLIST.
 
 When DEFLIST is nil, the currently browsed deflist is used."
-  (let ((deflist (or deflist (citre-peek--current-def-list))))
+  (let* ((deflist (or deflist (citre-peek--current-def-list)))
+         (len (citre-peek--def-list-length deflist))
+         (idx (citre-peek--def-list-index deflist))
+         start end lines overflow)
+    (setq lines (min citre-peek-locations-height len))
+    (setq start idx)
+    (setq end (+ idx (1- lines)))
+    (setq overflow (max 0 (- end (1- len))))
+    (cl-incf start (- overflow))
+    (cl-incf end (- overflow))
     (setq citre-peek--displayed-defs-interval
-          (cons 0 (min citre-peek-locations-height
-                       (citre-peek--def-list-length deflist))))))
+          (cons start end))))
 
 (defun citre-peek--setup-session (buf point)
   "Set up state variables for peek session.
@@ -929,16 +902,14 @@ N can be negative."
          (len (citre-peek--def-list-length deflist)))
     (setq idx (mod (+ n idx) len))
     (setf (citre-peek--def-list-index deflist) idx)
-    (unless (citre--index-in-interval idx
-                                      citre-peek--displayed-defs-interval
-                                      len)
-      (let ((offset (if (> n 0)
-                        (mod (- idx (1- end)) len)
-                      (- (mod (- start idx) len)))))
+    (unless (<= start idx end)
+      (let ((offset (if (> start idx)
+                        (- idx start)
+                      (- idx end))))
         (setcar citre-peek--displayed-defs-interval
-                (mod (+ offset start) len))
+                (+ offset start))
         (setcdr citre-peek--displayed-defs-interval
-                (mod (+ offset end) len))))
+                (+ offset end))))
     (setq citre-peek--content-update t)))
 
 ;;;;; Display
@@ -977,16 +948,15 @@ DEFLIST is the currently browsed def list."
   (let* ((idx (citre-peek--def-list-index deflist))
          (defs (citre-peek--def-list-entries deflist))
          (displayed-defs
-          (citre--subseq defs
-                         citre-peek--displayed-defs-interval))
+          (cl-subseq defs
+                     (car citre-peek--displayed-defs-interval)
+                     (1+ (cdr citre-peek--displayed-defs-interval))))
          (displayed-tags
           (mapcar #'citre-peek--def-entry-tag displayed-defs))
          (displayed-defs-strlist
           (mapcar #'citre-make-location-str displayed-tags))
          (displayed-idx
-          (citre--index-in-interval idx
-                                    citre-peek--displayed-defs-interval
-                                    (length defs))))
+          (- idx (car citre-peek--displayed-defs-interval))))
     (dotimes (n (length displayed-defs))
       (let ((line (citre-make-location-str (nth n displayed-tags))))
         (when (citre-peek--def-entry-branches (nth n displayed-defs))
