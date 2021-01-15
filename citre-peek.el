@@ -171,7 +171,14 @@ Annotations include kind, type, etc."
   :group 'citre)
 
 (defcustom citre-peek-chain-separator
-  (propertize " → " 'face 'font-lock-function-name-face)
+  ;; NOTE: In terminal Emacs, sometimes the chain is not updated properly when
+  ;; there's unicode char in it.  I think it's probably not a problem of Emacs
+  ;; but the display update of the terminal itself.  Put a `redraw-frame' call
+  ;; in `citre-peek--update-display' solves the problem, but it creates a
+  ;; visual flick.  I believe unicode chars in the middle of a line cause the
+  ;; problem, so this may also happen to the file content and definition list.
+  (propertize (if (display-graphic-p) " → " " - ")
+              'face 'font-lock-function-name-face)
   "The separator in the chain where it doesn't branch."
   :type 'string
   :group 'citre)
