@@ -57,13 +57,6 @@
 
 (make-variable-buffer-local 'citre-enable-capf-integration)
 
-(defcustom citre-enable-eldoc-integration t
-  "Enable Eldoc integration."
-  :type 'boolean
-  :group 'citre)
-
-(make-variable-buffer-local 'citre-enable-eldoc-integration)
-
 ;;;;; Options: `citre-jump' related
 
 (defcustom citre-select-location-function
@@ -81,30 +74,6 @@ return it directly.
 See `citre-select-location-completing-read' for an example of
 implementation."
   :type 'function
-  :group 'citre)
-
-;;;;; Options: Eldoc related
-
-(defcustom citre-find-function-name-limit 1500
-  "The limit of chars that Citre goes back to find function name.
-This is used in eldoc integration."
-  :type 'integer
-  :group 'citre)
-
-(defcustom citre-find-function-name-pos-function-alist
-  '(((lisp-mode emacs-lisp-mode) . citre--find-function-name-pos-lisp)
-    (t                           . citre--find-function-name-pos-generic))
-  "The function for finding current function name position in different modes.
-The key should be a major mode, or a list of major modes.  The
-value should be the function to use when current major mode is a
-derived mode of its key.  The last element in this list should
-have a key of t, then the funcion will be used as a fallback.
-
-This is used in eldoc integration."
-  :type '(alist
-          :key-type (choice (const :tag "Fallback" t)
-                            symbol (repeat symbol))
-          :value-type function)
   :group 'citre)
 
 ;;;;; Options: capf related
@@ -361,195 +330,6 @@ CAND is the returned value of `citre-make-completion-str'."
           ;; :exclusive 'no
           )))
 
-;;;; Tool: eldoc integration
-
-;; TODO: Drop Eldoc integration after we implement ace-peek.
-
-(defun citre--pos-in-code-p (&optional pos)
-  "Non-nil if position POS is in code.
-This means POS is not in comments or strings.  When POS is not
-specified, use current point.
-
-Notice that its behavior at boundaries of comment/strings may
-vary, depending on whether font lock mode is enabled."
-  (let* ((pos (or pos (point))))
-    ;; `syntax-ppss' is not always reliable, so we only use it when font lock
-    ;; mode is disabled.
-    (if font-lock-mode
-        (let ((pos-faces (get-text-property pos 'face)))
-          (unless (listp pos-faces)
-            (setq pos-faces (list pos-faces)))
-          (not
-           (cl-intersection '(font-lock-comment-face
-                              font-lock-comment-delimiter-face
-                              font-lock-doc-face
-                              font-lock-string-face)
-                            pos-faces)))
-      (not (save-excursion
-             (or (nth 4 (syntax-ppss pos))
-                 (nth 3 (syntax-ppss pos))))))))
-
-(defun citre--search-backward-in-code (str &optional bound count)
-  "Search backward from point for STR, and skip comments and strings.
-About the optional arguments BOUND and COUNT, see the docstring
-of `search-backward'.
-
-This function will return the point at the beginning of the first
-matched STR.  When the search fails, it won't signal an error,
-but return nil.  This is different from `search-backward'."
-  (let ((pos nil))
-    (save-excursion
-      (cl-loop
-       while
-       (search-backward str bound t count)
-       do
-       (when (citre--pos-in-code-p)
-         (setq pos (point))
-         (cl-return))))
-    (when pos
-      (goto-char pos))))
-
-;; TODO: Current implementation (of this and the next function) assumes the
-;; expression is balanced (since we use `up-list' and `forward-list'). We
-;; should get rid of this limitation.
-(defun citre--find-function-name-pos-generic (&optional pos)
-  "When in a function call, return the beginning position of the function name.
-When POS is specified, use it as the position inside function
-call.
-
-It's assumed that the function call has the form of:
-
-  function_name(arg1, arg2, ...)
-
-and there can be whitespaces between function_name and its
-arglist."
-  (let* ((pos (or pos (point)))
-         (pos-limit (max (point-min)
-                         (- pos citre-find-function-name-limit)))
-         (left-paren-pos nil)
-         (sym-atpt-bound nil)
-         (func-beg nil))
-    (save-excursion
-      (goto-char pos)
-      ;; skip over whitespaces first.
-      (skip-chars-backward "\s\t")
-      ;; If there's a symbol at point, and it has the form of a function call,
-      ;; then it is the function name we are looking for.
-      (when (setq sym-atpt-bound (bounds-of-thing-at-point 'symbol))
-        (progn
-          (goto-char (cdr sym-atpt-bound))
-          (skip-chars-forward "\s\t")
-          (when (eq (char-after) ?\()
-            (setq func-beg (car sym-atpt-bound)))))
-      ;; If the above detection fails, keep searching for open parenthesis
-      ;; backward, and see 1. is there a symbol before it; 2. is POS inside the
-      ;; parentheses.  If these are true, then it is the function name we are
-      ;; looking for.
-      (unless func-beg
-        (goto-char pos)
-        (while (and (citre--search-backward-in-code "(" pos-limit)
-                    (not func-beg))
-          (setq left-paren-pos (point))
-          (skip-chars-backward "\s\t")
-          (setq sym-atpt-bound (bounds-of-thing-at-point 'symbol))
-          (when sym-atpt-bound
-            (save-excursion
-              (goto-char left-paren-pos)
-              (forward-list)
-              (when (<= left-paren-pos pos (point))
-                (setq func-beg (car sym-atpt-bound))))))))
-    func-beg))
-
-(defun citre--find-function-name-pos-lisp (&optional pos)
-  "When in a function call, return the beginning position of the function name.
-When POS is specified, use it as the position inside function
-call.
-
-This is for use in Lisp languages."
-  (let* ((pos (or pos (point)))
-         (pos-limit (max (point-min)
-                         (- pos citre-find-function-name-limit)))
-         (quoted-flag t)
-         (func-beg nil))
-    (save-excursion
-      (goto-char pos)
-      ;; Keep moving backward to the beginning of the form one level up, until
-      ;; we've reached the top one.
-      (while (and (ignore-errors
-                    (progn (up-list -1 'escape-strings 'no-syntax-crossing)
-                           t))
-                  (> (point) pos-limit))
-        ;; `up-list' can also take us to other "beginning of sexps", like the
-        ;; beginning of a string.  We need to rule out these situations.
-        (when (and
-               (eq (char-after) ?\()
-               (citre--pos-in-code-p))
-          ;; If we found a quoted form (here are some detection of the quote to
-          ;; make sure it means "quoted form"), set a flag for it.  The
-          ;; function name should be one level upper than the outermost quoted
-          ;; form.
-
-          ;; We don't count backquote here since although it makes a valid
-          ;; quoted form, it's often used in macros where we do "list
-          ;; transformation", and when the macro is called, it functions as
-          ;; lisp code.
-          (if (and (eq (char-before) ?\')
-                   (citre--pos-in-code-p (1- (point)))
-                   (not (memq (char-before (1- (point))) '(?\\ ?\?))))
-              (setq quoted-flag t)
-            ;; If we are at a form that's one level upper than a quoted form,
-            ;; record its car as function name.
-            (when quoted-flag
-              (save-excursion
-                (forward-char)
-                (skip-chars-forward "\s\t\n")
-                (setq func-beg (car (bounds-of-thing-at-point 'symbol)))))
-            (setq quoted-flag nil)))))
-    ;; Make sure the top form isn't quoted.
-    (when (and func-beg (not quoted-flag))
-      func-beg)))
-
-(defun citre--find-function-name-pos (&optional pos)
-  "When in a function call, return the beginning position of the function name.
-When POS is specified, use it as the position inside function
-call.
-
-It looks up `citre-find-function-name-pos-function-alist' to find
-the appropriate function to call."
-  (let ((func nil))
-    (cl-dolist (pair citre-find-function-name-pos-function-alist)
-      (if (eq (car pair) t)
-          (progn
-            (setq func (cdr pair))
-            (cl-return))
-        (when (apply #'derived-mode-p (car pair))
-          (setq func (cdr pair))
-          (cl-return))))
-    (funcall func pos)))
-
-(defun citre--find-function-name ()
-  "When in a function call, return the function name."
-  (let ((pos (citre--find-function-name-pos)))
-    (when pos
-      (save-excursion
-        (goto-char pos)
-        (thing-at-point 'symbol)))))
-
-;; TODO: When signature is nil, use the line in the definition location
-;; instead.  Maybe this is appropriate for other interfaces too.
-(defun citre-eldoc-function ()
-  "When in a function call, return a help string about the function.
-The help string consists of the function name and its signature,
-and can be used as eldoc message."
-  (when-let* ((func-name (citre--find-function-name))
-              (records (citre-get-definitions nil func-name)))
-    (concat
-     (propertize func-name 'face 'font-lock-function-name-face)
-     " "
-     (cl-dolist (record records)
-       (when-let ((signature (citre-core-get-field 'signature record)))
-         (cl-return signature))))))
-
 ;;;; Tool: misc commands
 
 (defun citre-show-project-root ()
@@ -589,11 +369,7 @@ correctly."
           (setq citre-completion-in-region-function-orig
                 completion-in-region-function))
         (set (make-local-variable 'completion-in-region-function)
-             citre-completion-in-region-function)))
-    ;; Eldoc integration.
-    (when citre-enable-eldoc-integration
-      (add-function :before-until (local 'eldoc-documentation-function)
-                    #'citre-eldoc-function)))
+             citre-completion-in-region-function))))
    (t
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
@@ -602,9 +378,7 @@ correctly."
           (setq completion-in-region-function
                 citre-completion-in-region-function-orig)
           (setq citre-completion-in-region-function-orig nil))
-      (kill-local-variable 'completion-in-region-function))
-    (remove-function (local 'eldoc-documentation-function)
-                     #'citre-eldoc-function))))
+      (kill-local-variable 'completion-in-region-function)))))
 
 (provide 'citre-basic-tools)
 
