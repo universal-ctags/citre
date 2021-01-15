@@ -78,7 +78,7 @@ non-nil."
 ;;;;; Keybindings
 
 (defcustom citre-peek-ace-keys '(?a ?s ?d ?f ?j ?k ?l ?\;)
-  "Keys used for `citre-peek-through'."
+  "Ace keys used for `citre-peek-through'."
   :type '(repeat :tag "Keys" character)
   :group 'citre)
 
@@ -209,12 +209,13 @@ Annotations include kind, type, etc."
 ;;;;; List functions
 
 (defun citre--delete-nth (n list)
-  "Delete Nth element in LIST and return it."
+  "Delete Nth element in LIST and return the modified list."
   (setf (nthcdr n list) (nthcdr (1+ n) list))
   list)
 
 (defun citre--insert-nth (newelt n list)
-  "Insert NEWELT into the Nth position in LIST and return it."
+  "Insert NEWELT to the Nth position in LIST.
+The modified list is returned."
   (setf (nthcdr n list) (push newelt (nthcdr n list)))
   list)
 
