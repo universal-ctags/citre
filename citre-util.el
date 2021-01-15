@@ -208,7 +208,7 @@ project root PROJECT is specified, use that project instead."
   (let* ((project (when project (expand-file-name project)))
          (project (or project (citre-project-root)))
          (path (expand-file-name path)))
-    (if (string-prefix-p project path)
+    (if (and project (string-prefix-p project path))
         (file-relative-name path project)
       path)))
 
