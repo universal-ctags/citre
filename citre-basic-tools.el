@@ -165,7 +165,7 @@ file."
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql citre)))
   "Define method for xref to get symbol at point."
-  (thing-at-point 'symbol))
+  (citre-get-symbol))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql citre)) symbol)
   "Define method for xref to find definition of SYMBOL."
@@ -298,13 +298,14 @@ CAND is the returned value of `citre-make-completion-str'."
 
 (defun citre-completion-at-point ()
   "Function used for `completion-at-point-functions'."
-  (when-let* ((bounds (bounds-of-thing-at-point 'symbol))
+  (when-let* ((symbol (citre-get-symbol))
+              (bounds (citre-get-property symbol 'bounds))
               (start (car bounds))
               (end (cdr bounds))
               (collection
                (mapcar #'citre-make-completion-str
                        (citre-get-completions
-                        nil nil citre-capf-substr-completion)))
+                        symbol nil citre-capf-substr-completion)))
               (get-docsig
                (lambda (candidate)
                  (citre-get-property candidate 'signature 'from-record))))

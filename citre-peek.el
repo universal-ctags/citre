@@ -881,7 +881,7 @@ The returned def list is the root def list of the peek session."
 
 (defun citre-peek--get-def-list ()
   "Return the def list of symbol under point."
-  (let* ((symbol (thing-at-point 'symbol 'no-properties))
+  (let* ((symbol (substring-no-properties (citre-get-symbol)))
          (definitions (citre-get-definitions))
          (deflist (citre-peek--def-list-create definitions symbol)))
     (when (null definitions)
@@ -931,7 +931,7 @@ set variables according to it."
     (save-excursion
       (goto-char point)
       ;; TODO: could we make the get definitions API also return the symbol?
-      (let* ((symbol (thing-at-point 'symbol 'no-properties))
+      (let* ((symbol (substring-no-properties (citre-get-symbol)))
              (root-list (citre-peek--make-def-list-of-current-location
                          symbol))
              (branch (citre-peek--get-def-list)))
