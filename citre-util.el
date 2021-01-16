@@ -226,10 +226,121 @@ throws an user error if no tags file was found."
        citre-tags-files)
       (user-error "Tags file not found")))
 
+;;;;; APIs: Language support framework
+
+;;;;;; The lookup table
+
+(defvar citre-language-support-alist nil
+  "The lookup table for language-specific support.
+
+A key of it is the language's major mode (a symbol).
+
+A value of it is a plist.  Its props and values are:
+
+- `:get-symbol': The function to get the symbol at point.
+
+  It's a function with no arguments.  The returned value is a
+  string of the symbol name.  To support auto-completion, Citre
+  requires a `citre-bounds' property, which is a cons pair of the
+  beginning/end positions of the symbol.  You can use other
+  properties to record the information you need for
+  filtering/sorting the tags, see the props below.
+
+  If you don't specify this prop, `citre-get-symbol-default' is
+  used as fallback.  You can also use it internally, and add more
+  properties you need.
+
+  When there's an inactive region, it's recommended to get the
+  text in it as a symbol, so when your function doesn't work well
+  for the user, they can manually specify which part to get.
+  `citre-get-marked-symbol' implements this, and is also used by
+  `citre-get-symbol'.
+
+- `:completion-filter': The filter for auto-completion.
+
+  It can be a filter expression, a symbol whose value is a filter
+  expression, or a function that takes the string returned by the
+  `:get-symbol' function, and returns the filter expression.  The
+  fallback is `citre-completion-default-filter'.
+
+- `:completion-sorter': The sorter for auto-completion.
+
+  It can be a sorter expression, a symbol whose value is a sorter
+  expression, or a function that takes the string returned by the
+  `:get-symbol' function, and returns the sorter expression.The
+  fallback is `citre-completion-default-sorter'.
+
+- `:definition-filter' and `:definition-sorter': The same as
+  `:completion-filter' and `:completion-sorter', but used for
+  finding definitions.  Their fallback values are
+  `citre-definition-default-filter' and
+  `citre-definition-default-sorter'.")
+
+(defun citre--get-value-in-language-alist (prop &optional symbol)
+  "A helper for lookup PROP in `citre-language-support-alist'.
+Returns the value in it for the language in current buffer, and
+PROP.
+
+If SYMBOL is non-nil, and the value we get is a function, call
+the function on SYMBOL and return its value."
+  (when-let ((value (plist-get (alist-get major-mode
+                                          citre-language-support-alist)
+                               prop)))
+    (cond
+     ((and (symbolp value) (boundp value))
+      (symbol-value value))
+     ((and symbol (functionp value))
+      (funcall value symbol))
+     (t value))))
+
+;;;;;; Get symbol at point
+
+(defun citre-get-marked-symbol ()
+  "Get the text in activate region as a symbol."
+  (when (use-region-p)
+    (let ((bounds (cons (region-beginning) (region-end))))
+      (citre-put-property
+       (buffer-substring-no-properties (car bounds) (cdr bounds))
+       'bounds bounds))))
+
+(defun citre-get-symbol-at-point ()
+  "Get the symbol at point."
+  (when-let ((bounds (bounds-of-thing-at-point 'symbol)))
+    (citre-put-property
+     (buffer-substring-no-properties (car bounds) (cdr bounds))
+     'bounds bounds)))
+
+(defun citre-get-symbol-default ()
+  "Get the symbol at point.
+If there's an active region, the text in it is returned as a
+symbol.  Otherwise, the symbol at point is returned.  If both
+fails, nil is returned.
+
+The returned symbol is a string with a `citre-bounds' property,
+recording the beginning/end positions of the symbol."
+  (or (citre-get-marked-symbol)
+      (citre-get-symbol-at-point)))
+
+(defun citre-get-symbol ()
+  "Get the symbol at point.
+Set `citre-get-symbol-function-alist' to control the behavior of
+this function for different languages."
+  (funcall (or (citre--get-value-in-language-alist :get-symbol)
+               #'citre-get-symbol-default)))
+
 ;;;;; APIs: Auto-completion related
 
-;; TODO: Design a way of requiring more fields. This is needed for
-;; language-specific support.
+;; TODO: A better filter
+(defvar citre-completion-default-filter nil
+  "The default filter expression for auto-completion.")
+
+(defvar citre-completion-default-sorter
+  (citre-core-build-sorter
+   '(length name +) 'name)
+  "The default sorter expression for auto-completion.
+This sorts the candidates by their length, then the alphabetical
+order of their name.")
+
 (defun citre-get-completions (&optional symbol tagsfile substr-completion)
   "Get completions from TAGSFILE of symbol at point.
 If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
@@ -243,15 +354,16 @@ its text property `citre-kind' and `citre-signature' being the
 kind and signature of the tag.
 
 It returns nil when the completion can't be done."
-  ;; TODO: When inside a symbol, don't grab the part after point.
-  ;; TODO: For language specific support, we have to drop this "symbol" concept
-  ;; some day, and replace it with data that records the context.
-  (let ((symbol (or symbol (thing-at-point 'symbol)))
+  (let ((symbol (or symbol (citre-get-symbol)))
         (tagsfile (or tagsfile (citre-tags-file-path)))
         (match (if substr-completion 'substr 'prefix)))
     (citre-get-records tagsfile symbol match
-                       :sorter (citre-core-build-sorter
-                                '(length name +) 'name)
+                       :filter (or (citre--get-value-in-language-alist
+                                    :completion-filter symbol)
+                                   citre-completion-default-filter)
+                       :sorter (or (citre--get-value-in-language-alist
+                                    :completion-sorter symbol)
+                                   citre-completion-default-sorter)
                        :require '(name)
                        :optional '(ext-kind-full signature typeref))))
 
@@ -269,6 +381,16 @@ This is for showing the results for auto-completion tools."
 
 ;;;;; APIs: Finding definitions
 
+(defvar citre-definition-default-filter nil
+  "The default filter expression for finding definitions.")
+
+(defvar citre-definition-default-sorter
+  (citre-core-build-sorter
+   'input '(length name +) 'name)
+  "The default sorter expression for finding definitions.
+This sorts the file name by their alphabetical order, then the
+length and alphabetical order of the tag names.")
+
 (defun citre-get-definitions (&optional tagsfile symbol)
   "Get definitions from tags file TAGSFILE of symbol at point.
 If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
@@ -276,13 +398,17 @@ not specified, find it automatically under current project root.
 
 The result is a list of records, with the fields `ext-abspath',
 `line' and `kind'."
-  (let ((symbol (or symbol (thing-at-point 'symbol)))
+  (let ((symbol (or symbol (citre-get-symbol)))
         (tagsfile (or tagsfile (citre-tags-file-path))))
     (unless symbol
       (user-error "No symbol at point"))
     (citre-get-records tagsfile symbol 'exact
-                       :sorter (citre-core-build-sorter
-                                'input '(length name +) 'name)
+                       :filter (or (citre--get-value-in-language-alist
+                                    :definition-filter symbol)
+                                   citre-definition-default-filter)
+                       :sorter (or (citre--get-value-in-language-alist
+                                    :definition-sorter symbol)
+                                   citre-definition-default-sorter)
                        :require '(name ext-abspath pattern)
                        :optional '(ext-kind-full line typeref))))
 
