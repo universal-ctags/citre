@@ -881,22 +881,23 @@ If CASE-FOLD is non-nil, do case-insensitive matching.  If INVERT
 is non-nil, keep lines that doesn't match.  If IGNORE-MISSING is
 non-nil, also keep lines where FIELD is missing."
   (citre-core--error-on-arg string #'stringp)
-  (let ((field (intern (concat "$" (symbol-name field))))
-        (filter
-         (pcase match
-           ('regexp
-            `((string->regexp ,string :case-fold
-                              ,(pcase case-fold
-                                 ('nil 'false)
-                                 (_ 'true)))
-              ,field))
-           (_ `(,(intern (concat (symbol-name match) "?"))
-                ,(pcase case-fold
-                   ('nil field)
-                   (_ `(downcase ,field)))
-                ,(pcase case-fold
-                   ('nil string)
-                   (_ (downcase string))))))))
+  ;; TODO: Don't throw error on missing fields even IGNORE-MISSING is nil.
+  (let* ((field (intern (concat "$" (symbol-name field))))
+         (filter
+          (pcase match
+            ('regexp
+             `((string->regexp ,string :case-fold
+                               ,(pcase case-fold
+                                  ('nil 'false)
+                                  (_ 'true)))
+               ,field))
+            (_ `(,(intern (concat (symbol-name match) "?"))
+                 ,(pcase case-fold
+                    ('nil field)
+                    (_ `(downcase ,field)))
+                 ,(pcase case-fold
+                    ('nil string)
+                    (_ (downcase string))))))))
     (when invert
       (setq filter `(not ,filter)))
     (when ignore-missing
