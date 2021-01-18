@@ -190,7 +190,9 @@ buffer is set.  When BUFFER is non-nil, find project root for the
 file in BUFFER instead."
   (with-current-buffer (or buffer (current-buffer))
     (or citre-project-root
-        (when-let* ((file (buffer-file-name))
+        (when-let* ((file (or (buffer-file-name)
+                              ;; Support non-file buffers, e.g., Dired.
+                              (expand-file-name default-directory)))
                     (dir (file-name-directory file)))
           (setq citre-project-root
                 (or (citre--find-dir-with-denoters

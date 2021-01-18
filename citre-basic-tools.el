@@ -353,9 +353,6 @@ correctly."
   ;; `citre-project-root' in *scratch* buffer and test somethings in it.  Maybe
   ;; some users would want to do this.
   (cond
-   ((not (buffer-file-name))
-    (setq citre-mode nil)
-    (user-error "Can't enable citre mode: buffer is not visiting a file"))
    (citre-mode
     ;; Xref integration.
     (when citre-enable-xref-integration
