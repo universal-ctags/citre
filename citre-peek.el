@@ -932,14 +932,19 @@ set variables according to it."
       (goto-char point)
       ;; TODO: could we make the get definitions API also return the symbol?
       (let* ((symbol (substring-no-properties (citre-get-symbol)))
-             (root-list (citre-peek--make-def-list-of-current-location
-                         symbol))
-             (branch (citre-peek--get-def-list)))
-        (citre-peek--push-branch-in-current-entry-in-def-list
-         root-list branch)
-        (setq citre-peek--session-root-list root-list)
-        (setq citre-peek--depth-in-root-list 1)
-        (citre-peek--setup-displayed-defs-interval branch)
+             (deflist (citre-peek--get-def-list)))
+        ;; For file buffers, we create a root def list for current position, so
+        ;; the user can go back to it later.
+        (if (buffer-file-name)
+            (let ((root-list (citre-peek--make-def-list-of-current-location
+                              symbol)))
+              (citre-peek--push-branch-in-current-entry-in-def-list
+               root-list deflist)
+              (setq citre-peek--session-root-list root-list)
+              (setq citre-peek--depth-in-root-list 1))
+          (setq citre-peek--session-root-list deflist)
+          (setq citre-peek--depth-in-root-list 0))
+        (citre-peek--setup-displayed-defs-interval deflist)
         (setq citre-peek--content-update t)))))
 
 (defun citre-peek--def-index-forward (n)
