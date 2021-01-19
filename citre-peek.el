@@ -256,7 +256,7 @@ This is for generating the \"entry\" point of the symbol chain."
       ;; `syntax-ppss' is not always reliable, so we only use it when font lock
       ;; mode is disabled.
       (if font-lock-mode
-          (let ((pos-faces (get-text-property pos 'face)))
+          (when-let ((pos-faces (get-text-property pos 'face)))
             (unless (listp pos-faces)
               (setq pos-faces (list pos-faces)))
             ;; Use `cl-subsetp' rather than `cl-intersection', so that
