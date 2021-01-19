@@ -313,11 +313,10 @@ tools."
                                   (or type "")
                                   (if (or kind type) " " ""))
                                  'face 'citre-definition-annotation-face))
-         (path (propertize
-                (citre-relative-path
-                 (citre-core-get-field 'ext-abspath record))
-                'face 'font-lock-function-name-face))
-         (file-missing-p (if (file-exists-p path) "" "*")))
+         (abspath (citre-core-get-field 'ext-abspath record))
+         (path (propertize (citre-relative-path abspath)
+                           'face 'font-lock-function-name-face))
+         (file-missing-p (if (file-exists-p abspath) "" "*")))
     (citre-propertize (concat annotation file-missing-p path line str)
                       record)))
 
