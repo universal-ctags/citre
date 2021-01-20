@@ -900,8 +900,11 @@ non-nil, also keep lines where FIELD is missing."
                     (_ (downcase string))))))))
     (when invert
       (setq filter `(not ,filter)))
-    (when ignore-missing
-      (setq filter `(or (not ,field) ,filter)))
+    ;; The value of a missing field is #f, and applying string operators on it
+    ;; produces an error.  So we have to make sure it's not #f beforehand.
+    (if ignore-missing
+        (setq filter `(or (not ,field) ,filter))
+      (setq filter `(and ,field ,filter)))
     filter))
 
 ;; TODO: Should we convert between single-letter and full-length kinds here?
