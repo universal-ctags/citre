@@ -876,6 +876,8 @@ MATCH could be:
 - `substr': See if FIELD contains STRING.
 - `regexp': See if FIELD can be matched by regexp STRING.  \"/\"
   in STRING doesn't need to be escaped.
+- `member': See if STRING is a member of FIELD, where FIELD is a
+  comma-separated list.
 
 If CASE-FOLD is non-nil, do case-insensitive matching.  If INVERT
 is non-nil, keep lines that doesn't match.  If IGNORE-MISSING is
@@ -883,13 +885,20 @@ non-nil, also keep lines where FIELD is missing."
   (citre-core--error-on-arg string #'stringp)
   ;; TODO: Don't throw error on missing fields even IGNORE-MISSING is nil.
   (let* ((field (intern (concat "$" (symbol-name field))))
+         (regexp-case-fold (pcase case-fold
+                             ('nil 'false)
+                             (_ 'true)))
          (filter
           (pcase match
             ('regexp
-             `((string->regexp ,string :case-fold
-                               ,(pcase case-fold
-                                  ('nil 'false)
-                                  (_ 'true)))
+             `((string->regexp ,string :case-fold ,regexp-case-fold)
+               ,field))
+            ('member
+             `((string->regexp ,(concat "(^|,) ?"
+                                        (regexp-quote string)
+                                        "(,|$)")
+                               :case-fold
+                               ,regexp-case-fold)
                ,field))
             (_ `(,(intern (concat (symbol-name match) "?"))
                  ,(pcase case-fold
