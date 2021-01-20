@@ -864,57 +864,96 @@ It tries these in turn:
 
 ;;;;; Build postprocessor expressions
 
-(defun citre-core-build-filter (field string match
-                                      &optional case-fold invert
-                                      ignore-missing)
-  "Return a filter expression that filters on FIELD by STRING.
-MATCH could be:
+;;;;;; Internals
 
-- `eq': See if FIELD is STRING.
-- `prefix': See if FIELD starts with STRING.
-- `suffix': See if FIELD ends with STRING.
-- `substr': See if FIELD contains STRING.
-- `regexp': See if FIELD can be matched by regexp STRING.  \"/\"
-  in STRING doesn't need to be escaped.
-- `member': See if STRING is a member of FIELD, where FIELD is a
-  comma-separated list.
+(defun citre-core--readtags-regexp-builder (str1 str2 case-fold)
+  "Build filter expression that matches STR1 by STR2.
+STR1 can be a string or a symbol representing a field.  STR2 must
+be a string.  When CASE-FOLD is non-nil, do case-insensitive
+matching."
+  (unless (stringp str2)
+    (error "STR2 must be a string"))
+  `((string->regexp ,str2
+                    :case-fold
+                    ,(pcase case-fold
+                       ('nil 'false)
+                       (_ 'true)))
+    ,str1))
+
+(defun citre-core--readtags-case-fold-string-builder (str case-fold)
+  "Convert STR by CASE-FOLD.
+STR can be a string or a symbol representing a field.  When
+case-fold is non-nil, its downcased version is returned.
+Otherwise it's directly returned."
+  (if case-fold
+      (if (symbolp str)
+          `(downcase ,str)
+        (downcase str))
+    str))
+
+;;;;;; APIs
+
+(defun citre-core-build-filter (str1 str2 match
+                                     &optional case-fold invert
+                                     ignore-missing)
+  "Return a filter expression that matches STR1 and STR2.
+Both STRs can be a string, or a symbol of the field name.  MATCH
+could be:
+
+- `eq': See if STR1 equals STR2.
+- `prefix': See if STR1 is prefixed by STR2.
+- `suffix': See if STR1 is suffixed by STR2.
+- `substr': See if STR1 contains STR2.
+- `regexp': See if STR1 can be matched by STR2, which is a
+  regexp.  \"/\" in strings doesn't need to be escaped.  STR2
+  must be a string.
+- `member': See if STR1 contains STR2 as a member, where STR1 is
+  a comma-separated list.  STR2 must be a string.
+
+The order of STR1 and STR2 may feel a bit weird for Elisp users.
+That's because the convention of readtags is use STR1 as the
+\"target string\", and use STR2 as the prefix/suffix/regexp...
 
 If CASE-FOLD is non-nil, do case-insensitive matching.  If INVERT
-is non-nil, keep lines that doesn't match.  If IGNORE-MISSING is
-non-nil, also keep lines where FIELD is missing."
-  (citre-core--error-on-arg string #'stringp)
-  ;; TODO: Don't throw error on missing fields even IGNORE-MISSING is nil.
-  (let* ((field (intern (concat "$" (symbol-name field))))
-         (regexp-case-fold (pcase case-fold
-                             ('nil 'false)
-                             (_ 'true)))
-         (filter
-          (pcase match
-            ('regexp
-             `((string->regexp ,string :case-fold ,regexp-case-fold)
-               ,field))
-            ('member
-             `((string->regexp ,(concat "(^|,) ?"
-                                        (regexp-quote string)
-                                        "(,|$)")
-                               :case-fold
-                               ,regexp-case-fold)
-               ,field))
-            (_ `(,(intern (concat (symbol-name match) "?"))
-                 ,(pcase case-fold
-                    ('nil field)
-                    (_ `(downcase ,field)))
-                 ,(pcase case-fold
-                    ('nil string)
-                    (_ (downcase string))))))))
+is non-nil, flip the filter so it only keep lines that doesn't
+match.  If IGNORE-MISSING is non-nil, also keep lines where the
+fields pointed by STR1 or STR2 (if one/both of them are symbols)
+are missing, otherwise only keep lines that have those fields."
+  (let ((symbol-or-string-p (lambda (str)
+                              (or (symbolp str) (stringp str)))))
+    (citre-core--error-on-arg str1 symbol-or-string-p)
+    (citre-core--error-on-arg str2 symbol-or-string-p))
+  (let* (syms
+         (str-process
+          (lambda (str)
+            (if (symbolp str)
+                (let ((sym (intern (concat "$" (symbol-name str)))))
+                  (push sym syms)
+                  sym)
+              str)))
+         (str1 (funcall str-process str1))
+         (str2 (funcall str-process str2))
+         filter final-filter)
+    (setq filter
+          (if (memq match '(regexp member))
+              (let ((str2 (if (eq match 'regexp)
+                              str2
+                            (concat "(^|,) ?" (regexp-quote str2) "(,|$)"))))
+                (citre-core--readtags-regexp-builder str1 str2 case-fold))
+            (let* ((str1 (citre-core--readtags-case-fold-string-builder
+                          str1 case-fold))
+                   (str2 (citre-core--readtags-case-fold-string-builder
+                          str2 case-fold)))
+              `(,(intern (concat (symbol-name match) "?")) ,str1 ,str2))))
     (when invert
       (setq filter `(not ,filter)))
     ;; The value of a missing field is #f, and applying string operators on it
     ;; produces an error.  So we have to make sure it's not #f beforehand.
-    (if ignore-missing
-        (setq filter `(or (not ,field) ,filter))
-      (setq filter `(and ,field ,filter)))
-    filter))
+    (push (if ignore-missing 'or 'and) final-filter)
+    (dolist (sym syms)
+      (push (if ignore-missing `(not ,sym) sym) final-filter))
+    (push filter final-filter)
+    (nreverse final-filter)))
 
 ;; TODO: Should we convert between single-letter and full-length kinds here?
 ;; The implementation would be messy since it also involves the language field,
