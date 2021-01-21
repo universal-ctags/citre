@@ -100,7 +100,7 @@ priority (i.e., if we find one, then the rest will be ignored)."
 - `sensitive': Always do case sensitive completion.
 - `insensitive': Always do case insensitive completion.
 - `smart': Be sensive when completing a symbol with uppercase
-  letters, otherwise be insensitive.
+  letters or underscores, otherwise be insensitive.
 
 Note for developers: Actually this doesn't affect auto-completion
 directly.  This option controls the behavior of
@@ -145,7 +145,8 @@ and some of its fields, which can be utilized by
                        ('smart (if (memq match '(nil exact))
                                    nil
                                  (if (and name
-                                          (string= (downcase name) name))
+                                          (or (string= (downcase name) name)
+                                              (string-match "_" name)))
                                      t nil))))))
     (citre-core-get-records tagsfile- name match case-fold-
                             :filter filter :sorter sorter
