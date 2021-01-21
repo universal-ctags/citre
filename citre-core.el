@@ -955,6 +955,15 @@ are missing, otherwise only keep lines that have those fields."
     (push filter final-filter)
     (nreverse final-filter)))
 
+(defun citre-core-filter-field-exist (field &optional invert)
+  "Return a filter expression that requires FIELD to exist.
+FIELD is a symbol of the field name.  When INVERT is non-nil,
+require FIELDS to be missing."
+  (let ((field (intern (concat "$" (symbol-name field)))))
+    (if invert
+        `(not ,field)
+      field)))
+
 ;; TODO: Should we convert between single-letter and full-length kinds here?
 ;; The implementation would be messy since it also involves the language field,
 ;; and we need to match the file extension if the language field is missing.
