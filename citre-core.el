@@ -973,7 +973,7 @@ will be returned.  TAGSFILE is a canonical path."
         (arg-one-letter-kind-p (eq (length kind) 1)))
     (if (eq tags-file-one-letter-kind-p
             arg-one-letter-kind-p)
-        `(eq? $kind ,kind)
+        (citre-core-build-filter 'kind kind 'eq nil nil 'ignore-missing)
       'true)))
 
 ;;;;; Build sorter expressions
