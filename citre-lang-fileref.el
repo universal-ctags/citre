@@ -59,11 +59,12 @@ name part manually."
   (or (citre-get-marked-symbol)
       (when-let ((file (and (derived-mode-p 'dired-mode)
                             (dired-get-filename 'no-dir t))))
-        (if (and (string-match "\\.[^.]*$" file)
-                 (member (match-string 0 file)
-                         '(".h" ".hpp")))
-            file
-          (substring file 0 (match-beginning 0))))))
+        (if (string-match "\\.[^.]*$" file)
+            (if (member (match-string 0 file)
+                        '(".h" ".hpp"))
+                file
+              (substring file 0 (match-beginning 0)))
+          file))))
 
 ;;;; Filter for finding references
 
