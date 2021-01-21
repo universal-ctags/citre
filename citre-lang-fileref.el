@@ -79,13 +79,21 @@ name part manually."
                            nil nil 'ignore-missing)
   "Filter for finding references of modules/libraries/headers.")
 
+(defvar citre-lang-fileref-sorter
+  (citre-core-build-sorter
+   `(filter ,(citre-core-build-filter 'extras "reference" 'member) +)
+   'input '(length name +) 'name)
+  "Sorter for finding references of modules/libraries/headers.")
+
 ;;;; Plugging into the language support framework
 
 (defvar citre-lang-fileref-plist
-  `(:definition-filter
+  `(:get-symbol
+    citre-lang-fileref-get-symbol
+    :definition-filter
     citre-lang-fileref-filter
-    :get-symbol
-    citre-lang-fileref-get-symbol)
+    :definition-sorter
+    citre-lang-fileref-sorter)
   "Support for finding reference of files for Citre.
 It supports finding references of the file (or its related
 module/library) at point in file browser buffers.  Currently only
