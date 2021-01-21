@@ -334,7 +334,16 @@ this function for different languages."
 ;;;;; APIs: Auto-completion related
 
 ;; TODO: A better filter
-(defvar citre-completion-default-filter nil
+(defvar citre-completion-default-filter
+  `(and
+    ,(citre-core-build-filter 'extras "anonymous" 'member
+                              nil 'invert 'ignore-missing)
+    ,(citre-core-build-filter 'extras "reference" 'member
+                              nil 'invert 'ignore-missing)
+    ;; TODO: replace this by `citre-core-filter-match-kind'.  I now notice that
+    ;; the `tagsfile' arg makes it unusable.
+    ,(citre-core-build-filter 'kind "file" 'eq
+                              nil 'invert 'ignore-missing))
   "The default filter expression for auto-completion.")
 
 (defvar citre-completion-default-sorter
@@ -384,11 +393,17 @@ This is for showing the results for auto-completion tools."
 
 ;;;;; APIs: Finding definitions
 
-(defvar citre-definition-default-filter nil
+(defvar citre-definition-default-filter
+  `(and
+    ,(citre-core-build-filter 'extras "anonymous" 'member
+                              nil 'invert 'ignore-missing)
+    ,(citre-core-build-filter 'kind "file" 'eq
+                              nil 'invert 'ignore-missing))
   "The default filter expression for finding definitions.")
 
 (defvar citre-definition-default-sorter
   (citre-core-build-sorter
+   `(filter ,(citre-core-build-filter 'extras "anonymous" 'member) -)
    'input '(length name +) 'name)
   "The default sorter expression for finding definitions.
 This sorts the file name by their alphabetical order, then the
@@ -415,6 +430,7 @@ The result is a list of records, with the fields `ext-abspath',
                        :require '(name ext-abspath pattern)
                        :optional '(ext-kind-full line typeref))))
 
+;; TODO: annotate reference tags
 (defun citre-make-location-str (record)
   "Generate a string for RECORD for displaying.
 RECORD should be an element in the returned value of
