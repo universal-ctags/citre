@@ -862,7 +862,7 @@ It tries these in turn:
 
 ;;;; APIs
 
-;;;;; Build postprocessor expressions
+;;;;; Build filter expressions
 
 ;;;;;; Internals
 
@@ -976,8 +976,61 @@ will be returned.  TAGSFILE is a canonical path."
         `(eq? $kind ,kind)
       'true)))
 
-(defun citre-core-build-sorter (&rest fields)
-  "Return a sorter expression based on FIELDS.
+;;;;; Build sorter expressions
+
+;;;;;; Internals
+
+(defun citre-core--readtags-expr-replace-$-by-& (expr)
+  "Replace $-entry by &-entry in EXPR.
+EXPR is a filter expression."
+  (if (consp expr)
+      (cons (citre-core--readtags-expr-replace-$-by-& (car expr))
+            (citre-core--readtags-expr-replace-$-by-& (cdr expr)))
+    (if (and (symbolp expr) (eq (aref (symbol-name expr) 0) ?$))
+        (intern (concat "&" (substring (symbol-name expr) 1)))
+      expr)))
+
+(defun citre-core--simple-sorter-builder (elt)
+  "Build a sorter based on ELT.
+ELT is an element of the FIELDS arg in `citre-core-build-sorter',
+and is one of the \"OPERATOR\" or \"field\" variant."
+  (let* ((variant (car elt))
+         (field (nth 1 elt))
+         (entry (lambda (prefix)
+                  (intern (concat prefix (symbol-name field)))))
+         ($-entry (funcall entry "$"))
+         (&-entry (funcall entry "&"))
+         (opd (lambda (entry)
+                (pcase variant
+                  ('field entry)
+                  (_ `(,(car elt) ,entry)))))
+         ($-opd (funcall opd $-entry))
+         (&-opd (funcall opd &-entry)))
+    `(if (and ,$-entry ,&-entry)
+         ,(pcase (nth 2 elt)
+            ('+ `(<> ,$-opd ,&-opd))
+            ('- `(<> ,&-opd ,$-opd))
+            (_ (error "Invalid element: %s" elt)))
+       ;; For tags without the specified field, the order is uncertain.
+       0)))
+
+(defun citre-core--filter-sorter-builder (elt)
+  "Build a sorter based on ELT.
+ELT is an element of the FIELDS arg in `citre-core-build-sorter',
+and is the \"filter\" variant."
+  (let* (($-filter (nth 1 elt))
+         (&-filter (citre-core--readtags-expr-replace-$-by-& $-filter))
+         (vals (pcase (nth 2 elt)
+                 ('+ '(-1 1))
+                 ('- '(1 -1))
+                 (_ (error "Invalid element: %s" elt)))))
+    `(<> (if ,$-filter ,@vals)
+         (if ,&-filter ,@vals))))
+
+;;;;;; The API
+
+(defun citre-core-build-sorter (&rest args)
+  "Return a sorter expression based on ARGS.
 The return value can be used as the :sorter argument in
 `citre-core-get-records'.
 
@@ -985,12 +1038,39 @@ Each element of FIELDS can be:
 
 - A symbol.  For example, `input' means sort based on the input
   field, in ascending order.
-- A list `(symbol +)' or `(symbol -)'.  For example, `(line +)'
-  means sort based on the line field, in ascending order,
-  and `(line -)' means in descending order.
-- A list `(operator symbol +)' or `(operator symbol -)'.  For
-  example, `(length name +)' means sort based on the lengths of
-  the tag names, in ascending order.
+
+- A list
+
+      (field SYMBOL +/-)
+
+  For example, `(field line +)' means sorting based on the line
+  field, in ascending order, and `(field line -)' means in
+  descending order.
+
+- A list
+
+      (OPERATOR SYMBOL +/-)
+
+  For example, `(length name +)' means sorting based on the
+  lengths of the tag names, in ascending order, and `(length name
+  -)' means in the descending order.
+
+- A list
+
+      (filter FILTER-EXPR +/-)
+
+  For example, `(filter (eq? $kind \"file\") +)' means puting
+  tags with \"file\" kind above others, and `(filter (eq? $kind
+  \"file\") -)' means putting them below others.
+
+In readtags, if you sort directly based on a field that's missing
+in some lines, it will throw an error.  Here, all above variants
+except the \"filter\" one are processed so that this won't
+happen, and the order of tags involving missing fields is
+uncertain.  For \"filter\" variant, it's recommended to build the
+filter expression using Citre APIs to make sure it can be evaled
+on each tag.  You can think that tags that are keeped by
+`citre-core-build-filter' are put above/below others.
 
 When multiple elements are presented in FIELDS, they are tried in
 order, until the order is decided.  For example,
@@ -998,35 +1078,17 @@ order, until the order is decided.  For example,
   (citre-core-build-sorter input \\='(line -))
 
 means sort by the file name, then the line number (in descending
-order) if they are in the same file.
-
-NOTICE: You should make sure that the used fields are not
-presented only in some of the lines in the tags file, or readtags
-will run into errors.  It's ok if it's missing in all lines."
-  (let* ((sorter (list '<or>))
-         (err-msg "Invalid element in FIELDS: %s")
-         (var (lambda (field op)
-                (let ((var (intern (concat op (symbol-name (nth 1 field))))))
-                  (pcase (car field)
-                    ('nil var)
-                    (_ `(,(car field) ,var))))))
-         (expr (lambda (field)
-                 (pcase (nth 2 field)
-                   ('+ `(<> ,(funcall var field "$")
-                            ,(funcall var field "&")))
-                   ('- `(<> ,(funcall var field "&")
-                            ,(funcall var field "$")))
-                   (_ (error (format err-msg field)))))))
-    (dolist (field fields)
-      (let ((field (pcase field
-                     ((pred symbolp)
-                      `(nil ,field +))
-                     ((pred listp)
-                      (pcase (length field)
-                        (2 `(nil ,(car field) ,(nth 1 field)))
-                        (3 field)
-                        (_ (error (format err-msg field))))))))
-        (push (funcall expr field) sorter)))
+order) if they are in the same file."
+  (let* ((sorter (list '<or>)))
+    (dolist (arg args)
+      (when (symbolp arg)
+        (setq arg `(field ,arg +)))
+      (push
+       (pcase (car arg)
+         ('field (citre-core--simple-sorter-builder arg))
+         ('filter (citre-core--filter-sorter-builder arg))
+         (_ (citre-core--simple-sorter-builder arg)))
+       sorter))
     (nreverse sorter)))
 
 ;;;;; Get records from tags files
