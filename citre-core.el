@@ -1006,6 +1006,31 @@ tags that don't have `kind' field."
       (citre-core-build-filter 'kind (concat "^(" (string-join kinds "|") ")$")
                                'regexp nil nil ignore-missing))))
 
+(defun citre-core-filter-input (filename tagsfile &optional match)
+  "Return a filter expression that matches the input field by FILENAME.
+FILENAME should be a canonical path.  The generated filter can
+work no matter the tag uses relative or absolute path.
+
+TAGSFILE is the canonical path of the tags file.
+
+MATCH can be:
+
+- nil or `eq': Match input fields that is FILENAME.
+- `in-dir': Match input fields that is in directory FILENAME."
+  (let* ((filter (list 'or))
+         (match (pcase match
+                  ((or 'nil 'eq) 'eq)
+                  ('in-dir 'prefix)))
+         (info (citre-core--tags-file-info tagsfile))
+         (cwd (gethash 'dir info))
+         (relative-filename (when (and (gethash 'relative-path-p info)
+                                       (string-prefix-p cwd filename))
+                              (substring filename (length cwd)))))
+    (push (citre-core-build-filter 'input filename match) filter)
+    (when relative-filename
+      (push (citre-core-build-filter 'input relative-filename match) filter))
+    (nreverse filter)))
+
 ;;;;; Build sorter expressions
 
 ;;;;;; Internals

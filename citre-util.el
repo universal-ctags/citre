@@ -373,17 +373,21 @@ filters/sorters can make use of them."
 ;; TODO: A better filter
 (defun citre-completion-default-filter (symbol)
   "Default completion filter for SYMBOL."
-  `(and
-    ,(citre-core-build-filter 'extras "anonymous" 'member
-                              nil 'invert 'ignore-missing)
-    ,(citre-core-build-filter 'extras "reference" 'member
-                              nil 'invert 'ignore-missing)
-    ;; For tags file using single-letter kind, apply `not' to
-    ;; `citre-core-filter-kind' may exclude more tags than it should.  But we
-    ;; know the "F" (file) kind is preserved by ctags, and "F" is not used
-    ;; anywhere else, so we could do this.
-    (not ,(citre-core-filter-kind "file"
-                                  (citre-get-property symbol 'tags-file)))))
+  (let ((tags-file (citre-get-property symbol 'tags-file))
+        (file-path (citre-get-property symbol 'file-path)))
+    `(not
+      (or
+       ,(citre-core-build-filter 'extras "anonymous" 'member)
+       ,(citre-core-build-filter 'extras "reference" 'member)
+       ;; For tags file using single-letter kind, apply `not' to
+       ;; `citre-core-filter-kind' may exclude more tags than it should.
+       ;; But we know the "F" (file) kind is preserved by ctags, and "F" is
+       ;; not used anywhere else, so we could do this.
+       ,(citre-core-filter-kind "file" tags-file)
+       ;; Exclude tags that have "file" scope, and is not in this file.
+       (and (not ,(citre-core-filter-input file-path tags-file))
+            (or ,(citre-core-filter-field-exist 'file)
+                ,(citre-core-build-filter 'extras "fileScope" 'member)))))))
 
 (defvar citre-completion-default-sorter
   (citre-core-build-sorter
@@ -434,11 +438,16 @@ This is for showing the results for auto-completion tools."
 
 (defun citre-definition-default-filter (symbol)
   "Default definition filter for SYMBOL."
-  `(and
-    ,(citre-core-build-filter 'extras "anonymous" 'member
-                              nil 'invert 'ignore-missing)
-    (not ,(citre-core-filter-kind "file"
-                                  (citre-get-property symbol 'tags-file)))))
+  (let ((tags-file (citre-get-property symbol 'tags-file))
+        (file-path (citre-get-property symbol 'file-path)))
+    `(not
+      (or
+       ,(citre-core-build-filter 'extras "anonymous" 'member)
+       ,(citre-core-filter-kind "file" tags-file)
+       ;; Exclude tags that have "file" scope, and is not in this file.
+       (and (not ,(citre-core-filter-input file-path tags-file))
+            (or ,(citre-core-filter-field-exist 'file)
+                ,(citre-core-build-filter 'extras "fileScope" 'member)))))))
 
 (defvar citre-definition-default-sorter
   (citre-core-build-sorter
