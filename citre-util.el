@@ -397,13 +397,12 @@ This is for showing the results for auto-completion tools."
   `(and
     ,(citre-core-build-filter 'extras "anonymous" 'member
                               nil 'invert 'ignore-missing)
-    ,(citre-core-build-filter 'kind "file" 'eq
-                              nil 'invert 'ignore-missing))
+    (not ,(citre-core-filter-kind "file")))
   "The default filter expression for finding definitions.")
 
 (defvar citre-definition-default-sorter
   (citre-core-build-sorter
-   `(filter ,(citre-core-build-filter 'extras "anonymous" 'member) -)
+   `(filter ,(citre-core-build-filter 'extras "reference" 'member) -)
    'input '(length name +) 'name)
   "The default sorter expression for finding definitions.
 This sorts the file name by their alphabetical order, then the
