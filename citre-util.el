@@ -384,6 +384,9 @@ filters/sorters can make use of them."
        ;; But we know the "F" (file) kind is preserved by ctags, and "F" is
        ;; not used anywhere else, so we could do this.
        ,(citre-core-filter-kind "file" tags-file)
+       ;; The same as exclude "file" kinds, but tags file may use only one of
+       ;; `file' or `extras' fields, so it's good to have both of them.
+       ,(citre-core-build-filter 'extras "inputFile" 'member)
        ;; Exclude tags that have "file" scope, and is not in this file.
        (and (not ,(citre-core-filter-input file-path tags-file))
             (or ,(citre-core-filter-field-exist 'file)
@@ -444,6 +447,7 @@ This is for showing the results for auto-completion tools."
       (or
        ,(citre-core-build-filter 'extras "anonymous" 'member)
        ,(citre-core-filter-kind "file" tags-file)
+       ,(citre-core-build-filter 'extras "inputFile" 'member)
        ;; Exclude tags that have "file" scope, and is not in this file.
        (and (not ,(citre-core-filter-input file-path tags-file))
             (or ,(citre-core-filter-field-exist 'file)
