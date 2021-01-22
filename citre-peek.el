@@ -717,7 +717,11 @@ When PATH doesn't exist, this returns nil."
                 (set-auto-mode)))
             ;; NOTE: For some weird reason, if you put this before the above
             ;; form, `citre-project-root' will be cleared.
-            (setq citre-project-root current-project))
+            (setq citre-project-root current-project)
+            (setq citre--buffer-file-name path)
+            ;; In case language-specific `:get-symbol' function uses
+            ;; `default-directory'.
+            (setq default-directory (file-name-directory path)))
           (push (cons path buf) citre-peek--temp-buffer-alist)
           buf))))
 

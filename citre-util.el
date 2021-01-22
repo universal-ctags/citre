@@ -231,6 +231,16 @@ throws an user error if no tags file was found."
 
 ;;;;; APIs: Language support framework
 
+(defvar-local citre--buffer-file-name nil
+  "File name in non-file buffers.
+If a tool needs to open a file in a non-file buffer (like
+`citre-peek'), set this variable in that buffer, then the
+`buffer-file-name' function inside `citre-get-symbol' call could
+return the file name.  Simply puts it, the `:get-symbol'
+function (see `citre-language-support-alist') can use
+`buffer-file-name' function normally and it works for peek
+sessions.")
+
 ;;;;;; The lookup table
 
 (defvar citre-language-support-alist nil
@@ -245,9 +255,14 @@ A value of it is a plist.  Its props and values are:
   It's a function with no arguments.  The returned value is a
   string of the symbol name.  To support auto-completion, Citre
   requires a `citre-bounds' property, which is a cons pair of the
-  beginning/end positions of the symbol.  You can use other
-  properties to record the information you need for
-  filtering/sorting the tags, see the props below.
+  beginning/end positions of the symbol.
+
+  You can use other properties to record the information you need
+  for filtering/sorting the tags, see the props below.
+  `citre-file-path' for the canonical path of current file, and
+  `citre-tags-file' for the canonical path of tags file are
+  automatically attached to the returned value, so
+  filters/sorters can make use of them.
 
   If you don't specify this prop, `citre-get-symbol-default' is
   used as fallback.  You can also use it internally, and add more
@@ -277,7 +292,11 @@ A value of it is a plist.  Its props and values are:
   `:completion-filter' and `:completion-sorter', but used for
   finding definitions.  Their fallback values are
   `citre-definition-default-filter' and
-  `citre-definition-default-sorter'.")
+  `citre-definition-default-sorter'.
+
+The filter/sorter functions should be pure, i.e., should only use
+information provided by the symbol, and not fetch information
+from the environment.")
 
 (defun citre--get-value-in-language-alist (prop &optional symbol)
   "A helper for lookup PROP in `citre-language-support-alist'.
@@ -327,14 +346,33 @@ recording the beginning/end positions of the symbol."
 (defun citre-get-symbol ()
   "Get the symbol at point.
 Set `citre-get-symbol-function-alist' to control the behavior of
-this function for different languages."
-  (funcall (or (citre--get-value-in-language-alist :get-symbol)
-               #'citre-get-symbol-default)))
+this function for different languages.  `citre-file-path' and
+`citre-tags-file' properties are attached to the symbol string so
+filters/sorters can make use of them."
+  ;; HACK: make `buffer-file-name' work in temp buffers opened by a peek
+  ;; session.  This is unavoidable, since even we could use something like:
+  ;;
+  ;;   (or citre--buffer-file-name (buffer-file-name))
+  ;;
+  ;; when calculating the `citre-file-path' property, language-specific
+  ;; `:get-symbol' function may still call `buffer-file-name' for its own use.
+  (cl-letf* ((buffer-file-name-orig (symbol-function 'buffer-file-name))
+             ((symbol-function 'buffer-file-name)
+              (lambda (&optional buffer)
+                (or (with-current-buffer (or buffer (current-buffer))
+                      citre--buffer-file-name)
+                    (funcall buffer-file-name-orig buffer)))))
+    (let ((sym (funcall (or (citre--get-value-in-language-alist :get-symbol)
+                            #'citre-get-symbol-default))))
+      (citre-put-property sym 'file-path (buffer-file-name))
+      (citre-put-property sym 'tags-file (citre-tags-file-path))
+      sym)))
 
 ;;;;; APIs: Auto-completion related
 
 ;; TODO: A better filter
-(defvar citre-completion-default-filter
+(defun citre-completion-default-filter (symbol)
+  "Default completion filter for SYMBOL."
   `(and
     ,(citre-core-build-filter 'extras "anonymous" 'member
                               nil 'invert 'ignore-missing)
@@ -344,8 +382,8 @@ this function for different languages."
     ;; `citre-core-filter-kind' may exclude more tags than it should.  But we
     ;; know the "F" (file) kind is preserved by ctags, and "F" is not used
     ;; anywhere else, so we could do this.
-    (not ,(citre-core-filter-kind "file")))
-  "The default filter expression for auto-completion.")
+    (not ,(citre-core-filter-kind "file"
+                                  (citre-get-property symbol 'tags-file)))))
 
 (defvar citre-completion-default-sorter
   (citre-core-build-sorter
@@ -373,7 +411,7 @@ It returns nil when the completion can't be done."
     (citre-get-records tagsfile symbol match
                        :filter (or (citre--get-value-in-language-alist
                                     :completion-filter symbol)
-                                   citre-completion-default-filter)
+                                   (citre-completion-default-filter symbol))
                        :sorter (or (citre--get-value-in-language-alist
                                     :completion-sorter symbol)
                                    citre-completion-default-sorter)
@@ -394,12 +432,13 @@ This is for showing the results for auto-completion tools."
 
 ;;;;; APIs: Finding definitions
 
-(defvar citre-definition-default-filter
+(defun citre-definition-default-filter (symbol)
+  "Default definition filter for SYMBOL."
   `(and
     ,(citre-core-build-filter 'extras "anonymous" 'member
                               nil 'invert 'ignore-missing)
-    (not ,(citre-core-filter-kind "file")))
-  "The default filter expression for finding definitions.")
+    (not ,(citre-core-filter-kind "file"
+                                  (citre-get-property symbol 'tags-file)))))
 
 (defvar citre-definition-default-sorter
   (citre-core-build-sorter
@@ -423,7 +462,7 @@ The result is a list of records, with the fields `ext-abspath',
     (citre-get-records tagsfile symbol 'exact
                        :filter (or (citre--get-value-in-language-alist
                                     :definition-filter symbol)
-                                   citre-definition-default-filter)
+                                   (citre-definition-default-filter symbol))
                        :sorter (or (citre--get-value-in-language-alist
                                     :definition-sorter symbol)
                                    citre-definition-default-sorter)
