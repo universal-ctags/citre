@@ -980,19 +980,31 @@ careful about the capitalization!"
     `(or ,(citre-core-build-filter 'language lang 'eq)
          ,(citre-core-build-filter 'input regexp 'regexp))))
 
-;; TODO: Should we convert between single-letter and full-length kinds here?
-;; The implementation would be messy since it also involves the language field,
-;; and we need to match the file extension if the language field is missing.
-(defun citre-core-filter-kind (kind)
+(defun citre-core-filter-kind (kind &optional tagsfile ignore-missing)
   "Return a filter expression that matches the kind field by KIND.
 KIND should be a full-length kind.  The generated filter works on
 tags file using single-letter `kind' field, but it will match
 more tags than it should, because a single-letter kind can
-corresponds to multiple full-length kinds."
-  (let* ((kinds (gethash kind citre-core--kind-name-full-to-single-table))
-         (kinds (push kind kinds))
-         (regexp (concat "^(" (string-join kinds "|") ")$")))
-    (citre-core-build-filter 'kind regexp 'regexp nil nil 'ignore-missing)))
+corresponds to multiple full-length kinds.
+
+When TAGSFILE is non-nil, it detects if the tags file uses
+single-letter kind, and generate simpler (and presumably faster)
+filter based on that.  When IGNORE-MISSING is non-nil, also keep
+tags that don't have `kind' field."
+  (let (kinds)
+    (if tagsfile
+        (if (gethash 'one-letter-kind-p (citre-core--tags-file-info tagsfile))
+            (setq kinds (gethash kind
+                                 citre-core--kind-name-full-to-single-table))
+          (setq kinds kind))
+      (setq kinds (gethash kind citre-core--kind-name-full-to-single-table))
+      (push kind kinds))
+    (when (and (listp kinds) (eq (length kinds) 1))
+      (setq kinds (car kinds)))
+    (if (stringp kinds)
+        (citre-core-build-filter 'kind kinds 'eq nil nil ignore-missing)
+      (citre-core-build-filter 'kind (concat "^(" (string-join kinds "|") ")$")
+                               'regexp nil nil ignore-missing))))
 
 ;;;;; Build sorter expressions
 
