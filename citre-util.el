@@ -117,6 +117,29 @@ getting records for auto-completion."
   :type 'hook
   :group 'citre)
 
+;;;;; Options: Appearance
+
+(defface citre-definition-annotation-face
+  '((((background light))
+     :foreground "#666666" :slant italic)
+    (t
+     :foreground "#c0c0c0" :slant italic))
+  "Face used for annotations when presenting a definition.
+Annotations include kind, type, etc."
+  :group 'citre)
+
+(defcustom citre-definition-missing-file-mark
+  (propertize "!" 'face 'warning)
+  "Mark added before missing files in definitions."
+  :type 'string
+  :group 'citre)
+
+(defcustom citre-definition-reference-mark
+  (propertize "<R>" 'face 'citre-definition-annotation-face)
+  "Mark added for references in definitions."
+  :type 'string
+  :group 'citre)
+
 ;;;; Core API wrapper
 
 (cl-defun citre-get-records
@@ -480,7 +503,7 @@ The result is a list of records, with the fields `ext-abspath',
                                     :definition-sorter symbol)
                                    citre-definition-default-sorter)
                        :require '(name ext-abspath pattern)
-                       :optional '(ext-kind-full line typeref))))
+                       :optional '(ext-kind-full line typeref extras))))
 
 ;; TODO: annotate reference tags
 (defun citre-make-location-str (record)
@@ -499,21 +522,28 @@ tools."
                            ")")
                  ""))
          (str (citre-core-get-field 'extra-matched-str record))
-         (str (if str
-                  (concat ": " (string-trim str))
-                ""))
+         (str (if str (concat ": " (string-trim str)) ""))
          (kind (citre-core-get-field 'ext-kind-full record))
          (type (citre-core-get-field 'typeref record 'after-colon))
-         (annotation (propertize (concat
-                                  (or kind "")
-                                  (if (and kind type) "/" "")
-                                  (or type "")
-                                  (if (or kind type) " " ""))
-                                 'face 'citre-definition-annotation-face))
+
+         (extras (citre-core-get-field 'extras record))
+         (reference
+          (and extras
+               (string-match "\\(^\\|,\\) ?reference\\(,\\|$\\)" extras)))
+         (annotation (if (or kind type reference)
+                         (concat
+                          (propertize (concat
+                                       (or kind "")
+                                       (if (and kind type) "/" "")
+                                       (or type ""))
+                                      'face 'citre-definition-annotation-face)
+                          (if reference citre-definition-reference-mark "")
+                          " ")))
          (abspath (citre-core-get-field 'ext-abspath record))
          (path (propertize (citre-relative-path abspath)
                            'face 'font-lock-function-name-face))
-         (file-missing-p (if (file-exists-p abspath) "" "*")))
+         (file-missing-p (if (file-exists-p abspath) ""
+                           citre-definition-missing-file-mark)))
     (citre-propertize (concat annotation file-missing-p path line str)
                       record)))
 

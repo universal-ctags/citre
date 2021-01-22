@@ -136,15 +136,6 @@ border, and only the background property of this face is used, as
 the color of the dashes."
   :group 'citre)
 
-(defface citre-definition-annotation-face
-  '((((background light))
-     :foreground "#666666" :slant italic)
-    (t
-     :foreground "#c0c0c0" :slant italic))
-  "Face used for annotations when presenting a definition.
-Annotations include kind, type, etc."
-  :group 'citre)
-
 (defface citre-peek-ace-str-face
   '((((background light))
      :foreground "#dddddd" :background "#666666")
