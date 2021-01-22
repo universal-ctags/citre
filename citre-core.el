@@ -207,8 +207,9 @@ Info fields and their corresponding values are:
 - `one-letter-kind-p': Whether the tags file uses single-letter
   kind field.
 - `kind-table': A hash table for getting full-length kinds from
-  single-letter kinds, like `citre-core--kind-name-table', or nil
-  if the TAG_KIND_DESCRIPTION pseudo tags are not presented.")
+  single-letter kinds, like
+  `citre-core--kind-name-single-to-full-table', or nil if the
+  TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
 (defun citre--core-get-dir (tag ptag-cwd tagsfile relative-path-p)
   "Get the `dir' info of TAGSFILE.
@@ -716,14 +717,15 @@ it's returned directly.  If not, then:
 - The language is guessed first, see `citre-core--get-ext-lang'.
 - The single-letter kind is converted to full-length, based on
   the TAG_KIND_DESCRIPTION pseudo tags, or
-  `citre-core--kind-name-table' if it's not presented.
+  `citre-core--kind-name-single-to-full-table' if it's not
+  presented.
 
 If this fails, the single-letter kind is returned directly."
   (if-let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info)))
       (if-let* ((kind (gethash 'kind record))
                 (lang (citre-core--get-lang-from-record record))
                 (table (or (gethash 'kind-table tagsfile-info)
-                           citre-core--kind-name-table))
+                           citre-core--kind-name-single-to-full-table))
                 (table (gethash lang table))
                 (kind-full (gethash kind table)))
           kind-full
@@ -850,14 +852,14 @@ It tries these in turn:
 
 - Use the `language' field directly.
 - Guess the language based on the `input' field.  See
-  `citre-core--lang-extension-table'.
+  `citre-core--extension-lang-table'.
 - Return the file extension, or the filename if it doesn't have
   an extension.
 - Return nil."
   (or (gethash 'language record)
       (when-let ((input (gethash 'input record))
                  (extension (citre-core--file-name-extension input)))
-        (or (gethash (downcase extension) citre-core--lang-extension-table)
+        (or (gethash (downcase extension) citre-core--extension-lang-table)
             extension))))
 
 ;;;; APIs

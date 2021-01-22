@@ -32,12 +32,14 @@ error()
 ## Check long lines
 
 for f in *.el tests/common.el tests/*/test.el; do
-    info "[style, longline] $f"
-    # Allow long lines that are the first lines of the file, contains web
-    # links, or are the first lines of docstrings.
-    grep -n '.\{80,\}' $f \
-        | grep -v "\(^1:\)\|\(http://\)\|\(https://\)\|\(^[0-9]\+:  \"\)" \
-        && error "Long line found in $f."
+    if [ $f != "citre-core-tables.el" ]; then
+        info "[style, longline] $f"
+        # Allow long lines that are the first lines of the file, contains web
+        # links, or are the first lines of docstrings.
+        grep -n '.\{80,\}' $f \
+            | grep -v "\(^1:\)\|\(http://\)\|\(https://\)\|\(^[0-9]\+:  \"\)" \
+            && error "Long line found in $f."
+    fi
 done
 
 for f in scripts/*.sh; do

@@ -33,13 +33,15 @@
 ;; variable declarations in each section, run M-x occur with the
 ;; following query: ^;;;;* \|^(
 
-;;;; For ext-lang field
+;;;; extension -> language
 
-(defvar citre-core--lang-extension-table
+(defvar citre-core--extension-lang-table
   #s(hash-table
      test equal
      data
-     ("ada" "Ada" "adb" "Ada" "ads" "Ada"
+     ("inp" "Abaqus"
+      "abc" "Abc"
+      "ada" "Ada" "adb" "Ada" "ads" "Ada"
       "ant" "Ant"
       "asc" "Asciidoc" "adoc" "Asciidoc" "asciidoc" "Asciidoc"
       "asm" "Asm" "s" "Asm"
@@ -80,6 +82,8 @@
       "fy" "Fypp"
       "gdbinit" "Gdbinit" "gdb" "Gdbinit"
       "go" "Go"
+      "hx" "Haxe"
+      "hs" "Haskell"
       "html" "HTML" "htm" "HTML"
       "ini" "Iniconf" "conf" "Iniconf"
       "inko" "Inko"
@@ -88,8 +92,11 @@
       "properties" "JavaProperties"
       "js" "JavaScript" "jsx" "JavaScript" "mjs" "JavaScript"
       "json" "JSON"
+      "jl" "Julia"
+      "kt" "Kotlin" "kts" "Kotlin"
       "lds" "LdScript" "ld" "LdScript" "ldi" "LdScript" "scr" "LdScript"
       "cl" "Lisp" "clisp" "Lisp" "lisp" "Lisp" "lsp" "Lisp" "l" "Lisp"
+      "lhs" "LiterateHaskell"
       "lua" "Lua"
       "m4" "M4" "spt" "M4"
       "1" "Man" "2" "Man" "3" "Man" "4" "Man" "5" "Man" "6" "Man" "7" "Man"
@@ -137,6 +144,7 @@
       "tcl" "Tcl" "tk" "Tcl" "wish" "Tcl" "exp" "Tcl"
       "tex" "Tex"
       "ttcn" "TTCN" "ttcn3" "TTCN"
+      "t2t" "Txt2tags"
       "ts" "TypeScript"
       "vr" "Vera" "vri" "Vera" "vrh" "Vera"
       "v" "Verilog"
@@ -172,9 +180,6 @@
       "fs" "F#" "fsi" "F#" "fsx" "F#"
       "dsp" "Faust" "lib" "Faust"
       "gradle" "Groovy" "groovy" "Groovy" "jenkinsfile" "Groovy"
-      "hs" "Haskell" "lhs" "Haskell"
-      "jl" "Julia"
-      "kt" "Kotlin" "kts" "Kotlin"
       "nim" "Nim"
       "nix" "Nix"
       "org" "Org"
@@ -183,25 +188,311 @@
       "vala" "Vala" "vapi" "Vala"))
   "Hash table of file extensions and the corresponding languages.
 File extension (or the file name, if it doesn't have an
-extension) are downcased first, then used as the key to lookup in
-this table.")
+extension) are downcased first, then used as keys in this
+table.
 
-;;;; For ext-kind-full field
+This is for guessing the language of a tag (the `extra-lang'
+field) based on its file name when the `language' field is not
+presented.")
 
-(defvar citre-core--kind-name-table
+;; NOTE: The above table is manually created, and the reason is some of the
+;; languages use the same extension, e.g., Matlab and ObjectiveC, so we have to
+;; manually pick one.  Run `ctags --list-map-extensions' and `ctags
+;; --list-map-patterns' to see the built-in map of ctags. When you find
+;; languages in the table marked as "not supported by ctags" are now supported,
+;; update them AND the following tables.
+
+;;;; language -> extension
+
+(defvar citre-core--lang-extension-table
   #s(hash-table
      test equal
      data
-     ("Ada"
+     ("Abaqus"
+      ("inp")
+      "Abc"
+      ("abc")
+      "Ada"
+      ("ada" "Ada" "ads" "adb")
+      "Ant"
+      ("xml" "ant" "build.xml")
+      "Asciidoc"
+      ("asciidoc" "adoc" "asc")
+      "Asm"
+      ("S" "s" "ASM" "asm")
+      "Asp"
+      ("asa" "asp")
+      "Autoconf"
+      ("ac")
+      "AutoIt"
+      ("Au3" "aU3" "AU3" "au3")
+      "Automake"
+      ("am")
+      "Awk"
+      ("mawk" "gawk" "awk")
+      "Basic"
+      ("pb" "bb" "bi" "bas")
+      "BETA"
+      ("bet")
+      "BibTeX"
+      ("bib")
+      "Clojure"
+      ("cljc" "cljs" "clj")
+      "CMake"
+      ("cmake")
+      "C"
+      ("c")
+      "C++"
+      ("CXX" "CPP" "H" "C" "inl" "hxx" "hpp" "hp" "hh" "h++" "h" "cxx" "cpp" "cp" "cc" "c++")
+      "CSS"
+      ("css")
+      "C#"
+      ("cs")
+      "Ctags"
+      ("ctags")
+      "Cobol"
+      ("COB" "CBL" "cob" "cbl")
+      "CUDA"
+      ("cuh" "cu")
+      "D"
+      ("di" "d")
+      "Diff"
+      ("patch" "diff")
+      "DTD"
+      ("mod" "dtd")
+      "DTS"
+      ("dtsi" "dts")
+      "DosBatch"
+      ("cmd" "bat")
+      "Eiffel"
+      ("e")
+      "Elixir"
+      ("exs" "ex")
+      "Elm"
+      ("elm")
+      "EmacsLisp"
+      ("el")
+      "Erlang"
+      ("HRL" "hrl" "ERL" "erl")
+      "Falcon"
+      ("ftd" "fal")
+      "Flex"
+      ("mxml" "as")
+      "Fortran"
+      ("F15" "F08" "F03" "F95" "F90" "F77" "FTN" "FOR" "F" "f15" "f08" "f03" "f95" "f90" "f77" "ftn" "for" "f")
+      "Fypp"
+      ("fy")
+      "Gdbinit"
+      ("gdb")
+      "Go"
+      ("go")
+      "Haskell"
+      ("hs")
+      "Haxe"
+      ("hx")
+      "HTML"
+      ("html" "htm")
+      "Iniconf"
+      ("conf" "ini")
+      "Inko"
+      ("inko")
+      "ITcl"
+      ("itcl")
+      "Java"
+      ("java")
+      "JavaProperties"
+      ("properties")
+      "JavaScript"
+      ("mjs" "jsx" "js")
+      "JSON"
+      ("json")
+      "Julia"
+      ("jl")
+      "Kotlin"
+      ("kts" "kt")
+      "LdScript"
+      ("ldi" "ld" "scr" "lds")
+      "Lisp"
+      ("lsp" "lisp" "l" "clisp" "cl")
+      "LiterateHaskell"
+      ("lhs")
+      "Lua"
+      ("lua")
+      "M4"
+      ("spt" "m4")
+      "Man"
+      ("7stap" "3stap" "3pm" "9" "8" "7" "6" "5" "4" "3" "2" "1")
+      "Make"
+      ("mk" "mak")
+      "Markdown"
+      ("markdown" "md")
+      "MatLab"
+      ("m")
+      "Myrddin"
+      ("myr")
+      "NSIS"
+      ("nsh" "nsi")
+      "ObjectiveC"
+      ("h" "m" "mm")
+      "OldC++"
+      ("H" "C" "inl" "hxx" "hpp" "hp" "hh" "h++" "h" "cxx" "cpp" "cp" "cc" "c++")
+      "OldC"
+      ("c")
+      "OCaml"
+      ("aug" "mli" "ml")
+      "Pascal"
+      ("pas" "p")
+      "Perl"
+      ("perl" "plx" "ph" "pm" "pl")
+      "Perl6"
+      ("pl6" "pm" "pm6" "p6")
+      "PHP"
+      ("phtml" "php7" "php5" "php4" "php3" "php")
+      "Pod"
+      ("pod")
+      "PowerShell"
+      ("psm1" "ps1")
+      "Protobuf"
+      ("proto")
+      "PuppetManifest"
+      ("pp")
+      "Python"
+      ("wsgi" "scons" "pxi" "pxd" "pyx" "py")
+      "QemuHX"
+      ("hx")
+      "R"
+      ("q" "s" "R" "r")
+      "REXX"
+      ("rx" "rexx" "cmd")
+      "Robot"
+      ("robot")
+      "RpmSpec"
+      ("spec")
+      "ReStructuredText"
+      ("rst" "reST" "rest")
+      "Ruby"
+      ("ruby" "rb")
+      "Rust"
+      ("rs")
+      "Scheme"
+      ("rkt" "sm" "scm" "scheme" "sch" "SM" "SCM")
+      "SCSS"
+      ("scss")
+      "Sh"
+      ("ash" "zsh" "ksh" "bash" "bsh" "SH" "sh")
+      "SLang"
+      ("sl")
+      "SML"
+      ("sig" "sml")
+      "SQL"
+      ("sql")
+      "SystemdUnit"
+      ("slice" "snapshot" "timer" "path" "target" "swap" "automount" "mount" "device" "socket" "service")
+      "SystemTap"
+      ("stpm" "stp")
+      "Tcl"
+      ("exp" "wish" "tk" "tcl")
+      "Tex"
+      ("tex")
+      "TTCN"
+      ("ttcn3" "ttcn")
+      "Txt2tags"
+      ("t2t")
+      "TypeScript"
+      ("ts")
+      "Vera"
+      ("vrh" "vri" "vr")
+      "Verilog"
+      ("v")
+      "SystemVerilog"
+      ("svi" "svh" "sv")
+      "VHDL"
+      ("vhd" "vhdl")
+      "Vim"
+      ("vba" "vim")
+      "WindRes"
+      ("rc")
+      "YACC"
+      ("y")
+      "YumRepo"
+      ("repo")
+      "Zephir"
+      ("zep")
+      "DBusIntrospect"
+      ("xml")
+      "Glade"
+      ("glade")
+      "Maven2"
+      ("xml" "pom")
+      "PlistXML"
+      ("plist")
+      "RelaxNG"
+      ("rng")
+      "SVG"
+      ("svg")
+      "XML"
+      ("xml")
+      "XSLT"
+      ("xslt" "xsl")
+      "Yaml"
+      ("yml")
+      "Varlink"
+      ("varlink")))
+  "Hash table of languages and their corresponding extensions.
+This is for filter tags in certain languages by their file name
+when the `language' field is not presented. See
+`citre-core-filter-lang'.")
+
+;; Run this snippet to generate `citre-core--lang-extension-table'.  The result
+;; will be shown in a *Pp Eval Output* buffer, and it can be directly copied
+;; into the variable definition.  Make sure to indent them!
+
+;; (let* ((ctags-program "ctags")
+;;        (output (shell-command-to-string
+;;                 (citre-core--build-shell-command
+;;                  ctags-program
+;;                  "--quiet" "--options=NONE"
+;;                  "--machinable" "--list-map-extensions")))
+;;        (output-lines (nthcdr 1 (split-string output "\n" t)))
+;;        (output-records (mapcar (lambda (line)
+;;                                  (split-string line "\t" t))
+;;                                output-lines))
+;;        (table (make-hash-table :test #'equal)))
+;;   (dolist (record output-records)
+;;     (let ((lang (car record))
+;;           (ext (nth 1 record)))
+;;       (if (gethash lang table)
+;;           (push ext (gethash lang table))
+;;         (puthash lang (list ext) table))))
+;;   (pp-eval-expression table)
+;;   (pop-to-buffer "*Pp Eval Output*")
+;;   (goto-char (point-min))
+;;   (re-search-forward "#s(hash-table.*data")
+;;   (replace-match "#s(hash-table\ntest equal\ndata")
+;;   (indent-region (point-min) (point-max))
+;;   (goto-char (point-min)))
+
+;;;; language -> single-letter kind -> full-length kind
+
+(defvar citre-core--kind-name-single-to-full-table
+  #s(hash-table
+     test equal
+     data
+     ("Abaqus"
       #s(hash-table
          test equal
          data
-         ("E" "entryspec" "K" "taskspec" "O" "protectspec" "P" "packspec"
-          "R" "subprogspec" "S" "separate" "T" "typespec" "U" "subspec"
-          "V" "varspec" "a" "autovar" "b" "label" "c" "component" "e" "entry"
-          "f" "formal" "i" "identifier" "k" "task" "l" "literal" "n" "constant"
-          "o" "protected" "p" "package" "r" "subprogram" "t" "type"
-          "u" "subtype" "v" "variable" "x" "exception" "y" "anon"))
+         ("a" "assembly" "p" "part" "s" "step"))
+      "Abc"
+      #s(hash-table
+         test equal
+         data
+         ("s" "section"))
+      "Ada"
+      #s(hash-table
+         test equal
+         data
+         ("E" "entryspec" "K" "taskspec" "O" "protectspec" "P" "packspec" "R" "subprogspec" "S" "separate" "T" "typespec" "U" "subspec" "V" "varspec" "a" "autovar" "b" "label" "c" "component" "e" "entry" "f" "formal" "i" "identifier" "k" "task" "l" "literal" "n" "constant" "o" "protected" "p" "package" "r" "subprogram" "t" "type" "u" "subtype" "v" "variable" "x" "exception" "y" "anon"))
       "AnsiblePlaybook"
       #s(hash-table
          test equal
@@ -216,8 +507,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("S" "subsection" "T" "l4subsection" "a" "anchor" "c" "chapter"
-          "s" "section" "t" "subsubsection" "u" "l5subsection"))
+         ("S" "subsection" "T" "l4subsection" "a" "anchor" "c" "chapter" "s" "section" "t" "subsubsection" "u" "l5subsection"))
       "Asm"
       #s(hash-table
          test equal
@@ -227,8 +517,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("c" "class" "d" "constant" "f" "function" "s" "subroutine"
-          "v" "variable"))
+         ("c" "class" "d" "constant" "f" "function" "s" "subroutine" "v" "variable"))
       "AutoIt"
       #s(hash-table
          test equal
@@ -238,14 +527,12 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("c" "condition" "d" "definition" "e" "optenable" "m" "macro"
-          "p" "package" "s" "subst" "t" "template" "w" "optwith"))
+         ("c" "condition" "d" "definition" "e" "optenable" "m" "macro" "p" "package" "s" "subst" "t" "template" "w" "optwith"))
       "Automake"
       #s(hash-table
          test equal
          data
-         ("D" "data" "L" "library" "M" "man" "P" "program" "S" "script"
-          "T" "ltlibrary" "c" "condition" "d" "directory"))
+         ("D" "data" "L" "library" "M" "man" "P" "program" "S" "script" "T" "ltlibrary" "c" "condition" "d" "directory" "s" "subdir"))
       "Awk"
       #s(hash-table
          test equal
@@ -260,46 +547,32 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("c" "constant" "f" "function" "g" "enum" "l" "label" "t" "type"
-          "v" "variable"))
+         ("c" "constant" "f" "function" "g" "enum" "l" "label" "t" "type" "v" "variable"))
       "BibTeX"
       #s(hash-table
          test equal
          data
-         ("B" "booklet" "I" "incollection" "M" "mastersthesis"
-          "P" "proceedings" "a" "article" "b" "book" "c" "conference"
-          "i" "inbook" "j" "inproceedings" "m" "manual" "n" "misc"
-          "p" "phdthesis" "s" "string" "t" "techreport" "u" "unpublished"))
+         ("B" "booklet" "I" "incollection" "M" "mastersthesis" "P" "proceedings" "a" "article" "b" "book" "c" "conference" "i" "inbook" "j" "inproceedings" "m" "manual" "n" "misc" "p" "phdthesis" "s" "string" "t" "techreport" "u" "unpublished"))
       "C"
       #s(hash-table
          test equal
          data
-         ("D" "macroparam" "L" "label" "d" "macro" "e" "enumerator"
-          "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member"
-          "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable"
-          "x" "externvar" "z" "parameter"))
+         ("D" "macroparam" "L" "label" "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member" "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable" "x" "externvar" "z" "parameter"))
       "C#"
       #s(hash-table
          test equal
          data
-         ("E" "event" "c" "class" "d" "macro" "e" "enumerator" "f" "field"
-          "g" "enum" "i" "interface" "l" "local" "m" "method" "n" "namespace"
-          "p" "property" "s" "struct" "t" "typedef"))
+         ("E" "event" "c" "class" "d" "macro" "e" "enumerator" "f" "field" "g" "enum" "i" "interface" "l" "local" "m" "method" "n" "namespace" "p" "property" "s" "struct" "t" "typedef"))
       "C++"
       #s(hash-table
          test equal
          data
-         ("A" "alias" "D" "macroparam" "L" "label" "N" "name" "U" "using"
-          "Z" "tparam" "c" "class" "d" "macro" "e" "enumerator" "f" "function"
-          "g" "enum" "h" "header" "l" "local" "m" "member" "n" "namespace"
-          "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable"
-          "x" "externvar" "z" "parameter"))
+         ("A" "alias" "D" "macroparam" "L" "label" "N" "name" "U" "using" "Z" "tparam" "c" "class" "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member" "n" "namespace" "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable" "x" "externvar" "z" "parameter"))
       "CMake"
       #s(hash-table
          test equal
          data
-         ("D" "option" "f" "function" "m" "macro" "p" "project" "t" "target"
-          "v" "variable"))
+         ("D" "option" "f" "function" "m" "macro" "p" "project" "t" "target" "v" "variable"))
       "CPreProcessor"
       #s(hash-table
          test equal
@@ -314,10 +587,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("D" "macroparam" "L" "label" "d" "macro" "e" "enumerator"
-          "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member"
-          "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable"
-          "x" "externvar" "z" "parameter"))
+         ("D" "macroparam" "L" "label" "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member" "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable" "x" "externvar" "z" "parameter"))
       "Clojure"
       #s(hash-table
          test equal
@@ -327,8 +597,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("D" "division" "P" "program" "S" "sourcefile" "d" "data" "f" "fd"
-          "g" "group" "p" "paragraph" "s" "section"))
+         ("D" "division" "P" "program" "S" "sourcefile" "d" "data" "f" "fd" "g" "group" "p" "paragraph" "s" "section"))
+      "CobolFree"
+      #s(hash-table
+         test equal
+         data
+         ("D" "division" "P" "program" "S" "sourcefile" "d" "data" "f" "fd" "g" "group" "p" "paragraph" "s" "section"))
+      "CobolVariable"
+      #s(hash-table
+         test equal
+         data
+         ("D" "division" "P" "program" "S" "sourcefile" "d" "data" "f" "fd" "g" "group" "p" "paragraph" "s" "section"))
       "Ctags"
       #s(hash-table
          test equal
@@ -338,23 +617,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("M" "module" "T" "template" "V" "version" "X" "mixin" "a" "alias"
-          "c" "class" "e" "enumerator" "f" "function" "g" "enum"
-          "i" "interface" "l" "local" "m" "member" "n" "namespace"
-          "p" "prototype" "s" "struct" "u" "union" "v" "variable"
-          "x" "externvar"))
+         ("M" "module" "T" "template" "V" "version" "X" "mixin" "a" "alias" "c" "class" "e" "enumerator" "f" "function" "g" "enum" "i" "interface" "l" "local" "m" "member" "n" "namespace" "p" "prototype" "s" "struct" "u" "union" "v" "variable" "x" "externvar"))
       "DBusIntrospect"
       #s(hash-table
          test equal
          data
-         ("a" "arg" "i" "interface" "m" "method" "n" "node" "p" "property"
-          "s" "signal"))
+         ("a" "arg" "i" "interface" "m" "method" "n" "node" "p" "property" "s" "signal"))
       "DTD"
       #s(hash-table
          test equal
          data
-         ("E" "entity" "a" "attribute" "e" "element" "n" "notation"
-          "p" "parameterEntity"))
+         ("E" "entity" "a" "attribute" "e" "element" "n" "notation" "p" "parameterEntity"))
       "DTS"
       #s(hash-table
          test equal
@@ -379,23 +652,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("a" "macro" "c" "callback" "d" "delegate" "e" "exception"
-          "f" "function" "g" "guard" "i" "implementation" "m" "module"
-          "o" "operator" "p" "protocol" "r" "record" "t" "test" "y" "type"))
+         ("a" "macro" "c" "callback" "d" "delegate" "e" "exception" "f" "function" "g" "guard" "i" "implementation" "m" "module" "o" "operator" "p" "protocol" "r" "record" "t" "test" "y" "type"))
       "Elm"
       #s(hash-table
          test equal
          data
-         ("a" "alias" "c" "constructor" "f" "function" "m" "module"
-          "n" "namespace" "p" "port" "t" "type"))
+         ("a" "alias" "c" "constructor" "f" "function" "m" "module" "n" "namespace" "p" "port" "t" "type"))
       "EmacsLisp"
       #s(hash-table
          test equal
          data
-         ("C" "custom" "D" "derivedMode" "G" "group" "H" "face" "M" "minorMode"
-          "T" "theme" "V" "varalias" "a" "alias" "c" "const" "e" "error"
-          "f" "function" "i" "inline" "m" "macro" "s" "subst" "u" "unknown"
-          "v" "variable"))
+         ("C" "custom" "D" "derivedMode" "G" "group" "H" "face" "M" "minorMode" "T" "theme" "V" "varalias" "a" "alias" "c" "const" "e" "error" "f" "function" "i" "inline" "m" "macro" "s" "subst" "u" "unknown" "v" "variable"))
       "Erlang"
       #s(hash-table
          test equal
@@ -405,24 +672,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("c" "class" "f" "function" "i" "namespace" "m" "member"
-          "v" "variable"))
+         ("c" "class" "f" "function" "i" "namespace" "m" "member" "v" "variable"))
       "Flex"
       #s(hash-table
          test equal
          data
-         ("C" "constant" "I" "import" "P" "package" "c" "class" "f" "function"
-          "i" "interface" "l" "localvar" "m" "method" "p" "property"
-          "v" "variable" "x" "mxtag"))
+         ("C" "constant" "I" "import" "P" "package" "c" "class" "f" "function" "i" "interface" "l" "localvar" "m" "method" "p" "property" "v" "variable" "x" "mxtag"))
       "Fortran"
       #s(hash-table
          test equal
          data
-         ("E" "enum" "L" "local" "M" "method" "N" "enumerator" "P" "prototype"
-          "S" "submodule" "b" "blockData" "c" "common" "e" "entry"
-          "f" "function" "i" "interface" "k" "component" "l" "label"
-          "m" "module" "n" "namelist" "p" "program" "s" "subroutine" "t" "type"
-          "v" "variable"))
+         ("E" "enum" "L" "local" "M" "method" "N" "enumerator" "P" "prototype" "S" "submodule" "b" "blockData" "c" "common" "e" "entry" "f" "function" "i" "interface" "k" "component" "l" "label" "m" "module" "n" "namelist" "p" "program" "s" "subroutine" "t" "type" "v" "variable"))
       "Fypp"
       #s(hash-table
          test equal
@@ -432,8 +692,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("D" "document" "d" "definition" "l" "localVariable"
-          "t" "toplevelVariable"))
+         ("D" "document" "d" "definition" "l" "localVariable" "t" "toplevelVariable"))
       "Glade"
       #s(hash-table
          test equal
@@ -443,21 +702,27 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("M" "anonMember" "P" "packageName" "R" "receiver" "a" "talias"
-          "c" "const" "f" "func" "i" "interface" "m" "member" "n" "methodSpec"
-          "p" "package" "s" "struct" "t" "type" "u" "unknown" "v" "var"))
+         ("M" "anonMember" "P" "packageName" "R" "receiver" "a" "talias" "c" "const" "f" "func" "i" "interface" "m" "member" "n" "methodSpec" "p" "package" "s" "struct" "t" "type" "u" "unknown" "v" "var"))
       "HTML"
       #s(hash-table
          test equal
          data
-         ("C" "stylesheet" "I" "id" "J" "script" "a" "anchor" "c" "class"
-          "h" "heading1" "i" "heading2" "j" "heading3"))
+         ("C" "stylesheet" "I" "id" "J" "script" "a" "anchor" "c" "class" "h" "heading1" "i" "heading2" "j" "heading3"))
+      "Haskell"
+      #s(hash-table
+         test equal
+         data
+         ("c" "constructor" "f" "function" "m" "module" "t" "type"))
+      "Haxe"
+      #s(hash-table
+         test equal
+         data
+         ("c" "class" "e" "enum" "i" "interface" "m" "method" "t" "typedef" "v" "variable"))
       "ITcl"
       #s(hash-table
          test equal
          data
-         ("C" "common" "c" "class" "m" "method" "p" "procedure"
-          "v" "variable"))
+         ("C" "common" "c" "class" "m" "method" "p" "procedure" "v" "variable"))
       "Iniconf"
       #s(hash-table
          test equal
@@ -467,20 +732,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("a" "attribute" "c" "constant" "m" "method" "o" "object" "r" "reopen"
-          "t" "trait"))
+         ("a" "attribute" "c" "constant" "m" "method" "o" "class" "r" "reopen" "t" "trait"))
       "JSON"
       #s(hash-table
          test equal
          data
-         ("a" "array" "b" "boolean" "n" "number" "o" "object" "s" "string"
-          "z" "null"))
+         ("a" "array" "b" "boolean" "n" "number" "o" "object" "s" "string" "z" "null"))
       "Java"
       #s(hash-table
          test equal
          data
-         ("a" "annotation" "c" "class" "e" "enumConstant" "f" "field"
-          "g" "enum" "i" "interface" "l" "local" "m" "method" "p" "package"))
+         ("a" "annotation" "c" "class" "e" "enumConstant" "f" "field" "g" "enum" "i" "interface" "l" "local" "m" "method" "p" "package"))
       "JavaProperties"
       #s(hash-table
          test equal
@@ -490,13 +752,22 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("C" "constant" "G" "getter" "S" "setter" "c" "class" "f" "function"
-          "g" "generator" "m" "method" "p" "property" "v" "variable"))
+         ("C" "constant" "G" "getter" "S" "setter" "c" "class" "f" "function" "g" "generator" "m" "method" "p" "property" "v" "variable"))
+      "Julia"
+      #s(hash-table
+         test equal
+         data
+         ("c" "constant" "f" "function" "g" "field" "m" "macro" "n" "module" "s" "struct" "t" "type" "x" "unknown"))
       "Kconfig"
       #s(hash-table
          test equal
          data
          ("C" "choice" "M" "mainMenu" "c" "config" "k" "kconfig" "m" "menu"))
+      "Kotlin"
+      #s(hash-table
+         test equal
+         data
+         ("C" "constant" "T" "typealias" "c" "class" "i" "interface" "m" "method" "o" "object" "p" "package" "v" "variable"))
       "LdScript"
       #s(hash-table
          test equal
@@ -507,6 +778,11 @@ this table.")
          test equal
          data
          ("c" "const" "f" "function" "m" "macro" "u" "unknown" "v" "variable"))
+      "LiterateHaskell"
+      #s(hash-table
+         test equal
+         data
+         ("c" "constructor" "f" "function" "m" "module" "t" "type"))
       "Lua"
       #s(hash-table
          test equal
@@ -531,8 +807,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("S" "subsection" "T" "l4subsection" "c" "chapter" "s" "section"
-          "t" "subsubsection" "u" "l5subsection"))
+         ("S" "subsection" "T" "l4subsection" "c" "chapter" "s" "section" "t" "subsubsection" "u" "l5subsection"))
       "MatLab"
       #s(hash-table
          test equal
@@ -543,6 +818,11 @@ this table.")
          test equal
          data
          ("a" "artifactId" "g" "groupId" "p" "property" "r" "repositoryId"))
+      "Meson"
+      #s(hash-table
+         test equal
+         data
+         ("B" "build" "P" "project" "S" "subdir" "V" "variable" "b" "benchmark" "c" "custom" "r" "run" "t" "test"))
       "Moose"
       #s(hash-table
          test equal
@@ -552,51 +832,37 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("c" "constant" "f" "function" "p" "pkg" "r" "trait" "t" "type"
-          "v" "var"))
+         ("c" "constant" "f" "function" "p" "pkg" "r" "trait" "t" "type" "v" "var"))
       "NSIS"
       #s(hash-table
          test equal
          data
-         ("S" "sectionGroup" "d" "definition" "f" "function" "i" "script"
-          "l" "langstr" "m" "macro" "p" "macroparam" "s" "section"
-          "v" "variable"))
+         ("S" "sectionGroup" "d" "definition" "f" "function" "i" "script" "l" "langstr" "m" "macro" "p" "macroparam" "s" "section" "v" "variable"))
       "OCaml"
       #s(hash-table
          test equal
          data
-         ("C" "Constructor" "M" "module" "c" "class" "e" "Exception"
-          "f" "function" "m" "method" "p" "val" "r" "RecordField" "t" "type"
-          "v" "var"))
+         ("C" "Constructor" "M" "module" "c" "class" "e" "Exception" "f" "function" "m" "method" "p" "val" "r" "RecordField" "t" "type" "v" "var"))
       "ObjectiveC"
       #s(hash-table
          test equal
          data
-         ("C" "category" "E" "field" "I" "implementation" "M" "macro"
-          "P" "protocol" "c" "class" "e" "enum" "f" "function" "i" "interface"
-          "m" "method" "p" "property" "s" "struct" "t" "typedef" "v" "var"))
+         ("C" "category" "E" "field" "I" "implementation" "M" "macro" "P" "protocol" "c" "class" "e" "enum" "f" "function" "i" "interface" "m" "method" "p" "property" "s" "struct" "t" "typedef" "v" "var"))
       "OldC"
       #s(hash-table
          test equal
          data
-         ("D" "macroparam" "L" "label" "c" "class" "d" "macro" "e" "enumerator"
-          "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member"
-          "n" "namespace" "p" "prototype" "s" "struct" "t" "typedef"
-          "u" "union" "v" "variable" "x" "externvar"))
+         ("D" "macroparam" "L" "label" "c" "class" "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member" "n" "namespace" "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable" "x" "externvar"))
       "OldC++"
       #s(hash-table
          test equal
          data
-         ("D" "macroparam" "L" "label" "c" "class" "d" "macro" "e" "enumerator"
-          "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member"
-          "n" "namespace" "p" "prototype" "s" "struct" "t" "typedef"
-          "u" "union" "v" "variable" "x" "externvar"))
+         ("D" "macroparam" "L" "label" "c" "class" "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header" "l" "local" "m" "member" "n" "namespace" "p" "prototype" "s" "struct" "t" "typedef" "u" "union" "v" "variable" "x" "externvar"))
       "PHP"
       #s(hash-table
          test equal
          data
-         ("a" "alias" "c" "class" "d" "define" "f" "function" "i" "interface"
-          "l" "local" "n" "namespace" "t" "trait" "v" "variable"))
+         ("a" "alias" "c" "class" "d" "define" "f" "function" "i" "interface" "l" "local" "n" "namespace" "t" "trait" "v" "variable"))
       "Pascal"
       #s(hash-table
          test equal
@@ -611,14 +877,12 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("M" "module" "c" "constant" "d" "subroutineDeclaration" "f" "format"
-          "l" "label" "p" "package" "s" "subroutine"))
+         ("M" "module" "c" "constant" "d" "subroutineDeclaration" "f" "format" "l" "label" "p" "package" "s" "subroutine"))
       "Perl6"
       #s(hash-table
          test equal
          data
-         ("b" "submethod" "c" "class" "g" "grammar" "m" "method" "o" "module"
-          "p" "package" "r" "role" "s" "subroutine" "t" "token" "u" "rule"))
+         ("b" "submethod" "c" "class" "g" "grammar" "m" "method" "o" "module" "p" "package" "r" "role" "s" "subroutine" "t" "token" "u" "rule"))
       "PlistXML"
       #s(hash-table
          test equal
@@ -638,20 +902,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("D" "protodef" "G" "group" "e" "enumerator" "f" "field" "g" "enum"
-          "m" "message" "o" "oneof" "p" "package" "r" "rpc" "s" "service"))
+         ("D" "protodef" "G" "group" "e" "enumerator" "f" "field" "g" "enum" "m" "message" "o" "oneof" "p" "package" "r" "rpc" "s" "service"))
       "PuppetManifest"
       #s(hash-table
          test equal
          data
-         ("c" "class" "d" "definition" "n" "node" "r" "resource"
-          "v" "variable"))
+         ("c" "class" "d" "definition" "n" "node" "r" "resource" "v" "variable"))
       "Python"
       #s(hash-table
          test equal
          data
-         ("I" "namespace" "c" "class" "f" "function" "i" "module" "l" "local"
-          "m" "member" "v" "variable" "x" "unknown" "z" "parameter"))
+         ("I" "namespace" "c" "class" "f" "function" "i" "module" "l" "local" "m" "member" "v" "variable" "x" "unknown" "z" "parameter"))
       "PythonLoggingConfig"
       #s(hash-table
          test equal
@@ -671,8 +932,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("f" "function" "g" "globalVar" "l" "library" "s" "source"
-          "v" "functionVar" "z" "parameter"))
+         ("f" "function" "g" "globalVar" "l" "library" "s" "source" "v" "functionVar" "z" "parameter"))
       "R6Class"
       #s(hash-table
          test equal
@@ -692,8 +952,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("C" "citation" "S" "subsection" "T" "target" "c" "chapter"
-          "s" "section" "t" "subsubsection"))
+         ("C" "citation" "S" "subsection" "T" "target" "c" "chapter" "s" "section" "t" "subsubsection"))
       "RelaxNG"
       #s(hash-table
          test equal
@@ -713,15 +972,12 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("A" "accessor" "C" "constant" "L" "library" "S" "singletonMethod"
-          "a" "alias" "c" "class" "f" "method" "m" "module"))
+         ("A" "accessor" "C" "constant" "L" "library" "S" "singletonMethod" "a" "alias" "c" "class" "f" "method" "m" "module"))
       "Rust"
       #s(hash-table
          test equal
          data
-         ("M" "macro" "P" "method" "c" "implementation" "e" "enumerator"
-          "f" "function" "g" "enum" "i" "interface" "m" "field" "n" "module"
-          "s" "struct" "t" "typedef" "v" "variable"))
+         ("M" "macro" "P" "method" "c" "implementation" "e" "enumerator" "f" "function" "g" "enum" "i" "interface" "m" "field" "n" "module" "s" "struct" "t" "typedef" "v" "variable"))
       "S4Class"
       #s(hash-table
          test equal
@@ -731,8 +987,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("P" "placeholder" "c" "class" "f" "function" "i" "id" "m" "mixin"
-          "v" "variable" "z" "parameter"))
+         ("P" "placeholder" "c" "class" "f" "function" "i" "id" "m" "mixin" "v" "variable" "z" "parameter"))
       "SLang"
       #s(hash-table
          test equal
@@ -742,17 +997,12 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("c" "functor" "e" "exception" "f" "function" "r" "structure"
-          "s" "signature" "t" "type" "v" "value"))
+         ("c" "functor" "e" "exception" "f" "function" "r" "structure" "s" "signature" "t" "type" "v" "value"))
       "SQL"
       #s(hash-table
          test equal
          data
-         ("D" "domain" "E" "field" "L" "label" "P" "package" "R" "service"
-          "T" "trigger" "U" "publication" "V" "view" "c" "cursor"
-          "d" "prototype" "e" "event" "f" "function" "i" "index" "l" "local"
-          "n" "synonym" "p" "procedure" "r" "record" "s" "subtype" "t" "table"
-          "v" "variable" "x" "mltable" "y" "mlconn" "z" "mlprop"))
+         ("D" "domain" "E" "field" "L" "label" "P" "package" "R" "service" "T" "trigger" "U" "publication" "V" "view" "c" "cursor" "d" "prototype" "e" "event" "f" "function" "i" "index" "l" "local" "n" "synonym" "p" "procedure" "r" "record" "s" "subtype" "t" "table" "v" "variable" "x" "mltable" "y" "mlconn" "z" "mlprop"))
       "SVG"
       #s(hash-table
          test equal
@@ -777,12 +1027,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("A" "assert" "C" "class" "E" "enum" "H" "checker" "I" "interface"
-          "K" "package" "L" "clocking" "M" "modport" "P" "program"
-          "Q" "prototype" "R" "property" "S" "struct" "T" "typedef"
-          "V" "covergroup" "b" "block" "c" "constant" "e" "event"
-          "f" "function" "m" "module" "n" "net" "p" "port" "q" "sequence"
-          "r" "register" "t" "task"))
+         ("A" "assert" "C" "class" "E" "enum" "H" "checker" "I" "interface" "K" "package" "L" "clocking" "M" "modport" "N" "nettype" "O" "constraint" "P" "program" "Q" "prototype" "R" "property" "S" "struct" "T" "typedef" "V" "covergroup" "b" "block" "c" "constant" "e" "event" "f" "function" "i" "instance" "l" "ifclass" "m" "module" "n" "net" "p" "port" "q" "sequence" "r" "register" "t" "task" "w" "member"))
       "SystemdUnit"
       #s(hash-table
          test equal
@@ -792,9 +1037,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("C" "testcase" "G" "group" "M" "module" "P" "modulepar" "T" "timer"
-          "a" "altstep" "c" "const" "d" "template" "e" "enum" "f" "function"
-          "m" "member" "p" "port" "s" "signature" "t" "type" "v" "var"))
+         ("C" "testcase" "G" "group" "M" "module" "P" "modulepar" "T" "timer" "a" "altstep" "c" "const" "d" "template" "e" "enum" "f" "function" "m" "member" "p" "port" "s" "signature" "t" "type" "v" "var"))
       "Tcl"
       #s(hash-table
          test equal
@@ -814,56 +1057,47 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("B" "bibitem" "C" "command" "G" "subparagraph" "N" "counter"
-          "P" "paragraph" "b" "subsubsection" "c" "chapter" "i" "xinput"
-          "l" "label" "p" "part" "s" "section" "u" "subsection"))
+         ("B" "bibitem" "C" "command" "G" "subparagraph" "N" "counter" "P" "paragraph" "b" "subsubsection" "c" "chapter" "i" "xinput" "l" "label" "p" "part" "s" "section" "u" "subsection"))
+      "Txt2tags"
+      #s(hash-table
+         test equal
+         data
+         ("s" "section"))
       "TypeScript"
       #s(hash-table
          test equal
          data
-         ("C" "constant" "G" "generator" "a" "alias" "c" "class"
-          "e" "enumerator" "f" "function" "g" "enum" "i" "interface"
-          "l" "local" "m" "method" "n" "namespace" "p" "property"
-          "v" "variable" "z" "parameter"))
+         ("C" "constant" "G" "generator" "a" "alias" "c" "class" "e" "enumerator" "f" "function" "g" "enum" "i" "interface" "l" "local" "m" "method" "n" "namespace" "p" "property" "v" "variable" "z" "parameter"))
       "VHDL"
       #s(hash-table
          test equal
          data
-         ("C" "component" "P" "package" "T" "subtype" "a" "architecture"
-          "c" "constant" "d" "prototype" "e" "entity" "f" "function"
-          "l" "local" "p" "procedure" "r" "record" "t" "type"))
+         ("A" "alias" "C" "component" "P" "package" "Q" "process" "T" "subtype" "a" "architecture" "c" "constant" "d" "prototype" "e" "entity" "f" "function" "g" "generic" "l" "local" "p" "procedure" "q" "port" "r" "record" "s" "signal" "t" "type" "v" "variable"))
       "Varlink"
       #s(hash-table
          test equal
          data
-         ("E" "error" "I" "iparam" "O" "oparam" "d" "edesc" "e" "enumerator"
-          "f" "field" "g" "enum" "i" "interface" "m" "method" "s" "struct"))
+         ("E" "error" "I" "iparam" "O" "oparam" "d" "edesc" "e" "enumerator" "f" "field" "g" "enum" "i" "interface" "m" "method" "s" "struct"))
       "Vera"
       #s(hash-table
          test equal
          data
-         ("D" "macroParameter" "P" "prototype" "T" "typedef" "c" "class"
-          "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header"
-          "i" "interface" "l" "local" "m" "member" "p" "program" "s" "signal"
-          "t" "task" "v" "variable" "x" "externvar"))
+         ("D" "macroParameter" "P" "prototype" "T" "typedef" "c" "class" "d" "macro" "e" "enumerator" "f" "function" "g" "enum" "h" "header" "i" "interface" "l" "local" "m" "member" "p" "program" "s" "signal" "t" "task" "v" "variable" "x" "externvar"))
       "Verilog"
       #s(hash-table
          test equal
          data
-         ("b" "block" "c" "constant" "e" "event" "f" "function" "m" "module"
-          "n" "net" "p" "port" "r" "register" "t" "task"))
+         ("b" "block" "c" "constant" "e" "event" "f" "function" "i" "instance" "m" "module" "n" "net" "p" "port" "r" "register" "t" "task"))
       "Vim"
       #s(hash-table
          test equal
          data
-         ("C" "constant" "a" "augroup" "c" "command" "f" "function" "m" "map"
-          "n" "filename" "v" "variable"))
+         ("C" "constant" "a" "augroup" "c" "command" "f" "function" "m" "map" "n" "filename" "v" "variable"))
       "WindRes"
       #s(hash-table
          test equal
          data
-         ("a" "accelerators" "b" "bitmap" "c" "cursor" "d" "dialog" "f" "font"
-          "i" "icon" "m" "menu" "v" "version"))
+         ("a" "accelerators" "b" "bitmap" "c" "cursor" "d" "dialog" "f" "font" "i" "icon" "m" "menu" "v" "version"))
       "XML"
       #s(hash-table
          test equal
@@ -873,8 +1107,7 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("m" "matchedTemplate" "n" "namedTemplate" "p" "parameter"
-          "s" "stylesheet" "v" "variable"))
+         ("m" "matchedTemplate" "n" "namedTemplate" "p" "parameter" "s" "stylesheet" "v" "variable"))
       "YACC"
       #s(hash-table
          test equal
@@ -894,19 +1127,17 @@ this table.")
       #s(hash-table
          test equal
          data
-         ("a" "alias" "c" "class" "d" "define" "f" "function" "i" "interface"
-          "l" "local" "n" "namespace" "t" "trait" "v" "variable"))))
+         ("a" "alias" "c" "class" "d" "define" "f" "function" "i" "interface" "l" "local" "n" "namespace" "t" "trait" "v" "variable"))))
   "Hash table of language -> single-letter kind -> full-length kind.
-This is used for guessing the full-length kind when it's not
-presented, and TAG_KIND_DESCRIPTION pseudo tags are not presented
-too.")
+This is used for guessing the full-length kind (the
+`ext-kind-full' field) when it's not presented, and
+TAG_KIND_DESCRIPTION pseudo tags are not presented too.")
 
-;; Run this snippet to generate a kind name table from the help info of ctags.
-;; This is used for updating `citre-core--kind-name-table'.  The result will be
-;; shown in a *Pp Eval Output* buffer, and it can be directly copied into the
-;; variable definition.  Make sure to indent them!
+;; Run this snippet to generate `citre-core--kind-name-single-to-full-table'.
+;; The result will be shown in a *Pp Eval Output* buffer, and it can be
+;; directly copied into the variable definition.  Make sure to indent them!
 
-;; (let* ((ctags-program (or citre-ctags-program "ctags"))
+;; (let* ((ctags-program "ctags")
 ;;        (output (shell-command-to-string
 ;;                 (citre-core--build-shell-command
 ;;                  ctags-program
@@ -916,14 +1147,7 @@ too.")
 ;;        (output-records (mapcar (lambda (line)
 ;;                                  (cl-subseq (split-string line "\t" t) 0 3))
 ;;                                output-lines))
-;;        (table (make-hash-table :test #'equal))
-;;        (fill-column-local fill-column)
-;;        (newline-for-last-pair
-;;         (lambda ()
-;;           (save-excursion
-;;             (backward-sexp) (backward-sexp)
-;;             (insert-char ?\n)
-;;             (lisp-indent-line)))))
+;;        (table (make-hash-table :test #'equal)))
 ;;   (dolist (record output-records)
 ;;     (let ((lang (car record))
 ;;           (kind (nth 1 record))
@@ -933,31 +1157,678 @@ too.")
 ;;       (puthash kind kind-full (gethash lang table))))
 ;;   (pp-eval-expression table)
 ;;   (pop-to-buffer "*Pp Eval Output*")
-;;   ;; It's indented by 2 extra spaces after pasting back to this buffer.
-;;   (setq fill-column (- fill-column-local 2))
 ;;   (goto-char (point-min))
 ;;   (ignore-errors
 ;;     (while (re-search-forward "#s(hash-table.*data")
 ;;       (replace-match "\n#s(hash-table\ntest equal\ndata")))
 ;;   (goto-char (point-min))
 ;;   (delete-char 1)
+;;   (indent-region (point-min) (point-max)))
+
+;;;; full-length kind -> single-letter kind
+
+(defvar citre-core--kind-name-full-to-single-table
+  #s(hash-table
+     test equal
+     data
+     ("assembly"
+      ("a")
+      "part"
+      ("p")
+      "step"
+      ("s")
+      "section"
+      ("s")
+      "entryspec"
+      ("E")
+      "taskspec"
+      ("K")
+      "protectspec"
+      ("O")
+      "packspec"
+      ("P")
+      "subprogspec"
+      ("R")
+      "separate"
+      ("S")
+      "typespec"
+      ("T")
+      "subspec"
+      ("U")
+      "varspec"
+      ("V")
+      "autovar"
+      ("a")
+      "label"
+      ("l")
+      "component"
+      ("C")
+      "entry"
+      ("e")
+      "formal"
+      ("f")
+      "identifier"
+      ("i")
+      "task"
+      ("t")
+      "literal"
+      ("l")
+      "constant"
+      ("C")
+      "protected"
+      ("o")
+      "package"
+      ("P")
+      "subprogram"
+      ("r")
+      "type"
+      ("t")
+      "subtype"
+      ("T")
+      "variable"
+      ("v")
+      "exception"
+      ("e")
+      "anon"
+      ("y")
+      "play"
+      ("p")
+      "property"
+      ("p")
+      "antfile"
+      ("i")
+      "project"
+      ("P")
+      "target"
+      ("T")
+      "subsection"
+      ("u")
+      "l4subsection"
+      ("T")
+      "anchor"
+      ("a")
+      "chapter"
+      ("c")
+      "subsubsection"
+      ("b")
+      "l5subsection"
+      ("u")
+      "define"
+      ("d")
+      "macro"
+      ("d")
+      "class"
+      ("c")
+      "function"
+      ("f")
+      "subroutine"
+      ("s")
+      "script"
+      ("s")
+      "func"
+      ("f")
+      "global"
+      ("g")
+      "local"
+      ("l")
+      "region"
+      ("r")
+      "condition"
+      ("c")
+      "definition"
+      ("d")
+      "optenable"
+      ("e")
+      "subst"
+      ("s")
+      "template"
+      ("d")
+      "optwith"
+      ("w")
+      "data"
+      ("d")
+      "library"
+      ("L")
+      "man"
+      ("M")
+      "program"
+      ("p")
+      "ltlibrary"
+      ("T")
+      "directory"
+      ("d")
+      "subdir"
+      ("S")
+      "fragment"
+      ("f")
+      "pattern"
+      ("p")
+      "slot"
+      ("s")
+      "virtual"
+      ("v")
+      "enum"
+      ("g")
+      "booklet"
+      ("B")
+      "incollection"
+      ("I")
+      "mastersthesis"
+      ("M")
+      "proceedings"
+      ("P")
+      "article"
+      ("a")
+      "book"
+      ("b")
+      "conference"
+      ("c")
+      "inbook"
+      ("i")
+      "inproceedings"
+      ("j")
+      "manual"
+      ("m")
+      "misc"
+      ("n")
+      "phdthesis"
+      ("p")
+      "string"
+      ("s")
+      "techreport"
+      ("t")
+      "unpublished"
+      ("u")
+      "macroparam"
+      ("D")
+      "enumerator"
+      ("e")
+      "header"
+      ("h")
+      "member"
+      ("m")
+      "prototype"
+      ("P")
+      "struct"
+      ("s")
+      "typedef"
+      ("T")
+      "union"
+      ("u")
+      "externvar"
+      ("x")
+      "parameter"
+      ("p")
+      "event"
+      ("e")
+      "field"
+      ("f")
+      "interface"
+      ("i")
+      "method"
+      ("m")
+      "namespace"
+      ("n")
+      "alias"
+      ("a")
+      "name"
+      ("N")
+      "using"
+      ("U")
+      "tparam"
+      ("Z")
+      "option"
+      ("D")
+      "id"
+      ("i")
+      "selector"
+      ("s")
+      "division"
+      ("D")
+      "sourcefile"
+      ("S")
+      "fd"
+      ("f")
+      "group"
+      ("G")
+      "paragraph"
+      ("P")
+      "kind"
+      ("k")
+      "langdef"
+      ("l")
+      "module"
+      ("m")
+      "version"
+      ("v")
+      "mixin"
+      ("m")
+      "arg"
+      ("a")
+      "node"
+      ("n")
+      "signal"
+      ("s")
+      "entity"
+      ("e")
+      "attribute"
+      ("a")
+      "element"
+      ("e")
+      "notation"
+      ("n")
+      "parameterEntity"
+      ("p")
+      "phandler"
+      ("p")
+      "deletedFile"
+      ("d")
+      "hunk"
+      ("h")
+      "modifiedFile"
+      ("m")
+      "newFile"
+      ("n")
+      "feature"
+      ("f")
+      "callback"
+      ("c")
+      "delegate"
+      ("d")
+      "guard"
+      ("g")
+      "implementation"
+      ("c")
+      "operator"
+      ("o")
+      "protocol"
+      ("P")
+      "record"
+      ("r")
+      "test"
+      ("t")
+      "constructor"
+      ("c")
+      "port"
+      ("p")
+      "custom"
+      ("c")
+      "derivedMode"
+      ("D")
+      "face"
+      ("H")
+      "minorMode"
+      ("M")
+      "theme"
+      ("T")
+      "varalias"
+      ("V")
+      "const"
+      ("c")
+      "error"
+      ("E")
+      "inline"
+      ("i")
+      "unknown"
+      ("x")
+      "import"
+      ("I")
+      "localvar"
+      ("l")
+      "mxtag"
+      ("x")
+      "submodule"
+      ("S")
+      "blockData"
+      ("b")
+      "common"
+      ("C")
+      "namelist"
+      ("n")
+      "document"
+      ("D")
+      "localVariable"
+      ("l")
+      "toplevelVariable"
+      ("t")
+      "handler"
+      ("h")
+      "anonMember"
+      ("M")
+      "packageName"
+      ("P")
+      "receiver"
+      ("R")
+      "talias"
+      ("a")
+      "methodSpec"
+      ("n")
+      "var"
+      ("v")
+      "stylesheet"
+      ("s")
+      "heading1"
+      ("h")
+      "heading2"
+      ("i")
+      "heading3"
+      ("j")
+      "procedure"
+      ("p")
+      "key"
+      ("k")
+      "reopen"
+      ("r")
+      "trait"
+      ("t")
+      "array"
+      ("a")
+      "boolean"
+      ("b")
+      "number"
+      ("n")
+      "object"
+      ("o")
+      "null"
+      ("z")
+      "annotation"
+      ("a")
+      "enumConstant"
+      ("e")
+      "getter"
+      ("G")
+      "setter"
+      ("S")
+      "generator"
+      ("G")
+      "choice"
+      ("C")
+      "mainMenu"
+      ("M")
+      "config"
+      ("c")
+      "kconfig"
+      ("k")
+      "menu"
+      ("m")
+      "typealias"
+      ("T")
+      "inputSection"
+      ("i")
+      "symbol"
+      ("s")
+      "macrofile"
+      ("I")
+      "makefile"
+      ("I")
+      "title"
+      ("t")
+      "artifactId"
+      ("a")
+      "groupId"
+      ("g")
+      "repositoryId"
+      ("r")
+      "build"
+      ("B")
+      "benchmark"
+      ("b")
+      "run"
+      ("r")
+      "role"
+      ("r")
+      "wrapper"
+      ("w")
+      "pkg"
+      ("p")
+      "sectionGroup"
+      ("S")
+      "langstr"
+      ("l")
+      "Constructor"
+      ("C")
+      "Exception"
+      ("e")
+      "val"
+      ("p")
+      "RecordField"
+      ("r")
+      "category"
+      ("C")
+      "username"
+      ("u")
+      "subroutineDeclaration"
+      ("d")
+      "format"
+      ("f")
+      "submethod"
+      ("b")
+      "grammar"
+      ("g")
+      "token"
+      ("t")
+      "rule"
+      ("u")
+      "protodef"
+      ("D")
+      "message"
+      ("m")
+      "oneof"
+      ("o")
+      "rpc"
+      ("r")
+      "service"
+      ("R")
+      "resource"
+      ("r")
+      "loggerSection"
+      ("L")
+      "qualname"
+      ("q")
+      "infoitem"
+      ("i")
+      "qmp"
+      ("q")
+      "globalVar"
+      ("g")
+      "source"
+      ("s")
+      "functionVar"
+      ("v")
+      "activeBindingFunc"
+      ("a")
+      "context"
+      ("c")
+      "describe"
+      ("d")
+      "citation"
+      ("C")
+      "namedPattern"
+      ("n")
+      "keyword"
+      ("k")
+      "testcase"
+      ("C")
+      "patch"
+      ("p")
+      "tag"
+      ("t")
+      "accessor"
+      ("A")
+      "singletonMethod"
+      ("S")
+      "generic"
+      ("g")
+      "repr"
+      ("r")
+      "placeholder"
+      ("P")
+      "functor"
+      ("c")
+      "structure"
+      ("r")
+      "signature"
+      ("s")
+      "value"
+      ("v")
+      "domain"
+      ("D")
+      "trigger"
+      ("T")
+      "publication"
+      ("U")
+      "view"
+      ("V")
+      "cursor"
+      ("c")
+      "index"
+      ("i")
+      "synonym"
+      ("n")
+      "table"
+      ("t")
+      "mltable"
+      ("x")
+      "mlconn"
+      ("y")
+      "mlprop"
+      ("z")
+      "def"
+      ("d")
+      "set"
+      ("s")
+      "heredoc"
+      ("h")
+      "probe"
+      ("p")
+      "assert"
+      ("A")
+      "checker"
+      ("H")
+      "clocking"
+      ("L")
+      "modport"
+      ("M")
+      "nettype"
+      ("N")
+      "constraint"
+      ("O")
+      "covergroup"
+      ("V")
+      "block"
+      ("b")
+      "instance"
+      ("i")
+      "ifclass"
+      ("l")
+      "net"
+      ("n")
+      "sequence"
+      ("q")
+      "register"
+      ("r")
+      "unit"
+      ("u")
+      "modulepar"
+      ("P")
+      "timer"
+      ("T")
+      "altstep"
+      ("a")
+      "frametitle"
+      ("f")
+      "framesubtitle"
+      ("g")
+      "bibitem"
+      ("B")
+      "command"
+      ("c")
+      "subparagraph"
+      ("G")
+      "counter"
+      ("N")
+      "xinput"
+      ("i")
+      "process"
+      ("Q")
+      "architecture"
+      ("a")
+      "iparam"
+      ("I")
+      "oparam"
+      ("O")
+      "edesc"
+      ("d")
+      "macroParameter"
+      ("D")
+      "augroup"
+      ("a")
+      "map"
+      ("m")
+      "filename"
+      ("n")
+      "accelerators"
+      ("a")
+      "bitmap"
+      ("b")
+      "dialog"
+      ("d")
+      "font"
+      ("f")
+      "icon"
+      ("i")
+      "nsprefix"
+      ("n")
+      "root"
+      ("r")
+      "matchedTemplate"
+      ("m")
+      "namedTemplate"
+      ("n")
+      "repoid"
+      ("r")
+      "file"
+      ("F")))
+  "Hash table of full-length kind -> single-letter kind.
+This is used for filtering the `kind' field of tags with
+single-letter kind by full-length kind.  See
+`citre-core-filter-kind'.")
+
+;; NOTE: For now there's only one single-letter kind for a full-length kind,
+;; which is good, but we still use a "string -> list of strings" structure in
+;; the above table, in case that some day, the same (full-length) kind in 2
+;; languages have different single-letter versions.
+
+;; Run this snippet to generate `citre-core--kind-name-full-to-single-table'.
+;; The result will be shown in a *Pp Eval Output* buffer, and it can be
+;; directly copied into the variable definition.  Make sure to indent them!
+
+;; (let* ((ctags-program "ctags")
+;;        (output (shell-command-to-string
+;;                 (citre-core--build-shell-command
+;;                  ctags-program
+;;                  "--quiet" "--options=NONE"
+;;                  "--machinable" "--list-kinds-full")))
+;;        (output-lines (nthcdr 1 (split-string output "\n" t)))
+;;        (output-records (mapcar (lambda (line)
+;;                                  (cl-subseq (split-string line "\t" t) 0 3))
+;;                                output-lines))
+;;        (table (make-hash-table :test #'equal)))
+;;   (dolist (record output-records)
+;;     (let ((kind (nth 1 record))
+;;           (kind-full (nth 2 record)))
+;;       (if (gethash kind-full table)
+;;           (push kind (gethash kind-full table)))
+;;       (puthash kind-full (list kind) table)))
+;;   ;; "file" kind is not language-specific.  It's used for file tags and is
+;;   ;; preserved by ctags.
+;;   (puthash "file" '("F") table)
+;;   (pp-eval-expression table)
+;;   (pop-to-buffer "*Pp Eval Output*")
+;;   (goto-char (point-min))
+;;   (re-search-forward "#s(hash-table.*data")
+;;   (replace-match "#s(hash-table\ntest equal\ndata")
 ;;   (indent-region (point-min) (point-max))
-;;   (ignore-errors
-;;     ;; Find the whole list of hash table "data"s
-;;     (while (re-search-forward "(\\(\"[a-zA-Z0-9]+\" *\\)+)")
-;;       (save-excursion
-;;         ;; Go before the 1st element
-;;         (backward-sexp)
-;;         (forward-char)
-;;         ;; Make sure no long lines, and things are presented in pairs.
-;;         (while (ignore-errors (progn (forward-sexp) (forward-sexp) t))
-;;           (when (> (current-column) fill-column)
-;;             (funcall newline-for-last-pair)))
-;;         ;; Now we are after the last element, there's 2 more closing parens
-;;         ;; after the point, so we need to check again.
-;;         (when (> (current-column) (- fill-column 2))
-;;           (funcall newline-for-last-pair)))))
-;;   (whitespace-cleanup)
 ;;   (goto-char (point-min)))
 
 (provide 'citre-core-tables)
