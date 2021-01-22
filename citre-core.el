@@ -940,6 +940,7 @@ are missing, otherwise only keep lines that have those fields."
           (if (memq match '(regexp member))
               (let ((str2 (if (eq match 'regexp)
                               str2
+                            ;; TODO: create a `regexp-quote' for ERE.
                             (concat "(^|,) ?" (regexp-quote str2) "(,|$)"))))
                 (citre-core--readtags-regexp-builder str1 str2 case-fold))
             (let* ((str1 (citre-core--readtags-case-fold-string-builder
@@ -966,26 +967,32 @@ require FIELDS to be missing."
         `(not ,field)
       field)))
 
+(defun citre-core-filter-lang (lang)
+  "Return a filter expression that requires the language to be LANG.
+If the `language' field exists, this uses that field, otherwise
+filter based on the extension of the `input' field, which may not
+be accurate.
+
+Run \"ctags --list-languages\" to see valid values of LANG.  Be
+careful about the capitalization!"
+  (let* ((ext (gethash lang citre-core--lang-extension-table))
+         (regexp (concat "\\.(" (string-join ext "|") ")$")))
+    `(or ,(citre-core-build-filter 'language lang 'eq)
+         ,(citre-core-build-filter 'input regexp 'regexp))))
+
 ;; TODO: Should we convert between single-letter and full-length kinds here?
 ;; The implementation would be messy since it also involves the language field,
 ;; and we need to match the file extension if the language field is missing.
-(defun citre-core-filter-match-kind (tagsfile kind)
+(defun citre-core-filter-kind (kind)
   "Return a filter expression that matches the kind field by KIND.
-If KIND is single-letter (or full-length), but the tags file
-TAGSFILE uses full-length (or single-letter) kinds, then `true'
-will be returned.  TAGSFILE is a canonical path."
-  (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
-  (unless (stringp tagsfile)
-    (error "TAGSFILE needs to be a string, but is a %s: %S"
-           (type-of tagsfile) tagsfile))
-  (let ((tags-file-one-letter-kind-p
-         (gethash 'one-letter-kind-p
-                  (citre-core--tags-file-info tagsfile)))
-        (arg-one-letter-kind-p (eq (length kind) 1)))
-    (if (eq tags-file-one-letter-kind-p
-            arg-one-letter-kind-p)
-        (citre-core-build-filter 'kind kind 'eq nil nil 'ignore-missing)
-      'true)))
+KIND should be a full-length kind.  The generated filter works on
+tags file using single-letter `kind' field, but it will match
+more tags than it should, because a single-letter kind can
+corresponds to multiple full-length kinds."
+  (let* ((kinds (gethash kind citre-core--kind-name-full-to-single-table))
+         (kinds (push kind kinds))
+         (regexp (concat "^(" (string-join kinds "|") ")$")))
+    (citre-core-build-filter 'kind regexp 'regexp nil nil 'ignore-missing)))
 
 ;;;;; Build sorter expressions
 

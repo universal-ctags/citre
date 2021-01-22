@@ -340,10 +340,11 @@ this function for different languages."
                               nil 'invert 'ignore-missing)
     ,(citre-core-build-filter 'extras "reference" 'member
                               nil 'invert 'ignore-missing)
-    ;; TODO: replace this by `citre-core-filter-match-kind'.  I now notice that
-    ;; the `tagsfile' arg makes it unusable.
-    ,(citre-core-build-filter 'kind "file" 'eq
-                              nil 'invert 'ignore-missing))
+    ;; For tags file using single-letter kind, apply `not' to
+    ;; `citre-core-filter-kind' may exclude more tags than it should.  But we
+    ;; know the "F" (file) kind is preserved by ctags, and "F" is not used
+    ;; anywhere else, so we could do this.
+    (not ,(citre-core-filter-kind "file")))
   "The default filter expression for auto-completion.")
 
 (defvar citre-completion-default-sorter
