@@ -153,10 +153,23 @@ number if they know the file is renamed/moved to which file."
      (concat kind str)
      (xref-make-file-location (concat file-existance path) line 0))))
 
+(defun citre-xref--get-definition-for-completed-symbol (symbol)
+  "Get definition for SYMBOL without text property.
+When xref prompts for user input for the symbol, we can't get
+information from the environment of the symbol at point, so we
+have to bypass the whole filter/sort mechanism of Citre and use
+simple tag name matching.  This function is for it."
+  (citre-get-tags nil symbol 'exact
+                  ;; TODO: write a filter and sorter for this use case.
+                  :require '(name ext-abspath pattern)
+                  :optional '(ext-kind-full line typeref extras)))
+
 (defun citre-xref--find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
   (mapcar #'citre-xref--make-object
-          (citre-get-definitions nil symbol)))
+          (if (citre-get-property symbol 'xref-get-at-point)
+              (citre-get-definitions nil symbol)
+            (citre-xref--get-definition-for-completed-symbol symbol))))
 
 (defun citre-xref-backend ()
   "Define the Citre backend for xref."
@@ -164,7 +177,8 @@ number if they know the file is renamed/moved to which file."
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql citre)))
   "Define method for xref to get symbol at point."
-  (citre-get-symbol))
+  (citre-put-property (citre-get-symbol)
+                      'xref-get-at-point t))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql citre)) symbol)
   "Define method for xref to find definition of SYMBOL."
