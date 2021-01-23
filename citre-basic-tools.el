@@ -178,7 +178,7 @@ simple tag name matching.  This function is for it."
   "Return the xref object of the definition information of SYMBOL."
   (mapcar #'citre-xref--make-object
           (if (citre-get-property symbol 'xref-get-at-point)
-              (citre-get-definitions nil symbol)
+              (citre-get-definitions symbol)
             (citre-xref--get-definition-for-completed-symbol symbol))))
 
 (defun citre-xref-backend ()

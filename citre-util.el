@@ -457,7 +457,7 @@ This is for showing the results for auto-completion tools."
 This sorts the file name by their alphabetical order, then the
 length and alphabetical order of the tag names.")
 
-(defun citre-get-definitions (&optional tagsfile symbol)
+(defun citre-get-definitions (&optional symbol tagsfile)
   "Get definitions from tags file TAGSFILE of symbol at point.
 If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
 not specified, find it automatically under current project root.
