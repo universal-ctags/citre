@@ -990,6 +990,10 @@ N can be negative."
 
 ;;;;; Display
 
+(defun citre-peek--make-definition-str (tag)
+  "Generate str of TAG to show in peek window."
+  (citre-make-location-str tag nil 'no-content))
+
 (defun citre-peek--make-border ()
   "Return the border to be used in peek windows."
   (if (display-graphic-p)
@@ -1030,11 +1034,11 @@ DEFLIST is the currently browsed def list."
          (displayed-tags
           (mapcar #'citre-peek--def-entry-tag displayed-defs))
          (displayed-defs-strlist
-          (mapcar #'citre-make-location-str displayed-tags))
+          (mapcar #'citre-peek--make-definition-str displayed-tags))
          (displayed-idx
           (- idx (car citre-peek--displayed-defs-interval))))
     (dotimes (n (length displayed-defs))
-      (let ((line (citre-make-location-str (nth n displayed-tags))))
+      (let ((line (citre-peek--make-definition-str (nth n displayed-tags))))
         (when (citre-peek--def-entry-branches (nth n displayed-defs))
           (setq line (concat citre-peek-peeked-through-definition-prefix
                              line)))

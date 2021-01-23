@@ -478,46 +478,62 @@ The result is a list of tags, with the fields `ext-abspath',
                     :require '(name ext-abspath pattern)
                     :optional '(ext-kind-full line typeref extras))))
 
-;; TODO: annotate reference tags
-(defun citre-make-location-str (tag)
+(defun citre-make-location-str (tag &optional no-location no-content)
   "Generate a string for TAG for displaying.
 TAG should be an element in the returned value of
-`citre-get-definitions'.  The string returned looks like
-\"file(line-number): content\", with TAG stored in its property
-`citre-tag'.
+`citre-get-definitions'.  The string returned contains:
 
-This is for showing the results for \"finding definition\"
-tools."
-  (let* ((line (citre-core-get-field 'extra-line tag))
-         (line (if line
-                   (concat "("
-                           (propertize (number-to-string line) 'face 'warning)
-                           ")")
-                 ""))
-         (str (citre-core-get-field 'extra-matched-str tag))
-         (str (if str (concat ": " (string-trim str)) ""))
-         (kind (citre-core-get-field 'ext-kind-full tag))
-         (type (citre-core-get-field 'typeref tag 'after-colon))
-         (extras (citre-core-get-field 'extras tag))
-         (reference
-          (and extras
-               (string-match "\\(^\\|,\\) ?reference\\(,\\|$\\)" extras)))
-         (annotation (if (or kind type reference)
-                         (concat
-                          (propertize (concat
-                                       (or kind "")
-                                       (if (and kind type) "/" "")
-                                       (or type ""))
-                                      'face 'citre-definition-annotation-face)
-                          (if reference citre-definition-reference-mark "")
-                          " ")))
-         (abspath (citre-core-get-field 'ext-abspath tag))
-         (path (propertize (citre-relative-path abspath)
-                           'face 'font-lock-function-name-face))
-         (file-missing-p (if (file-exists-p abspath) ""
-                           citre-definition-missing-file-mark)))
-    (citre-propertize (concat annotation file-missing-p path line str)
-                      tag)))
+- annotation: Kind and type of TAG, and whether it's a
+  reference tag.
+- location: Path and line number of TAG.  Can be disabled by
+  NO-LOCATION.
+- content: The string recorded in the pattern field of TAG.  Can
+  be disabled by NO-CONTENT.
+
+TAG is stored in the `citre-tag' property of the string.
+
+This function is for showing the results for \"finding
+definition\" tools."
+  (let* (annotation path linum location content)
+    ;; annotation
+    (let* ((kind (citre-core-get-field 'ext-kind-full tag))
+           (type (citre-core-get-field 'typeref tag 'after-colon))
+           (extras (citre-core-get-field 'extras tag))
+           (reference
+            (and extras
+                 (string-match "\\(^\\|,\\) ?reference\\(,\\|$\\)" extras))))
+      (setq annotation
+            (concat
+             (propertize (concat
+                          (or kind "")
+                          (if (and kind type) "/" "")
+                          (or type ""))
+                         'face 'citre-definition-annotation-face)
+             (if reference citre-definition-reference-mark ""))))
+    ;; location
+    (unless no-location
+      (when-let ((abspath (citre-core-get-field 'ext-abspath tag)))
+        (setq path
+              (concat
+               (if (file-exists-p abspath) ""
+                 citre-definition-missing-file-mark)
+               (propertize (citre-relative-path abspath)
+                           'face 'font-lock-function-name-face))))
+      (when-let ((line (citre-core-get-field 'extra-line tag)))
+        (setq linum (concat (if no-location "" "(")
+                            (propertize (number-to-string line) 'face 'warning)
+                            (if no-location "" ")")))))
+    ;; content
+    (unless no-content
+      (when-let ((str (citre-core-get-field 'extra-matched-str tag)))
+        (setq content (string-trim str))))
+    ;; location
+    (setq location (concat (or path "") (or linum "")
+                           (if (and (or path linum) content) ":" "")))
+    (let* ((parts (list annotation location content)))
+      (setq parts (cl-remove nil parts :test #'eq))
+      (setq parts (cl-remove "" parts :test #'equal))
+      (citre-propertize (string-join parts " ") tag))))
 
 (defun citre-goto-tag (tag &optional window)
   "Jump to the location of TAG.

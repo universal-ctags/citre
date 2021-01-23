@@ -140,17 +140,12 @@ number if they know the file is renamed/moved to which file."
 
 (defun citre-xref--make-object (tag)
   "Make xref object of TAG."
-  (let* ((kind (citre-core-get-field 'kind tag))
-         (kind (if kind
-                   (concat (propertize kind 'face 'warning) " ")
-                 ""))
-         (path (citre-core-get-field 'ext-abspath tag))
+  (let* ((path (citre-core-get-field 'ext-abspath tag))
          (file-existance
           (if (file-exists-p path) "" "*missing*"))
-         (line (citre-xref--get-linum tag))
-         (str (citre-core-get-field 'extra-matched-str tag)))
+         (line (citre-xref--get-linum tag)))
     (xref-make
-     (concat kind str)
+     (citre-make-location-str tag 'no-location)
      (xref-make-file-location (concat file-existance path) line 0))))
 
 (defun citre-xref--get-definition-for-completed-symbol (symbol)
