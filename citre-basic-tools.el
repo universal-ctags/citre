@@ -113,6 +113,15 @@ When nil, don't modify `completion-in-region-function'."
             ,(citre-core-filter-kind "file")))
   "Filter for finding definitions when the symbol is inputted by user.")
 
+(defvar citre-xref--completion-table-cache
+  '(:tage-file nil :time nil :collection nil)
+  "Plist for caching identifier completions.
+Its props and vals are:
+
+- `:tags-file': Canonical path of tags file.
+- `:time': Last modified time of tags file.
+- `:collection': The completions.")
+
 ;; NOTE: In the worst situation, this will create and kill a temporary buffer
 ;; when processing every tag.  If we get bug report on the performance, we
 ;; could use the temp buffer technique in citre-peek, so we only need to do
@@ -189,15 +198,33 @@ simple tag name matching.  This function is for it."
   ((_backend (eql citre)))
   "Return a function for xref to find all completions of a prefix."
   (lambda (str pred action)
-    (let ((collection
-           (cl-remove-duplicates
-            (mapcar (lambda (tag) (citre-core-get-field 'name tag))
-                    (citre-get-tags
-                     nil "" nil
-                     :filter citre-xref--filter
-                     :sorter (citre-core-sorter '(length name +) 'name)
-                     :require '(name)))
-            :test #'equal)))
+    (let* ((tagsfile (citre-tags-file-path))
+           (update-time (gethash 'time (citre-core--tags-file-info tagsfile)))
+           (collection
+            (if (and (equal tagsfile
+                            (plist-get citre-xref--completion-table-cache
+                                       :tags-file))
+                     (equal update-time
+                            (plist-get citre-xref--completion-table-cache
+                                       :time)))
+                (plist-get citre-xref--completion-table-cache :collection)
+              (let ((collection
+                     (cl-remove-duplicates
+                      (mapcar
+                       (lambda (tag) (citre-core-get-field 'name tag))
+                       (citre-get-tags
+                        nil str nil
+                        :filter citre-xref--filter
+                        :sorter (citre-core-sorter '(length name +) 'name)
+                        :require '(name)))
+                      :test #'equal)))
+                (plist-put citre-xref--completion-table-cache
+                           :tags-file tagsfile)
+                (plist-put citre-xref--completion-table-cache
+                           :time update-time)
+                (plist-put citre-xref--completion-table-cache
+                           :collection collection)
+                collection))))
       (complete-with-action action collection str pred))))
 
 ;;;; Tool: `citre-jump'
