@@ -108,6 +108,11 @@ When nil, don't modify `completion-in-region-function'."
 (declare-function xref-make "xref" (summary location))
 (declare-function xref-make-file-location "xref" (file line column))
 
+(defvar citre-xref--filter
+  `(not (or ,(citre-core-filter 'extras '("anonymous inputFile") 'csv-contain)
+            ,(citre-core-filter-kind "file")))
+  "Filter for finding definitions when the symbol is inputted by user.")
+
 ;; NOTE: In the worst situation, this will create and kill a temporary buffer
 ;; when processing every tag.  If we get bug report on the performance, we
 ;; could use the temp buffer technique in citre-peek, so we only need to do
@@ -155,7 +160,8 @@ information from the environment of the symbol at point, so we
 have to bypass the whole filter/sort mechanism of Citre and use
 simple tag name matching.  This function is for it."
   (citre-get-tags nil symbol 'exact
-                  ;; TODO: write a filter and sorter for this use case.
+                  :filter citre-xref--filter
+                  :sorter citre-definition-default-sorter
                   :require '(name ext-abspath pattern)
                   :optional '(ext-kind-full line typeref extras)))
 
@@ -184,8 +190,14 @@ simple tag name matching.  This function is for it."
   "Return a function for xref to find all completions of a prefix."
   (lambda (str pred action)
     (let ((collection
-           (mapcar (lambda (tag) (citre-core-get-field 'name tag))
-                   (citre-get-tags nil "" nil :require '(name)))))
+           (cl-remove-duplicates
+            (mapcar (lambda (tag) (citre-core-get-field 'name tag))
+                    (citre-get-tags
+                     nil "" nil
+                     :filter citre-xref--filter
+                     :sorter (citre-core-sorter '(length name +) 'name)
+                     :require '(name)))
+            :test #'equal)))
       (complete-with-action action collection str pred))))
 
 ;;;; Tool: `citre-jump'
