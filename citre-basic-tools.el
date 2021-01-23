@@ -323,21 +323,48 @@ completion framework), this falls back to the default
         (delete-region start end)
         (insert (substring-no-properties completion))))))
 
-(defun citre--make-completion-annotation (cand)
-  "Generate annotation for a completion string CAND.
-CAND is the returned value of `citre-make-completion-str'."
-  (let* ((kind (citre-get-property cand 'ext-kind-full 'from-tag))
-         (type (citre-get-property cand 'typeref 'from-tag))
-         (type (when type (substring type (1+ (string-match ":" type))))))
+(defun citre--completion-get-annotation (str)
+  "Generate annotation for STR.
+STR is a candidate in a capf session.  See the implementation of
+`citre-completion-at-point'."
+  (let* ((kind (citre-get-property str 'kind))
+         (type (citre-get-property str 'type)))
     (when (or kind type)
-      (propertize (concat
-                   " ("
-                   (or kind "")
-                   (if (and kind type) "/" "")
-                   (or type "")
-                   ")")
-                  ;; TODO: Maybe we should change this name?
-                  'face 'citre-definition-annotation-face))))
+      (propertize
+       (concat " ("
+               (or kind "")
+               (if (and kind type) "/" "")
+               (or type "")
+               ")")
+       'face 'citre-definition-annotation-face))))
+
+(defun citre--completion-make-collection (tags)
+  "Make collection for auto-completion of TAGS."
+  (let* ((collection
+          (mapcar
+           (lambda (tag)
+             (citre-put-property
+              (citre-core-get-field 'name tag)
+              'kind
+              (citre-core-get-field 'ext-kind-full tag)
+              'type
+              (citre-core-get-field 'typeref tag 'after-colon)
+              'signature
+              (citre-core-get-field 'signature tag 'after-colon)))
+           tags))
+         ;; `equal-including-properties' doesn't work. I don't know why, maybe
+         ;; it uses `eq' to compare the properties.
+         (str-equal
+          (lambda (str1 str2)
+            (and (equal str1 str2)
+                 (null (cl-position
+                        nil
+                        (mapcar (lambda (prop)
+                                  (equal (citre-get-property str1 prop)
+                                         (citre-get-property str2 prop)))
+                                '(kind type signature))))))))
+    (cl-remove-duplicates
+     collection :test str-equal)))
 
 ;;;;; Entry point
 
@@ -349,25 +376,12 @@ CAND is the returned value of `citre-make-completion-str'."
               (end (cdr bounds))
               (completions (citre-get-completions
                             symbol nil citre-capf-substr-completion))
-              (collection
-               (mapcar (lambda (tag)
-                         (citre-put-property (citre-core-get-field 'name tag)
-                                             'tag tag))
-                       completions))
-              (get-annotation
-               (lambda (cand)
-                 ;; TODO: Use a separate function to generate annotation.  This
-                 ;; will allow us to remove duplicates.
-                 (when-let ((annotation (citre-make-location-str
-                                         (citre-get-property cand 'tag)
-                                         'no-location 'no-content)))
-                   (concat " (" annotation ")"))))
+              (collection (citre--completion-make-collection completions))
               (get-docsig
                (lambda (cand)
-                 (citre-core-get-field 'signature
-                                       (citre-get-property cand 'tag)))))
+                 (citre-get-property cand 'signature))))
     (list start end collection
-          :annotation-function get-annotation
+          :annotation-function #'citre--completion-get-annotation
           :company-docsig get-docsig
           ;; This makes our completion function a "non-exclusive" one, which
           ;; means to try the next completion function when current completion

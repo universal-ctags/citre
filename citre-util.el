@@ -554,26 +554,6 @@ This is suitable to run after jumping to a location."
 
 ;;;;; APIs: Text property related
 
-(defun citre-propertize (str tag &rest fields)
-  "Propertize STR by FIELDS in TAG.
-Added text properties are prefixed by \"citre-\".  For example,
-the `kind' field will be stored in the `citre-kind' property.
-
-When FIELDS are nil, the whole tag is stored in the `citre-tag'
-property.
-
-Notice that this is destructive, which is different from
-`propertize'.  The propertized STR is returned."
-  (let ((len (length str)))
-    (if fields
-        (dolist (field fields)
-          (put-text-property 0 len
-                             (intern (concat "citre-" (symbol-name field)))
-                             (citre-core-get-field field tag)
-                             str))
-      (put-text-property 0 len 'citre-tag tag str))
-    str))
-
 (defun citre-get-property (str field)
   "Get the text property corresponding to FIELD in STR.
 STR should be propertized by `citre-put-property'.
@@ -582,13 +562,20 @@ What it actually does is prefix FIELD by `citre-', and get that
 text property."
   (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
 
-(defun citre-put-property (str prop val)
-  "Set the text property corresponding to PROP in STR.
-The value is specified by VAL.  The text property added is
-prefixed by \"citre-\".  Propertized STR is returned."
-  (put-text-property 0 (length str)
-                     (intern (concat "citre-" (symbol-name prop)))
-                     val str)
+(defun citre-put-property (str &rest properties)
+  "Set the text property of STR.
+STR is the string to be modified.  PROPERTIES form a sequence of
+PROPERTY VALUE pairs for test properties to add.  Each PROPERTY
+is prefixed by \"citre-\".  Propertized STR is returned."
+  (let ((i 0)
+        (len (length properties)))
+    (while (< (1+ (* 2 i)) len)
+      (let ((prop (nth (* 2 i) properties))
+            (val (nth (1+ (* 2 i)) properties)))
+        (put-text-property 0 (length str)
+                           (intern (concat "citre-" (symbol-name prop)))
+                           val str))
+      (cl-incf i)))
   str)
 
 (provide 'citre-util)
