@@ -254,16 +254,6 @@ throws an user error if no tags file was found."
 
 ;;;;; APIs: Language support framework
 
-(defvar-local citre--buffer-file-name nil
-  "File name in non-file buffers.
-If a tool needs to open a file in a non-file buffer (like
-`citre-peek'), set this variable in that buffer, then the
-`buffer-file-name' function inside `citre-get-symbol' call could
-return the file name.  Simply puts it, the `:get-symbol'
-function (see `citre-language-support-alist') can use
-`buffer-file-name' function normally and it works for peek
-sessions.")
-
 ;;;;;; The lookup table
 
 (defvar citre-language-support-alist nil
@@ -372,24 +362,11 @@ Set `citre-get-symbol-function-alist' to control the behavior of
 this function for different languages.  `citre-file-path' and
 `citre-tags-file' properties are attached to the symbol string so
 filters/sorters can make use of them."
-  ;; HACK: make `buffer-file-name' work in temp buffers opened by a peek
-  ;; session.  This is unavoidable, since even we could use something like:
-  ;;
-  ;;   (or citre--buffer-file-name (buffer-file-name))
-  ;;
-  ;; when calculating the `citre-file-path' property, language-specific
-  ;; `:get-symbol' function may still call `buffer-file-name' for its own use.
-  (cl-letf* ((buffer-file-name-orig (symbol-function 'buffer-file-name))
-             ((symbol-function 'buffer-file-name)
-              (lambda (&optional buffer)
-                (or (with-current-buffer (or buffer (current-buffer))
-                      citre--buffer-file-name)
-                    (funcall buffer-file-name-orig buffer)))))
-    (let ((sym (funcall (or (citre--get-value-in-language-alist :get-symbol)
-                            #'citre-get-symbol-default))))
-      (citre-put-property sym 'file-path (buffer-file-name))
-      (citre-put-property sym 'tags-file (citre-tags-file-path))
-      sym)))
+  (let ((sym (funcall (or (citre--get-value-in-language-alist :get-symbol)
+                          #'citre-get-symbol-default))))
+    (citre-put-property sym 'file-path (buffer-file-name))
+    (citre-put-property sym 'tags-file (citre-tags-file-path))
+    sym))
 
 ;;;;; APIs: Auto-completion related
 

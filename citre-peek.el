@@ -575,6 +575,9 @@ any symbol."
 ;; - `citre-peek--content-update': Set this to t when the content in the peek
 ;;   window is updated.  This variable is for preventing recalculate the
 ;;   content after every command.
+;;
+;; - `citre-peek--buffer-file-name': Normally you don't need to care about it.
+;;   It's automatically set by `citre-peek--find-file-buffer'.
 
 (defvar citre-peek--session-root-list nil
   "The root def list of current peek session.")
@@ -615,6 +618,14 @@ bounds as returned by `citre--search-symbols'.")
 
 (defvar citre-peek--bg-selected nil
   "Background color for selected definitions when peeking.")
+
+(defvar-local citre-peek--buffer-file-name nil
+  "File name in non-file buffers.
+`citre-peek' needs to open files in non-file temporary buffers,
+where `buffer-file-name' function doesn't work.  `citre-peek'
+uses hacks to make it work when getting the symbol and finding
+its definitions inside such buffers.  For this to work,
+`citre-peek--buffer-file-name' must be set in these buffers.")
 
 (define-minor-mode citre-peek--mode
   "Mode for `citre-peek'.
@@ -681,6 +692,19 @@ which take care of setting up other things."
 ;; it because its content are modified.  Rather than trying to workaround these
 ;; issues, it's better to create this function instead.
 
+(defmacro citre-peek--hack-buffer-file-name (&rest body)
+  "Override function `buffer-file-name' in BODY.
+This makes it work in non-file buffers where
+`citre-peek--buffer-file-name' is set."
+  (declare (indent 0))
+  `(cl-letf* ((buffer-file-name-orig (symbol-function 'buffer-file-name))
+              ((symbol-function 'buffer-file-name)
+               (lambda (&optional buffer)
+                 (or (with-current-buffer (or buffer (current-buffer))
+                       citre-peek--buffer-file-name)
+                     (funcall buffer-file-name-orig buffer)))))
+     ,@body))
+
 (defun citre-peek--find-file-buffer (path)
   "Return the buffer visiting file PATH.
 PATH is a canonical path.  This is like `find-buffer-visiting',
@@ -709,7 +733,7 @@ When PATH doesn't exist, this returns nil."
             ;; NOTE: For some weird reason, if you put this before the above
             ;; form, `citre-project-root' will be cleared.
             (setq citre-project-root current-project)
-            (setq citre--buffer-file-name path)
+            (setq citre-peek--buffer-file-name path)
             ;; In case language-specific `:get-symbol' function uses
             ;; `default-directory'.
             (setq default-directory (file-name-directory path)))
@@ -876,12 +900,13 @@ The returned def list is the root def list of the peek session."
 
 (defun citre-peek--get-def-list ()
   "Return the def list of symbol under point."
-  (let* ((symbol (substring-no-properties (citre-get-symbol)))
-         (definitions (citre-get-definitions))
-         (deflist (citre-peek--def-list-create definitions symbol)))
-    (when (null definitions)
-      (user-error "Can't find definition"))
-    deflist))
+  (citre-peek--hack-buffer-file-name
+    (let* ((symbol (substring-no-properties (citre-get-symbol)))
+           (definitions (citre-get-definitions))
+           (deflist (citre-peek--def-list-create definitions symbol)))
+      (when (null definitions)
+        (user-error "Can't find definition"))
+      deflist)))
 
 (defun citre-peek--create-branch (buf point)
   "Create new branch in the history.
@@ -926,7 +951,8 @@ set variables according to it."
     (save-excursion
       (goto-char point)
       ;; TODO: could we make the get definitions API also return the symbol?
-      (let* ((symbol (substring-no-properties (citre-get-symbol)))
+      (let* ((symbol (substring-no-properties
+                      (citre-peek--hack-buffer-file-name (citre-get-symbol))))
              (deflist (citre-peek--get-def-list)))
         ;; For file buffers, we create a root def list for current position, so
         ;; the user can go back to it later.
