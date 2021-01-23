@@ -373,8 +373,8 @@ filters/sorters can make use of them."
 ;; TODO: A better filter
 (defun citre-completion-default-filter (symbol)
   "Default completion filter for SYMBOL."
-  (let ((tags-file (citre-get-property symbol 'tags-file))
-        (file-path (citre-get-property symbol 'file-path)))
+  (let ((tags-file (citre-get-property 'tags-file symbol))
+        (file-path (citre-get-property 'file-path symbol)))
     `(not
       (or
        ,(citre-core-filter 'extras '("anonymous" "reference" "inputFile")
@@ -426,8 +426,8 @@ It returns nil when the completion can't be done."
 
 (defun citre-definition-default-filter (symbol)
   "Default definition filter for SYMBOL."
-  (let ((tags-file (citre-get-property symbol 'tags-file))
-        (file-path (citre-get-property symbol 'file-path)))
+  (let ((tags-file (citre-get-property 'tags-file symbol))
+        (file-path (citre-get-property 'file-path symbol)))
     `(not
       (or
        ,(citre-core-filter 'extras '("anonymous" "inputFile") 'csv-contain)
@@ -554,7 +554,7 @@ This is suitable to run after jumping to a location."
 
 ;;;;; APIs: Text property related
 
-(defun citre-get-property (str field)
+(defun citre-get-property (field str)
   "Get the text property corresponding to FIELD in STR.
 STR should be propertized by `citre-put-property'.
 

@@ -177,7 +177,7 @@ simple tag name matching.  This function is for it."
 (defun citre-xref--find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
   (mapcar #'citre-xref--make-object
-          (if (citre-get-property symbol 'xref-get-at-point)
+          (if (citre-get-property 'xref-get-at-point symbol)
               (citre-get-definitions symbol)
             (citre-xref--get-definition-for-completed-symbol symbol))))
 
@@ -327,8 +327,8 @@ completion framework), this falls back to the default
   "Generate annotation for STR.
 STR is a candidate in a capf session.  See the implementation of
 `citre-completion-at-point'."
-  (let* ((kind (citre-get-property str 'kind))
-         (type (citre-get-property str 'type)))
+  (let* ((kind (citre-get-property 'kind str))
+         (type (citre-get-property 'type str)))
     (when (or kind type)
       (propertize
        (concat " ("
@@ -360,8 +360,8 @@ STR is a candidate in a capf session.  See the implementation of
                  (null (cl-position
                         nil
                         (mapcar (lambda (prop)
-                                  (equal (citre-get-property str1 prop)
-                                         (citre-get-property str2 prop)))
+                                  (equal (citre-get-property prop str1)
+                                         (citre-get-property prop str2)))
                                 '(kind type signature))))))))
     (cl-remove-duplicates
      collection :test str-equal)))
@@ -371,7 +371,7 @@ STR is a candidate in a capf session.  See the implementation of
 (defun citre-completion-at-point ()
   "Function used for `completion-at-point-functions'."
   (when-let* ((symbol (citre-get-symbol))
-              (bounds (citre-get-property symbol 'bounds))
+              (bounds (citre-get-property 'bounds symbol))
               (start (car bounds))
               (end (cdr bounds))
               (completions (citre-get-completions
@@ -379,7 +379,7 @@ STR is a candidate in a capf session.  See the implementation of
               (collection (citre--completion-make-collection completions))
               (get-docsig
                (lambda (cand)
-                 (citre-get-property cand 'signature))))
+                 (citre-get-property 'signature cand))))
     (list start end collection
           :annotation-function #'citre--completion-get-annotation
           :company-docsig get-docsig
