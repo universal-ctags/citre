@@ -880,6 +880,24 @@ matching."
                        (_ 'true)))
     ,str1))
 
+(defun citre-core--csv-contain-regexp-builder (str)
+  "Build a regexp that matches a CSV string that contains STR.
+STR can also be a list of strings, then the regexp matches any
+element in STR.
+
+This is for use in readtags filter."
+  (let ((string-or-list-of-string-p
+         (lambda (str)
+           (or (stringp str)
+               (null (cl-position nil (mapcar #'stringp str)))))))
+    (citre-core--error-on-arg str string-or-list-of-string-p))
+  (when (stringp str)
+    (setq str (list str)))
+  (concat "(^|,) ?"
+          ;; TODO: implement a `regexp-quote' for ERE.
+          (mapconcat #'regexp-quote str "|")
+          "(,|$)"))
+
 (defun citre-core--filter-case-fold-string-builder (str case-fold)
   "Convert STR by CASE-FOLD.
 STR can be a string or a symbol representing a field.  When
@@ -896,8 +914,9 @@ Otherwise it's directly returned."
 (defun citre-core-filter (str1 str2 match
                                &optional case-fold invert keep-missing)
   "Return a filter expression that matches STR1 and STR2.
-Both STRs can be a string, or a symbol of the field name.  MATCH
-could be:
+Both STRs can be a string, or a symbol of the field name.  STR2
+can be a list of strings if MATCH is `csv-contain', see below.
+MATCH could be:
 
 - `eq': See if STR1 equals STR2.
 - `prefix': See if STR1 is prefixed by STR2.
@@ -907,7 +926,9 @@ could be:
   regexp.  \"/\" in strings doesn't need to be escaped.  STR2
   must be a string.
 - `csv-contain': See if STR1 contains STR2 as a member, where
-  STR1 is a comma-separated list.  STR2 must be a string.
+  STR1 is a comma-separated list.  STR2 can be a string, or a
+  list of strings, then it sees if STR1 contains any element in
+  STR2.
 
 The order of STR1 and STR2 may feel a bit weird for Elisp users.
 That's because the convention of readtags is use STR1 as the
@@ -918,10 +939,6 @@ is non-nil, flip the filter so it only keep lines that doesn't
 match.  If KEEP-MISSING is non-nil, also keep lines where the
 fields pointed by STR1 or STR2 (if one/both of them are symbols)
 are missing, otherwise only keep lines that have those fields."
-  (let ((symbol-or-string-p (lambda (str)
-                              (or (symbolp str) (stringp str)))))
-    (citre-core--error-on-arg str1 symbol-or-string-p)
-    (citre-core--error-on-arg str2 symbol-or-string-p))
   (let* (syms
          (str-process
           (lambda (str)
@@ -937,9 +954,12 @@ are missing, otherwise only keep lines that have those fields."
           (if (memq match '(regexp csv-contain))
               (let ((str2 (if (eq match 'regexp)
                               str2
-                            ;; TODO: create a `regexp-quote' for ERE.
-                            (concat "(^|,) ?" (regexp-quote str2) "(,|$)"))))
+                            (citre-core--csv-contain-regexp-builder str2))))
                 (citre-core--filter-regexp-builder str1 str2 case-fold))
+            (let ((symbol-or-string-p (lambda (str)
+                                        (or (symbolp str) (stringp str)))))
+              (citre-core--error-on-arg str1 symbol-or-string-p)
+              (citre-core--error-on-arg str2 symbol-or-string-p))
             (let* ((str1 (citre-core--filter-case-fold-string-builder
                           str1 case-fold))
                    (str2 (citre-core--filter-case-fold-string-builder
