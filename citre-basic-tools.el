@@ -109,47 +109,46 @@ When nil, don't modify `completion-in-region-function'."
 (declare-function xref-make-file-location "xref" (file line column))
 
 ;; NOTE: In the worst situation, this will create and kill a temporary buffer
-;; when processing every record.  If we get bug report on the performance, we
+;; when processing every tag.  If we get bug report on the performance, we
 ;; could use the temp buffer technique in citre-peek, so we only need to do
 ;; this once for every file.
-(defun citre-xref--get-linum (record)
-  "Get the line number of tag RECORD.
+(defun citre-xref--get-linum (tag)
+  "Get the line number of TAG.
 If there's no buffer visiting the file containing the tag, this
 openes it temporarily, and clean it up on exit.
 
-When the file pointed to by RECORD doesn't exist, this returns
-the line number in RECORD, or 0 if it doesn't record the line
-number.  This is because we don't want to fail an xref session
-only because one file is lost, and users may manually use the
-line number if they know the file is renamed/moved to which
-file."
-  (let* ((path (citre-core-get-field 'ext-abspath record))
+When the file pointed to by TAG doesn't exist, this returns the
+line number in TAG, or 0 if it doesn't record the line number.
+This is because we don't want to fail an xref session only
+because one file is lost, and users may manually use the line
+number if they know the file is renamed/moved to which file."
+  (let* ((path (citre-core-get-field 'ext-abspath tag))
          (buf-opened (find-buffer-visiting path))
          buf linum)
     (if (not (file-exists-p path))
-        (or (citre-core-get-field 'extra-line record) 0)
+        (or (citre-core-get-field 'extra-line tag) 0)
       (if buf-opened
           (setq buf buf-opened)
         (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
         (with-current-buffer buf
           (insert-file-contents path)))
       (with-current-buffer buf
-        (setq linum (citre-core-locate-tag record 'use-linum)))
+        (setq linum (citre-core-locate-tag tag 'use-linum)))
       (unless buf-opened
         (kill-buffer buf))
       linum)))
 
-(defun citre-xref--make-object (record)
-  "Make xref object of RECORD."
-  (let* ((kind (citre-core-get-field 'kind record))
+(defun citre-xref--make-object (tag)
+  "Make xref object of TAG."
+  (let* ((kind (citre-core-get-field 'kind tag))
          (kind (if kind
                    (concat (propertize kind 'face 'warning) " ")
                  ""))
-         (path (citre-core-get-field 'ext-abspath record))
+         (path (citre-core-get-field 'ext-abspath tag))
          (file-existance
           (if (file-exists-p path) "" "*missing*"))
-         (line (citre-xref--get-linum record))
-         (str (citre-core-get-field 'extra-matched-str record)))
+         (line (citre-xref--get-linum tag))
+         (str (citre-core-get-field 'extra-matched-str tag)))
     (xref-make
      (concat kind str)
      (xref-make-file-location (concat file-existance path) line 0))))
@@ -176,8 +175,8 @@ file."
   "Return a function for xref to find all completions of a prefix."
   (lambda (str pred action)
     (let ((collection
-           (mapcar (lambda (record) (citre-core-get-field 'name record))
-                   (citre-get-records nil "" nil :require '(name)))))
+           (mapcar (lambda (tag) (citre-core-get-field 'name tag))
+                   (citre-get-tags nil "" nil :require '(name)))))
       (complete-with-action action collection str pred))))
 
 ;;;; Tool: `citre-jump'
@@ -208,8 +207,7 @@ definition that is currently peeked."
                               (citre-get-definitions)))
            (loc-alist (mapcar (lambda (loc)
                                 (cons loc
-                                      (citre-get-property
-                                       loc nil 'from-record)))
+                                      (citre-get-property loc nil 'from-tag)))
                               locations)))
       (if (null locations)
           (user-error "Can't find definition")
@@ -281,8 +279,8 @@ completion framework), this falls back to the default
 (defun citre--make-completion-annotation (cand)
   "Generate annotation for a completion string CAND.
 CAND is the returned value of `citre-make-completion-str'."
-  (let* ((kind (citre-get-property cand 'ext-kind-full 'from-record))
-         (type (citre-get-property cand 'typeref 'from-record))
+  (let* ((kind (citre-get-property cand 'ext-kind-full 'from-tag))
+         (type (citre-get-property cand 'typeref 'from-tag))
          (type (when type (substring type (1+ (string-match ":" type))))))
     (when (or kind type)
       (propertize (concat
@@ -308,7 +306,7 @@ CAND is the returned value of `citre-make-completion-str'."
                         symbol nil citre-capf-substr-completion)))
               (get-docsig
                (lambda (candidate)
-                 (citre-get-property candidate 'signature 'from-record))))
+                 (citre-get-property candidate 'signature 'from-tag))))
     (list start end collection
           :annotation-function #'citre--make-completion-annotation
           :company-docsig get-docsig

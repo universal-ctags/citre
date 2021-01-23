@@ -103,10 +103,10 @@ priority (i.e., if we find one, then the rest will be ignored)."
   letters or underscores, otherwise be insensitive.
 
 Note for developers: Actually this doesn't affect auto-completion
-directly.  This option controls the behavior of
-`citre-get-records' when its argument MATCH is not nil or
-`exact', and when this is the case, it's likely that the user is
-getting records for auto-completion."
+directly.  This option controls the behavior of `citre-get-tags'
+when its argument MATCH is not nil or `exact', and when this is
+the case, it's likely that the user is getting tags for
+auto-completion."
   :type '(choice (const :tag "Sensitive" sensitive)
                  (const :tag "Insensitive" insensitive)
                  (const :tag "Smart" smart))
@@ -142,12 +142,12 @@ Annotations include kind, type, etc."
 
 ;;;; Core API wrapper
 
-(cl-defun citre-get-records
+(cl-defun citre-get-tags
     (&optional tagsfile name match
                &key filter sorter
                require optional exclude parse-all-fields lines)
-  "Get records of tags in tags file TAGSFILE that match NAME.
-This is like `citre-core-get-records', except that:
+  "Get tags in tags file TAGSFILE that match NAME.
+This is like `citre-core-get-tags', except that:
 
 - TAGSFILE could be nil, and it will be find automatically under
   current project root.
@@ -156,7 +156,7 @@ This is like `citre-core-get-records', except that:
 
 TAGSFILE is the canonical path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
-see `citre-core-get-records'.
+see `citre-core-get-tags'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
@@ -171,12 +171,12 @@ and some of its fields, which can be utilized by
                                           (or (string= (downcase name) name)
                                               (string-match "_" name)))
                                      t nil))))))
-    (citre-core-get-records tagsfile- name match case-fold-
-                            :filter filter :sorter sorter
-                            :require require :optional optional
-                            :exclude exclude
-                            :parse-all-fields parse-all-fields
-                            :lines lines)))
+    (citre-core-get-tags tagsfile- name match case-fold-
+                         :filter filter :sorter sorter
+                         :require require :optional optional
+                         :exclude exclude
+                         :parse-all-fields parse-all-fields
+                         :lines lines)))
 
 ;;;; Helpers
 
@@ -400,8 +400,8 @@ filters/sorters can make use of them."
         (file-path (citre-get-property symbol 'file-path)))
     `(not
       (or
-       ,(citre-core-build-filter 'extras "anonymous" 'member)
-       ,(citre-core-build-filter 'extras "reference" 'member)
+       ,(citre-core-filter 'extras "anonymous" 'csv-contain)
+       ,(citre-core-filter 'extras "reference" 'csv-contain)
        ;; For tags file using single-letter kind, apply `not' to
        ;; `citre-core-filter-kind' may exclude more tags than it should.
        ;; But we know the "F" (file) kind is preserved by ctags, and "F" is
@@ -409,14 +409,14 @@ filters/sorters can make use of them."
        ,(citre-core-filter-kind "file" tags-file)
        ;; The same as exclude "file" kinds, but tags file may use only one of
        ;; `file' or `extras' fields, so it's good to have both of them.
-       ,(citre-core-build-filter 'extras "inputFile" 'member)
+       ,(citre-core-filter 'extras "inputFile" 'csv-contain)
        ;; Exclude tags that have "file" scope, and is not in this file.
        (and (not ,(citre-core-filter-input file-path tags-file))
             (or ,(citre-core-filter-field-exist 'file)
-                ,(citre-core-build-filter 'extras "fileScope" 'member)))))))
+                ,(citre-core-filter 'extras "fileScope" 'csv-contain)))))))
 
 (defvar citre-completion-default-sorter
-  (citre-core-build-sorter
+  (citre-core-sorter
    '(length name +) 'name)
   "The default sorter expression for auto-completion.
 This sorts the candidates by their length, then the alphabetical
@@ -438,27 +438,27 @@ It returns nil when the completion can't be done."
   (let ((symbol (or symbol (citre-get-symbol)))
         (tagsfile (or tagsfile (citre-tags-file-path)))
         (match (if substr-completion 'substr 'prefix)))
-    (citre-get-records tagsfile symbol match
-                       :filter (or (citre--get-value-in-language-alist
-                                    :completion-filter symbol)
-                                   (citre-completion-default-filter symbol))
-                       :sorter (or (citre--get-value-in-language-alist
-                                    :completion-sorter symbol)
-                                   citre-completion-default-sorter)
-                       :require '(name)
-                       :optional '(ext-kind-full signature typeref))))
+    (citre-get-tags tagsfile symbol match
+                    :filter (or (citre--get-value-in-language-alist
+                                 :completion-filter symbol)
+                                (citre-completion-default-filter symbol))
+                    :sorter (or (citre--get-value-in-language-alist
+                                 :completion-sorter symbol)
+                                citre-completion-default-sorter)
+                    :require '(name)
+                    :optional '(ext-kind-full signature typeref))))
 
 ;; TODO: Is it better to define these in the util layer or in specific tools?
-(defun citre-make-completion-str (record)
-  "Generate a string for RECORD for displaying.
-RECORD should be an element in the returned value of
+(defun citre-make-completion-str (tag)
+  "Generate a string for TAG for displaying.
+TAG should be an element in the returned value of
 `citre-get-completions'.  The string returned is the tag name of
-it, with RECORD stored in its property `citre-record'.
+it, with TAG stored in its property `citre-tag'.
 
 This is for showing the results for auto-completion tools."
   (citre-propertize
-   (citre-core-get-field 'name record)
-   record))
+   (citre-core-get-field 'name tag)
+   tag))
 
 ;;;;; APIs: Finding definitions
 
@@ -468,17 +468,17 @@ This is for showing the results for auto-completion tools."
         (file-path (citre-get-property symbol 'file-path)))
     `(not
       (or
-       ,(citre-core-build-filter 'extras "anonymous" 'member)
+       ,(citre-core-filter 'extras "anonymous" 'csv-contain)
        ,(citre-core-filter-kind "file" tags-file)
-       ,(citre-core-build-filter 'extras "inputFile" 'member)
+       ,(citre-core-filter 'extras "inputFile" 'csv-contain)
        ;; Exclude tags that have "file" scope, and is not in this file.
        (and (not ,(citre-core-filter-input file-path tags-file))
             (or ,(citre-core-filter-field-exist 'file)
-                ,(citre-core-build-filter 'extras "fileScope" 'member)))))))
+                ,(citre-core-filter 'extras "fileScope" 'csv-contain)))))))
 
 (defvar citre-definition-default-sorter
-  (citre-core-build-sorter
-   `(filter ,(citre-core-build-filter 'extras "reference" 'member) -)
+  (citre-core-sorter
+   `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -)
    'input '(length name +) 'name)
   "The default sorter expression for finding definitions.
 This sorts the file name by their alphabetical order, then the
@@ -489,44 +489,43 @@ length and alphabetical order of the tag names.")
 If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
 not specified, find it automatically under current project root.
 
-The result is a list of records, with the fields `ext-abspath',
+The result is a list of tags, with the fields `ext-abspath',
 `line' and `kind'."
   (let ((symbol (or symbol (citre-get-symbol)))
         (tagsfile (or tagsfile (citre-tags-file-path))))
     (unless symbol
       (user-error "No symbol at point"))
-    (citre-get-records tagsfile symbol 'exact
-                       :filter (or (citre--get-value-in-language-alist
-                                    :definition-filter symbol)
-                                   (citre-definition-default-filter symbol))
-                       :sorter (or (citre--get-value-in-language-alist
-                                    :definition-sorter symbol)
-                                   citre-definition-default-sorter)
-                       :require '(name ext-abspath pattern)
-                       :optional '(ext-kind-full line typeref extras))))
+    (citre-get-tags tagsfile symbol 'exact
+                    :filter (or (citre--get-value-in-language-alist
+                                 :definition-filter symbol)
+                                (citre-definition-default-filter symbol))
+                    :sorter (or (citre--get-value-in-language-alist
+                                 :definition-sorter symbol)
+                                citre-definition-default-sorter)
+                    :require '(name ext-abspath pattern)
+                    :optional '(ext-kind-full line typeref extras))))
 
 ;; TODO: annotate reference tags
-(defun citre-make-location-str (record)
-  "Generate a string for RECORD for displaying.
-RECORD should be an element in the returned value of
+(defun citre-make-location-str (tag)
+  "Generate a string for TAG for displaying.
+TAG should be an element in the returned value of
 `citre-get-definitions'.  The string returned looks like
-\"file(line-number): content\", with RECORD stored in its
-property `citre-record'.
+\"file(line-number): content\", with TAG stored in its property
+`citre-tag'.
 
 This is for showing the results for \"finding definition\"
 tools."
-  (let* ((line (citre-core-get-field 'extra-line record))
+  (let* ((line (citre-core-get-field 'extra-line tag))
          (line (if line
                    (concat "("
                            (propertize (number-to-string line) 'face 'warning)
                            ")")
                  ""))
-         (str (citre-core-get-field 'extra-matched-str record))
+         (str (citre-core-get-field 'extra-matched-str tag))
          (str (if str (concat ": " (string-trim str)) ""))
-         (kind (citre-core-get-field 'ext-kind-full record))
-         (type (citre-core-get-field 'typeref record 'after-colon))
-
-         (extras (citre-core-get-field 'extras record))
+         (kind (citre-core-get-field 'ext-kind-full tag))
+         (type (citre-core-get-field 'typeref tag 'after-colon))
+         (extras (citre-core-get-field 'extras tag))
          (reference
           (and extras
                (string-match "\\(^\\|,\\) ?reference\\(,\\|$\\)" extras)))
@@ -539,16 +538,16 @@ tools."
                                       'face 'citre-definition-annotation-face)
                           (if reference citre-definition-reference-mark "")
                           " ")))
-         (abspath (citre-core-get-field 'ext-abspath record))
+         (abspath (citre-core-get-field 'ext-abspath tag))
          (path (propertize (citre-relative-path abspath)
                            'face 'font-lock-function-name-face))
          (file-missing-p (if (file-exists-p abspath) ""
                            citre-definition-missing-file-mark)))
     (citre-propertize (concat annotation file-missing-p path line str)
-                      record)))
+                      tag)))
 
-(defun citre-goto-tag (record &optional window)
-  "Jump to the location of tag RECORD.
+(defun citre-goto-tag (tag &optional window)
+  "Jump to the location of TAG.
 WINDOW can be:
 
 - nil: Use current window.
@@ -557,9 +556,9 @@ WINDOW can be:
   ;; TODO: I actually don't know well about this whole display-buffer,
   ;; pop-to-buffer and switch-to-buffer thing.  Will come back and see if this
   ;; docstring describes the behavior well.
-  (let ((path (citre-core-get-field 'ext-abspath record)))
+  (let ((path (citre-core-get-field 'ext-abspath tag)))
     (unless path
-      (error "RECORD doesn't have the ext-abspath field"))
+      (error "TAG doesn't have the ext-abspath field"))
     (unless (file-exists-p path)
       (user-error "File %s doesn't exist" path))
     (let* ((buf (find-file-noselect path))
@@ -567,7 +566,7 @@ WINDOW can be:
       (if window
           (pop-to-buffer buf)
         (switch-to-buffer buf))
-      (goto-char (citre-core-locate-tag record))
+      (goto-char (citre-core-locate-tag tag))
       (run-hooks 'citre-after-jump-hook)
       (when (eq window 'other-window-noselect)
         (pop-to-buffer current-buf)))))
@@ -584,13 +583,13 @@ This is suitable to run after jumping to a location."
 ;; if they are used to propertize strings in a record, and we use the record
 ;; later to do something, but Citre doesn't do that.  If we can confirm this,
 ;; we'll add (or not add) a warning for developers.
-(defun citre-propertize (str record &rest fields)
-  "Propertize STR by FIELDS in RECORD.
+(defun citre-propertize (str tag &rest fields)
+  "Propertize STR by FIELDS in TAG.
 Added text properties are prefixed by \"citre-\".  For example,
 the `kind' field will be stored in the `citre-kind' property.
 
-When FIELDS are nil, the whole record is stored in the
-`citre-record' property.
+When FIELDS are nil, the whole tag is stored in the `citre-tag'
+property.
 
 Notice that this is destructive, which is different from
 `propertize'.  The propertized STR is returned."
@@ -599,33 +598,33 @@ Notice that this is destructive, which is different from
         (dolist (field fields)
           (put-text-property 0 len
                              (intern (concat "citre-" (symbol-name field)))
-                             (citre-core-get-field field record)
+                             (citre-core-get-field field tag)
                              str))
-      (put-text-property 0 len 'citre-record record str))
+      (put-text-property 0 len 'citre-tag tag str))
     str))
 
-(defun citre-get-property (str &optional field from-record)
+(defun citre-get-property (str &optional field from-tag)
   "Get the text property corresponding to FIELD in STR.
 STR should be propertized by `citre-propertize' or
 `citre-put-property'.
 
-When FIELD is non-nil and FROM-RECORD is nil, what it actually
-does is prefix FIELD by `citre-', and get that text property.
+When FIELD is non-nil and FROM-TAG is nil, what it actually does
+is prefix FIELD by `citre-', and get that text property.
 
-When FIELD and FROM-RECORD are both non-nil, it gets the record
-first, then get FIELD from it using `citre-core-get-field'.
+When FIELD and FROM-TAG are both non-nil, it gets the tag first,
+then get FIELD from it using `citre-core-get-field'.
 
-When FIELD is nil and FROM-RECORD is non-nil, it gets the record
-from STR, stored in the `citre-record' text property."
+When FIELD is nil and FROM-tag is non-nil, it gets the tag from
+STR, stored in the `citre-tag' text property."
   (cond
-   ((and field (null from-record))
+   ((and field (null from-tag))
     (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
-   ((and (null field) from-record)
-    (get-text-property 0 'citre-record str))
-   ((and field from-record)
-    (citre-core-get-field field (get-text-property 0 'citre-record str)))
+   ((and (null field) from-tag)
+    (get-text-property 0 'citre-tag str))
+   ((and field from-tag)
+    (citre-core-get-field field (get-text-property 0 'citre-tag str)))
    (t
-    (error "Invalid combination of FIELD and FROM-RECORD"))))
+    (error "Invalid combination of FIELD and FROM-TAG"))))
 
 (defun citre-put-property (str prop val)
   "Set the text property corresponding to PROP in STR.

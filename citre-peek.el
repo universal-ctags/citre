@@ -223,7 +223,7 @@ The modified list is returned."
 ;;;;; Recording positions of lines/symbols
 
 (defun citre--make-tag-of-current-location (name)
-  "Make a record of the current line, with the name field being NAME.
+  "Make a tag of the current line, with the name field being NAME.
 This is for generating the \"entry\" point of the symbol chain."
   (let* ((pat (string-trim
                (buffer-substring-no-properties

@@ -2,22 +2,22 @@
 
 (ert-deftest test-main-apis ()
   "Test main APIs."
-  (let ((records (citre-core-get-records
-                  (expand-test-file)
-                  "z" 'exact nil :require '(name input kind line))))
+  (let ((tags (citre-core-get-tags
+               (expand-test-file)
+               "z" 'exact nil :require '(name input kind line))))
     (should (equal
-             (mapcar (lambda (record) (citre-core-get-field 'name record))
-                     records)
+             (mapcar (lambda (tag) (citre-core-get-field 'name tag))
+                     tags)
              '("z" "z")))
     (should (equal
-             (mapcar (lambda (record) (citre-core-get-field 'input record))
-                     records)
+             (mapcar (lambda (tag) (citre-core-get-field 'input tag))
+                     tags)
              '("src/input.h" "src/input.h")))
     (should (equal
-             (mapcar (lambda (record) (citre-core-get-field 'kind record))
-                     records)
+             (mapcar (lambda (tag) (citre-core-get-field 'kind tag))
+                     tags)
              '("member" "member")))
     (should (equal
-             (mapcar (lambda (record) (citre-core-get-field 'line record))
-                     records)
+             (mapcar (lambda (tag) (citre-core-get-field 'line tag))
+                     tags)
              '(18 9)))))
