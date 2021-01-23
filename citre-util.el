@@ -422,18 +422,6 @@ It returns nil when the completion can't be done."
                     :require '(name)
                     :optional '(ext-kind-full signature typeref))))
 
-;; TODO: Is it better to define these in the util layer or in specific tools?
-(defun citre-make-completion-str (tag)
-  "Generate a string for TAG for displaying.
-TAG should be an element in the returned value of
-`citre-get-completions'.  The string returned is the tag name of
-it, with TAG stored in its property `citre-tag'.
-
-This is for showing the results for auto-completion tools."
-  (citre-propertize
-   (citre-core-get-field 'name tag)
-   tag))
-
 ;;;;; APIs: Finding definitions
 
 (defun citre-definition-default-filter (symbol)
@@ -490,8 +478,6 @@ TAG should be an element in the returned value of
 - content: The string recorded in the pattern field of TAG.  Can
   be disabled by NO-CONTENT.
 
-TAG is stored in the `citre-tag' property of the string.
-
 This function is for showing the results for \"finding
 definition\" tools."
   (let* (annotation path linum location content)
@@ -533,7 +519,7 @@ definition\" tools."
     (let* ((parts (list annotation location content)))
       (setq parts (cl-remove nil parts :test #'eq))
       (setq parts (cl-remove "" parts :test #'equal))
-      (citre-propertize (string-join parts " ") tag))))
+      (string-join parts " "))))
 
 (defun citre-goto-tag (tag &optional window)
   "Jump to the location of TAG.
@@ -568,10 +554,6 @@ This is suitable to run after jumping to a location."
 
 ;;;;; APIs: Text property related
 
-;; TODO: I don't know if these (destructive) functions are gonna cause troubles
-;; if they are used to propertize strings in a record, and we use the record
-;; later to do something, but Citre doesn't do that.  If we can confirm this,
-;; we'll add (or not add) a warning for developers.
 (defun citre-propertize (str tag &rest fields)
   "Propertize STR by FIELDS in TAG.
 Added text properties are prefixed by \"citre-\".  For example,
@@ -592,28 +574,13 @@ Notice that this is destructive, which is different from
       (put-text-property 0 len 'citre-tag tag str))
     str))
 
-(defun citre-get-property (str &optional field from-tag)
+(defun citre-get-property (str field)
   "Get the text property corresponding to FIELD in STR.
-STR should be propertized by `citre-propertize' or
-`citre-put-property'.
+STR should be propertized by `citre-put-property'.
 
-When FIELD is non-nil and FROM-TAG is nil, what it actually does
-is prefix FIELD by `citre-', and get that text property.
-
-When FIELD and FROM-TAG are both non-nil, it gets the tag first,
-then get FIELD from it using `citre-core-get-field'.
-
-When FIELD is nil and FROM-tag is non-nil, it gets the tag from
-STR, stored in the `citre-tag' text property."
-  (cond
-   ((and field (null from-tag))
-    (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
-   ((and (null field) from-tag)
-    (get-text-property 0 'citre-tag str))
-   ((and field from-tag)
-    (citre-core-get-field field (get-text-property 0 'citre-tag str)))
-   (t
-    (error "Invalid combination of FIELD and FROM-TAG"))))
+What it actually does is prefix FIELD by `citre-', and get that
+text property."
+  (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
 
 (defun citre-put-property (str prop val)
   "Set the text property corresponding to PROP in STR.

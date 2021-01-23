@@ -251,12 +251,11 @@ definition that is currently peeked."
   (interactive)
   (let ((marker (point-marker))
         (target nil))
-    (let* ((locations (mapcar #'citre-make-location-str
-                              (citre-get-definitions)))
-           (loc-alist (mapcar (lambda (loc)
-                                (cons loc
-                                      (citre-get-property loc nil 'from-tag)))
-                              locations)))
+    (let* ((definitions (citre-get-definitions))
+           (loc-alist (mapcar (lambda (def)
+                                (cons (citre-make-location-str def) def))
+                              definitions))
+           (locations (mapcar #'car loc-alist)))
       (if (null locations)
           (user-error "Can't find definition")
         (setq target (funcall citre-select-location-function locations))
@@ -348,15 +347,27 @@ CAND is the returned value of `citre-make-completion-str'."
               (bounds (citre-get-property symbol 'bounds))
               (start (car bounds))
               (end (cdr bounds))
+              (completions (citre-get-completions
+                            symbol nil citre-capf-substr-completion))
               (collection
-               (mapcar #'citre-make-completion-str
-                       (citre-get-completions
-                        symbol nil citre-capf-substr-completion)))
+               (mapcar (lambda (tag)
+                         (citre-put-property (citre-core-get-field 'name tag)
+                                             'tag tag))
+                       completions))
+              (get-annotation
+               (lambda (cand)
+                 ;; TODO: Use a separate function to generate annotation.  This
+                 ;; will allow us to remove duplicates.
+                 (when-let ((annotation (citre-make-location-str
+                                         (citre-get-property cand 'tag)
+                                         'no-location 'no-content)))
+                   (concat " (" annotation ")"))))
               (get-docsig
-               (lambda (candidate)
-                 (citre-get-property candidate 'signature 'from-tag))))
+               (lambda (cand)
+                 (citre-core-get-field 'signature
+                                       (citre-get-property cand 'tag)))))
     (list start end collection
-          :annotation-function #'citre--make-completion-annotation
+          :annotation-function get-annotation
           :company-docsig get-docsig
           ;; This makes our completion function a "non-exclusive" one, which
           ;; means to try the next completion function when current completion
