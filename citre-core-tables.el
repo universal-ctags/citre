@@ -449,10 +449,8 @@ when the `language' field is not presented. See
 
 ;; (let* ((ctags-program "ctags")
 ;;        (output (shell-command-to-string
-;;                 (citre-core--build-shell-command
-;;                  ctags-program
-;;                  "--quiet" "--options=NONE"
-;;                  "--machinable" "--list-map-extensions")))
+;;                 (format "%s --quiet --options=NONE --machinable --list-map-extensions"
+;;                         ctags-program)))
 ;;        (output-lines (nthcdr 1 (split-string output "\n" t)))
 ;;        (output-records (mapcar (lambda (line)
 ;;                                  (split-string line "\t" t))
@@ -1139,10 +1137,8 @@ TAG_KIND_DESCRIPTION pseudo tags are not presented too.")
 
 ;; (let* ((ctags-program "ctags")
 ;;        (output (shell-command-to-string
-;;                 (citre-core--build-shell-command
-;;                  ctags-program
-;;                  "--quiet" "--options=NONE"
-;;                  "--machinable" "--list-kinds-full")))
+;;                 (format "%s --quiet --options=NONE --machinable --list-kinds-full"
+;;                         ctags-program)))
 ;;        (output-lines (nthcdr 1 (split-string output "\n" t)))
 ;;        (output-records (mapcar (lambda (line)
 ;;                                  (cl-subseq (split-string line "\t" t) 0 3))
@@ -1805,10 +1801,8 @@ single-letter kind by full-length kind.  See
 
 ;; (let* ((ctags-program "ctags")
 ;;        (output (shell-command-to-string
-;;                 (citre-core--build-shell-command
-;;                  ctags-program
-;;                  "--quiet" "--options=NONE"
-;;                  "--machinable" "--list-kinds-full")))
+;;                 (format "%s --quiet --options=NONE --machinable --list-kinds-full"
+;;                         ctags-program)))
 ;;        (output-lines (nthcdr 1 (split-string output "\n" t)))
 ;;        (output-records (mapcar (lambda (line)
 ;;                                  (cl-subseq (split-string line "\t" t) 0 3))

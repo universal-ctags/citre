@@ -61,74 +61,6 @@ Citre requires the readtags program provided by Universal Ctags."
 
 ;;;; Basic Helpers
 
-(defun citre-core--escape-single-quote (string)
-  ;; TIP: Help mode renders single quotes in docstrings as curly single quotes,
-  ;; and \\=' prevents that.  Eval this defun form and use `describe-function'
-  ;; to read this docstring.
-  "Disable the effect of single quotes as shell string terminators in STRING.
-This function assumes the situation where STRING is to be passed
-to `format' function like:
-
-  (shell-command (format \"... \\='%s\\='\" STRING))
-
-Assume the formatted \\='%s\\=' will be operated by the command
-as a string.  An attacker can pass an arbitrary command to the
-shell by putting single quotes in STRING like:
-
-  (let ((string \"arg\\='; rm -rf /\\='\"))
-    (shell-command (format \"... \\='%s\\='\" STRING)))
-
-Then \\='%s\\=' is formatted as:
-
-  \\='arg\\='; rm -rf /\\='\\='
-
-Now the command operates on \\='arg\\=' as a string, and the
-dangerous rm -rf / comes out of the string and be executed.
-
-To mitigate such attack, this function replaces all \\=' in
-STRING with \\='\"\\='\"\\=', which disables their meaning as
-string terminator.  You can use this like:
-
-  (let* ((string \"arg\\='; rm -rf /\\='\")
-         (string (citre-core--escape-single-quote string))))
-    (shell-command (format \"... \\='%s\\='\" STRING)))
-
-Then \\='%s\\=' is formatted as:
-
-  \\='arg\\='\"\\='\"'; rm -rf /\\='\"\\='\"\\='
-
-Now the rm -rf / doesn't come out of the string.
-
-This is for use in `citre-core--build-shell-command', where its
-ARGS are exactly in this situation.  It makes sure that
-unintentional attack doesn't happen when passing symbols/strings
-with single quotes to it."
-  (replace-regexp-in-string "'" "'\"'\"'" string))
-
-(defun citre-core--build-shell-command (&rest args)
-  "Build a shell command from ARGS.
-Each element of ARGS could be a string, symbol or list.  For
-strings, this formats them using \"%s\"; for symbols and lists,
-this formats them using \"%S\". Then, each of them is wrapped in
-single quotes, and concatenated with a space between each of
-them.
-
-Before wrapping in single quotes,
-`citre-core--escape-single-quote' is applied to each of them to
-prevent certain kinds of shell injection.  See its docstring for
-details.
-
-This function is not for building shell commands in general, but
-only for Citre's own use, especially for building readtags
-commands."
-  (string-join
-   (mapcar (lambda (elt)
-             (format "'%s'"
-                     (citre-core--escape-single-quote
-                      (format (if (stringp elt) "%s" "%S") elt))))
-           args)
-   " "))
-
 (defun citre-core--string-after-1st-colon (string)
   "Return the part in STRING after the first colon in it.
 If STRING doesn't contain a colon, it will be returned directly."
@@ -320,44 +252,13 @@ This function caches the info, and uses the cache when possible."
 
 ;;;;; Get lines
 
-;; The shell command in this function is a bit hard to understand.  I'll
-;; explain it.  An example of `cmd' would be like:
-;;
-;; { readtags -l || printf "\n$?\n" 1>&2; } | head -n 1; echo "$?"
-;;
-;; It runs readtags, and if an error happens, write the exit code ($?) to
-;; stderr.  We add a newline before $?, since the error message of readtags is
-;; hard coded in its code, and I've seen missing trailing newlines in some of
-;; them.  It's also redirected to stderr, so it won't be filtered by "head".
-;;
-;; The output of readtags is piped into "head" to get the first N lines.  Then
-;; the exit code of "head" is echoed.  At the end we get something like:
-;;
-;; ...readtags output or error message (can be empty)...
-;; when readtags fails, the exit code of it (can be empty)
-;; the exit code of head
-;;
-;; If the exit code of readtags appears, we have to deal with it.  Here we
-;; consider a value > 128 to be successful, since it indicates that readtags is
-;; terminated by a signal, and that does happen: when readtags outputs a lot,
-;; since "head" will close the pipe after it reads the first N lines, readtags
-;; will receive a SIGPIPE signal, but we already get the line we want, and this
-;; is preferred as we don't need to wait for readtags to finish all its output.
-;;
-;; There's no reliable way to get the exit code corresponding to SIGPIPE: its
-;; signal number is 13, and POSIX standard says when a command is terminated by
-;; a signal, the exit code should be > 128, but nothing more.  In practice,
-;; most shell gives you 13 + 128, but at least ksh93 adds it by 256.
-;;
-;; If the inferior shell is bash, we have the PIPESTATUS variable to get the
-;; exit code of the command before a pipe.  But we want the command to be
-;; POSIX-compliant, so we have to take this uglier way.
-
 (defun citre-core--get-lines
-    (tagsfile &optional name match case-fold filter sorter lines)
+    (tagsfile &optional name match case-fold filter sorter action lines)
   "Get lines in tags file TAGSFILE using readtags.
-See `citre-core-get-tags' to know about NAME, MATCH,
-CASE-FOLD, FILTER, SORTER and LINES."
+See `citre-core-get-tags' to know about NAME, MATCH, CASE-FOLD,
+FILTER, SORTER and LINES.  ACTION can be nil, to get regular
+tags, or any valid actions in readtags, e.g., \"-D\", to get
+pseudo tags."
   ;; Prevents shell injection.
   (when lines (cl-assert (natnump lines)))
   (let* ((match (or match 'exact))
@@ -368,56 +269,71 @@ CASE-FOLD, FILTER, SORTER and LINES."
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
-         parts cmd)
+         (stderr (get-buffer-create "* readtags-stderr*"))
+         parts proc cache result err
+         (proc-filter
+          ;; Collect chunks of readtags output (STR) into RESULT.
+          (lambda (proc str)
+            (when cache
+              (setq str (concat (car cache) str)))
+            ;; A chunk can end in the middle of a line, we need to handle that.
+            (if (string-match "\n$" str)
+                (progn
+                  (setq result (nconc result (split-string str "\n" t)))
+                  (setq cache nil))
+              (let ((output-lines (split-string str "\n" t)))
+                (setq result (nconc result (butlast output-lines)))
+                (setq cache (last output-lines))))
+            ;; Delete the process when we gather enough lines.
+            (when (and lines (>= (length result) lines))
+              (setq result (cl-subseq result 0 lines))
+              (delete-process proc))))
+         (proc-sentinel
+          (lambda (proc msg)
+            ;; The MSG passed to the sentinel function is not reliable since it
+            ;; changes as the environment language changes.  So we use
+            ;; `process-status'.
+            (pcase (process-status proc)
+              ;; The signal is sent by us as there are enough LINES in RESULT.
+              ('signal nil)
+              ('exit
+               (pcase (process-exit-status proc)
+                 ;; In case the output doesn't end with a newline.
+                 (0 (when cache (setq result (nconc result cache))))
+                 (status (setq err (format "readtags exits %s:\n%s"
+                                           status
+                                           (with-current-buffer stderr
+                                             (buffer-string)))))))
+              (_ (setq err (concat "readtags: " (string-trim msg))))))))
     ;; Program name
     (push (or citre-readtags-program "readtags") parts)
     ;; Read from this tags file
     (push "-t" parts)
     (push tagsfile parts)
     ;; Filter expression
-    (when filter
-      (push "-Q" parts)
-      (push filter parts))
-    (when sorter
-      (push "-S" parts)
-      (push sorter parts))
+    (when filter (push "-Q" parts) (push (format "%S" filter) parts))
+    (when sorter (push "-S" parts) (push (format "%S" sorter) parts))
     ;; Extra arguments
     (push extras parts)
     ;; Action
-    (if (or (null name)
-            (string-empty-p name))
-        (push "-l" parts)
-      (push "-" parts)
-      (push name parts))
-    (setq
-     cmd
-     (format
-      "{ %s || printf \"\\n$?\\n\" 1>&2; }%s"
-      (apply #'citre-core--build-shell-command
-             (nreverse parts))
-      (if lines
-          (format " | head -n %s; echo \"$?\"" lines)
-        ;; The filtering succeeded because we did nothing (equivalent to
-        ;; filtering by an "identity" function).
-        "; echo \"0\"")))
-    (let* ((result (split-string
-                    (shell-command-to-string cmd)
-                    "\n" t))
-           (len (length result))
-           (pipe-code (nth (- len 1) result))
-           (readtags-code
-            (when-let ((code (when (> len 1) (nth (- len 2) result))))
-              (when (string-match-p "^\[0-9]+$" code) code)))
-           (output (cl-subseq result 0 (if readtags-code -2 -1))))
-      (if (and (string= pipe-code "0")
-               (or (null readtags-code)
-                   ;; TODO: test this on a large tags file?  It's not very
-                   ;; realistic because a user doesn't want to clone a huge
-                   ;; repo to use a Emacs package.
-                   (> (string-to-number readtags-code) 128)))
-          output
-        (error "Readtags exits %s.  Head exits %s.\n%s"
-               readtags-code pipe-code (string-join output "\n"))))))
+    (if action (push action parts)
+      (if (or (null name) (string-empty-p name))
+          (push "-l" parts)
+        (push "-" parts)
+        (push name parts)))
+    (setq proc
+          (make-process :name "readtags"
+                        :buffer nil
+                        :command (nreverse parts)
+                        :connection-type 'pipe
+                        :noquery t
+                        :stderr stderr
+                        :filter proc-filter
+                        :sentinel proc-sentinel))
+    ;; Poll for the process to finish.
+    (accept-process-output proc)
+    (kill-buffer stderr)
+    (if err (error err) result)))
 
 ;;;;; Parse tagline
 
@@ -792,7 +708,7 @@ LINES, see `citre-core-get-tags'."
                parse-all-fields))
             (citre-core--get-lines
              tagsfile name match case-fold
-             filter sorter lines))))
+             filter sorter nil lines))))
 
 ;;;; Internals: Extension fields from tags
 
@@ -1183,23 +1099,14 @@ element of it is another list consists of the fields separated by
 tabs in a pseudo tag line."
   (citre-core--error-on-arg name #'citre-core--string-non-empty-p)
   (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
-  (let* ((program (or citre-readtags-program "readtags"))
-         (name (concat "!_" name))
-         (op (if prefix 'prefix? 'eq?))
-         (result (split-string
-                  (shell-command-to-string
-                   (concat
-                    (citre-core--build-shell-command
-                     program "-t" tagsfile "-Q" `(,op $name ,name) "-D")
-                    "; printf \"\n$?\n\""))
-                  "\n" t))
-         (status (car (last result)))
-         (output (cl-subseq result 0 -1)))
-    (if (string= status "0")
-        (mapcar (lambda (line)
-                  (split-string line "\t" t))
-                output)
-      (error "Readtags exits %s.\n%s" status output))))
+  (let* ((name (concat "!_" name))
+         (result (citre-core--get-lines
+                  tagsfile nil nil nil
+                  (citre-core-filter 'name name (if prefix 'prefix 'eq))
+                  nil "-D")))
+    (mapcar (lambda (line)
+              (split-string line "\t" t))
+            result)))
 
 (cl-defun citre-core-get-tags
     (tagsfile &optional name match case-fold
