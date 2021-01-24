@@ -93,16 +93,6 @@ non-nil, *and* add `substring' to `completion-styles' (for Emacs
   :type 'boolean
   :group 'citre)
 
-(defcustom citre-completion-in-region-function
-  #'citre-completion-in-region
-  "The function used for `completion-in-region-function'.
-This is called by `completion-at-point' in buffers where Citre
-mode is enabled, and offers an alternative UI for completion.
-
-When nil, don't modify `completion-in-region-function'."
-  :type '(choice function (const :tag "Default" nil))
-  :group 'citre)
-
 ;;;; Tool: Xref integration
 
 (declare-function xref-make "xref" (summary location))
@@ -280,49 +270,6 @@ definition that is currently peeked."
 
 ;;;;; Internals
 
-(defvar-local citre-completion-in-region-function-orig nil
-  "This stores the original `completion-in-region-function'.
-This is only set when `completion-in-region-function' is
-originally buffer-local.")
-
-;; TODO: remove this. I believe most "completion framework" handles this (at
-;; least ivy/selectrum do), and users rely on auto-completion may be using
-;; auto-completion.el/company. But let's do this after we create a nice
-;; auto-completion tool for vanilla Emacs users.
-(defun citre-completion-in-region (start end collection &optional predicate)
-  "A function replacing the default `completion-in-region-function'.
-This completes the text between START and END using COLLECTION.
-PREDICATE says when to exit.
-
-When there are multiple candidates, this uses the standard
-`completing-read' interface, while the default
-`completion--in-region' pops a *Completions* buffer to show them.
-When combined with some minibuffer completion framework, this is
-more user-friendly then the default one.
-
-Notice when `completing-read-function' is
-`completing-read-default' (i.e., not enhanced by a minibuffer
-completion framework), this falls back to the default
-`completion--in-region'."
-  (if (eq completing-read-function #'completing-read-default)
-      (completion--in-region start end collection predicate)
-    (let* ((str (buffer-substring-no-properties start end))
-           (completion-ignore-case (string= str (downcase str)))
-           (candidates
-            (nconc
-             (completion-all-completions str collection predicate
-                                         (- end start))
-             nil))
-           (completion nil))
-      (pcase (length candidates)
-        (0 (message "No completions"))
-        (1 (setq completion (car candidates)))
-        (_ (setq completion (completing-read (format "(%s): " str)
-                                             candidates predicate t))))
-      (when completion
-        (delete-region start end)
-        (insert (substring-no-properties completion))))))
-
 (defun citre--completion-get-annotation (str)
   "Generate annotation for STR.
 STR is a candidate in a capf session.  See the implementation of
@@ -431,23 +378,11 @@ correctly."
     ;; Capf integration.
     (when citre-enable-capf-integration
       (add-hook 'completion-at-point-functions
-                #'citre-completion-at-point nil t)
-      ;; Set `completion-in-region-function'.
-      (when citre-completion-in-region-function
-        (when (local-variable-p 'completion-in-region-function)
-          (setq citre-completion-in-region-function-orig
-                completion-in-region-function))
-        (set (make-local-variable 'completion-in-region-function)
-             citre-completion-in-region-function))))
+                #'citre-completion-at-point nil t)))
    (t
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
-    (remove-hook 'completion-at-point-functions #'citre-completion-at-point t)
-    (if citre-completion-in-region-function-orig
-        (progn
-          (setq completion-in-region-function
-                citre-completion-in-region-function-orig)
-          (setq citre-completion-in-region-function-orig nil))
-      (kill-local-variable 'completion-in-region-function)))))
+    (remove-hook 'completion-at-point-functions
+                 #'citre-completion-at-point t))))
 
 (provide 'citre-basic-tools)
 
