@@ -990,7 +990,7 @@ N can be negative."
 
 (defun citre-peek--make-definition-str (tag)
   "Generate str of TAG to show in peek window."
-  (citre-make-location-str tag nil 'no-content))
+  (citre-make-location-str tag nil nil nil 'no-content))
 
 (defun citre-peek--make-border ()
   "Return the border to be used in peek windows."

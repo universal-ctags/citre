@@ -63,36 +63,6 @@
     `citre-common-dependency-alist` and the specified dependencies since they
     are for things in the project root.
 
-- imenu integration
-
-  Let ctags scan current file to generate imenu index. If the file is modified,
-  we could save it in a temp file first, but maybe this is a bit overkill.
-  Also, probably we don't want to generate a tags file, but it's unclear how to
-  pipe the ctags output to readtags. The "process substitution" technique
-  suggested below is one way to do this, but readtags may be not guaranteed to
-  read from a pipe in the future.
-
-  readtags can't read tags from stdin, one way I found is to use named pipe, it
-  functions like a file but is a pipe. Bash and some other shells can do
-  "process substitution", like this:
-
-  ```console
-  $ readtags -t <(ctags -R -f-) -l
-  ```
-
-  This is really neat, but not POSIX compatible. For POSIX compatible solution,
-  we can create a named pipe with a unique name first, and use it:
-
-  ```console
-  $ tmp=$(mktemp -u citre-temp-XXXX --tmpdir)
-  # I don't know why I can't write ctags output directly to this named pipe
-  # here. I have to redirect to it.
-  $ mkfifo $tmp && (ctags -R -f- > $tmp &) && readtags -t $tmp -l && rm $tmp
-  ... readtags output ...
-  ```
-
-  We could put them in one line, and that's pretty much a poor man's process
-  substitution.
 # Misc
 
   - We need a `citre-doctor`. It sees if the user is using universal ctags,

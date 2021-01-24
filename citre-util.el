@@ -464,7 +464,8 @@ is found."
                     :require '(name ext-abspath pattern)
                     :optional '(ext-kind-full line typeref extras))))
 
-(defun citre-make-location-str (tag &optional no-location no-content)
+(defun citre-make-location-str (tag &optional no-location
+                                    no-path no-linum no-content)
   "Generate a string for TAG for displaying.
 TAG should be an element in the returned value of
 `citre-get-definitions'.  The string returned contains:
@@ -472,7 +473,8 @@ TAG should be an element in the returned value of
 - annotation: Kind and type of TAG, and whether it's a
   reference tag.
 - location: Path and line number of TAG.  Can be disabled by
-  NO-LOCATION.
+  NO-LOCATION, and the path/line number part can be disabled by
+  NO-PATH and NO-LINUM, respectively.
 - content: The string recorded in the pattern field of TAG.  Can
   be disabled by NO-CONTENT.
 
@@ -497,16 +499,19 @@ definition\" tools."
     ;; location
     (unless no-location
       (when-let ((abspath (citre-core-get-field 'ext-abspath tag)))
-        (setq path
-              (concat
-               (if (file-exists-p abspath) ""
-                 citre-definition-missing-file-mark)
-               (propertize (citre-relative-path abspath)
-                           'face 'font-lock-function-name-face))))
+        (unless no-path
+          (setq path
+                (concat
+                 (if (file-exists-p abspath) ""
+                   citre-definition-missing-file-mark)
+                 (propertize (citre-relative-path abspath)
+                             'face 'font-lock-function-name-face)))))
       (when-let ((line (citre-core-get-field 'extra-line tag)))
-        (setq linum (concat (if no-location "" "(")
-                            (propertize (number-to-string line) 'face 'warning)
-                            (if no-location "" ")")))))
+        (unless no-linum
+          (setq linum (concat (if no-path "" "(")
+                              (propertize (number-to-string line)
+                                          'face 'warning)
+                              (if no-path "" ")"))))))
     ;; content
     (unless no-content
       (when-let ((str (citre-core-get-field 'extra-matched-str tag)))

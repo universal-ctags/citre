@@ -57,6 +57,15 @@
 
 (make-variable-buffer-local 'citre-enable-capf-integration)
 
+;;;; Tool: Imenu integration
+
+(defcustom citre-enable-imenu-integration t
+  "Enable imenu integration."
+  :type 'boolean
+  :group 'citre)
+
+(make-variable-buffer-local 'citre-enable-imenu-integration)
+
 ;;;;; Options: `citre-jump' related
 
 (defcustom citre-select-location-function
@@ -349,6 +358,61 @@ STR is a candidate in a capf session.  See the implementation of
           ;; :exclusive 'no
           )))
 
+;;;; Tool: Imenu
+
+(defvar-local citre--imenu-create-index-function-orig nil
+  "Original value of `imenu-create-index-function' in buffer.")
+
+(defun citre--classify-tags (tags)
+  "Classify TAGS based on the `ext-kind-full' field.
+This creates an alist, its key is `kind' field value, and value
+is a list of tags of that kind."
+  (let ((result nil))
+    (dolist (tag tags)
+      (cl-symbol-macrolet ((place (alist-get kind result nil nil #'equal)))
+        (let ((kind (citre-core-get-field 'ext-kind-full tag)))
+          (unless place
+            (setf place nil))
+          (push tag place))))
+    (dotimes (i (length result))
+      (setf (cdr (nth i result))
+            (nreverse (cdr (nth i result)))))
+    (cl-sort result (lambda (str1 str2)
+                      (compare-strings str1 nil nil str2 nil nil))
+             :key #'car)))
+
+(defun citre--make-imenu-index (tag)
+  "Create Imenu index for TAG."
+  (cons (concat
+         (citre-core-get-field 'name tag)
+         " "
+         (propertize "(" 'face 'citre-definition-annotation-face)
+         (citre-make-location-str tag 'no-location nil nil 'no-content)
+         (propertize ")" 'face 'citre-definition-annotation-face))
+        (citre-core-locate-tag tag)))
+
+(defun citre-imenu-create-index-function ()
+  "Create imenu index."
+  (let* ((file (buffer-file-name))
+         (tags-file (citre-tags-file-path))
+         (tags (citre-get-tags
+                nil nil nil
+                :filter
+                `(and ,(citre-core-filter-input file tags-file)
+                      (not ,(citre-core-filter
+                             'extras
+                             '("anonymous" "reference" "inputFile")
+                             'csv-contain)
+                           ,(citre-core-filter-kind "file" tags-file)))
+                :sorter (citre-core-sorter 'line)
+                :require '(name pattern)
+                :optional '(ext-kind-full line typeref extras)))
+         (tags (citre--classify-tags tags)))
+    (dotimes (i (length tags))
+      (setf (cdr (nth i tags))
+            (mapcar #'citre--make-imenu-index (cdr (nth i tags)))))
+    tags))
+
 ;;;; Tool: misc commands
 
 (defun citre-show-project-root ()
@@ -368,17 +432,22 @@ correctly."
   :lighter " Citre"
   (cond
    (citre-mode
-    ;; Xref integration.
     (when citre-enable-xref-integration
       (add-hook 'xref-backend-functions #'citre-xref-backend nil t))
-    ;; Capf integration.
     (when citre-enable-capf-integration
       (add-hook 'completion-at-point-functions
-                #'citre-completion-at-point nil t)))
+                #'citre-completion-at-point nil t))
+    (when citre-enable-imenu-integration
+      (setq citre--imenu-create-index-function-orig
+            imenu-create-index-function)
+      (setq imenu-create-index-function #'citre-imenu-create-index-function)))
    (t
     (remove-hook 'xref-backend-functions #'citre-xref-backend t)
     (remove-hook 'completion-at-point-functions
-                 #'citre-completion-at-point t))))
+                 #'citre-completion-at-point t)
+    (when citre-enable-imenu-integration
+      (setq imenu-create-index-function
+            citre--imenu-create-index-function-orig)))))
 
 (provide 'citre-basic-tools)
 
