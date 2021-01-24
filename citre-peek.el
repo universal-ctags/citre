@@ -904,7 +904,7 @@ The returned def list is the root def list of the peek session."
            (definitions (citre-get-definitions))
            (deflist (citre-peek--def-list-create definitions symbol)))
       (when (null definitions)
-        (user-error "Can't find definition"))
+        (user-error "Can't find definition for %s" symbol))
       deflist)))
 
 (defun citre-peek--create-branch (buf point)

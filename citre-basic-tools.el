@@ -250,23 +250,23 @@ This uses the `completing-read' interface.  See
 During an active `citre-peek' session, this jumps to the
 definition that is currently peeked."
   (interactive)
-  (let ((marker (point-marker))
-        (target nil))
-    (let* ((definitions (citre-get-definitions))
-           (loc-alist
-            (mapcar (lambda (def)
-                      (cons
-                       (citre-make-tag-str def nil
-                                           '(annotation)
-                                           '(location :suffix ":")
-                                           '(content))
-                       def))
-                    definitions))
-           (locations (mapcar #'car loc-alist)))
-      (if (null locations)
-          (user-error "Can't find definition")
-        (setq target (funcall citre-select-location-function locations))
-        (citre-goto-tag (alist-get target loc-alist nil nil #'equal))))
+  (let* ((marker (point-marker))
+         (symbol (citre-get-symbol))
+         (definitions (citre-get-definitions))
+         (loc-alist
+          (mapcar (lambda (def)
+                    (cons
+                     (citre-make-tag-str def nil
+                                         '(annotation)
+                                         '(location :suffix ":")
+                                         '(content))
+                     def))
+                  definitions))
+         (locations (mapcar #'car loc-alist)))
+    (if (null locations)
+        (user-error "Can't find definition for %s" symbol)
+      (citre-goto-tag (alist-get (funcall citre-select-location-function locations)
+                                 loc-alist nil nil #'equal)))
     (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
