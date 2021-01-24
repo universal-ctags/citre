@@ -1018,10 +1018,15 @@ tags that don't have `kind' field."
       (push kind kinds))
     (when (and (listp kinds) (eq (length kinds) 1))
       (setq kinds (car kinds)))
-    (if (stringp kinds)
-        (citre-core-filter 'kind kinds 'eq nil nil ignore-missing)
-      (citre-core-filter 'kind (concat "^(" (string-join kinds "|") ")$")
-                         'regexp nil nil ignore-missing))))
+    (pcase kinds
+      ;; This can happen when the tags file uses single-letter kind, a new kind
+      ;; is added to a language parser, and we didn't update the lookup table.
+      ('nil 'true)
+      ((pred stringp)
+       (citre-core-filter 'kind kinds 'eq nil nil ignore-missing))
+      ((pred listp)
+       (citre-core-filter 'kind (concat "^(" (string-join kinds "|") ")$")
+                          'regexp nil nil ignore-missing)))))
 
 (defun citre-core-filter-input (filename tagsfile &optional match)
   "Return a filter expression that matches the input field by FILENAME.
