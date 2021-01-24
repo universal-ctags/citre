@@ -223,11 +223,6 @@ returned."
              info)
     info))
 
-;; TODO: In many situations, we require the file path is not only absolute
-;; (i.e., `file-name-absolute-p' returns t), but also "canonical" (i.e., AND it
-;; doesn't start with "~"). We should make this definition clear in the
-;; documentations for developers, and make the requirement clear in all the
-;; docstrings.
 (defun citre-core--tags-file-info (tagsfile)
   "Return the additional info FIELDS of tags file TAGSFILE.
 TAGSFILE is the canonical path of the tags file.  The return
@@ -944,6 +939,7 @@ tags that don't have `kind' field."
        (citre-core-filter 'kind (concat "^(" (string-join kinds "|") ")$")
                           'regexp nil nil ignore-missing)))))
 
+;; TODO: Windows.
 (defun citre-core-filter-input (filename tagsfile &optional match)
   "Return a filter expression that matches the input field by FILENAME.
 FILENAME should be a canonical path.  The generated filter can

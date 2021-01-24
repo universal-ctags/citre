@@ -69,7 +69,7 @@ root."
   :group 'citre)
 
 (defcustom citre-project-root nil
-  "Absolute path of project root directory.
+  "Canonical path of project root directory.
 Set this in your .dir-locals.el if the project root detection
 fails, and for some reason you can't put a denoter file in the
 project root (see `citre-project-denoter-files').
@@ -196,7 +196,7 @@ such directory doesn't exist, nil will be returned."
 ;;;;; APIs: Project related
 
 (defun citre-project-root (&optional buffer)
-  "Find the project root of current file.
+  "Find the canonical path of project root of current file.
 The following methods are tried in turn, and the first succeeded
 one determines the project root:
 
@@ -239,7 +239,7 @@ project root PROJECT is specified, use that project instead."
       path)))
 
 (defun citre-tags-file-path (&optional project)
-  "Find tags file in PROJECT and return its path.
+  "Return the canonical path of tags file in PROJECT.
 If PROJECT is not specified, use current project in buffer.  This
 looks up `citre-tags-files' to find the tags file needed, and
 throws an user error if no tags file was found."
@@ -397,17 +397,15 @@ order of their name.")
 
 (defun citre-get-completions (&optional symbol tagsfile substr-completion)
   "Get completions from TAGSFILE of symbol at point.
-If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
-not specified, fint it automatically under current project root.
-If SUBSTR-COMPLETION is non-nil, get tags that contains SYMBOL,
-or get tags that starts with SYMBOL.  The case sensitivity is
+TAGSFILE is the canonical path of the tags file.  If SYMBOL is
+non-nil, use that symbol instead.  If TAGSFILE is not specified,
+fint it automatically under current project root.  If
+SUBSTR-COMPLETION is non-nil, get tags that contains SYMBOL, or
+get tags that starts with SYMBOL.  The case sensitivity is
 controlled by `citre-case-sensitivity'.
 
-The result is a list of strings, each string is a tag name, with
-its text property `citre-kind' and `citre-signature' being the
-kind and signature of the tag.
-
-It returns nil when the completion can't be done."
+The returned value is a list of tags.  Nil is returned when the
+completion can't be done."
   (let ((symbol (or symbol (citre-get-symbol)))
         (tagsfile (or tagsfile (citre-tags-file-path)))
         (match (if substr-completion 'substr 'prefix)))
@@ -446,11 +444,12 @@ length and alphabetical order of the tag names.")
 
 (defun citre-get-definitions (&optional symbol tagsfile)
   "Get definitions from tags file TAGSFILE of symbol at point.
-If SYMBOL is non-nil, use that symbol instead.  If TAGSFILE is
-not specified, find it automatically under current project root.
+TAGSFILE is the canonical path of the tags file.  If SYMBOL is
+non-nil, use that symbol instead.  If TAGSFILE is not specified,
+find it automatically under current project root.
 
-The result is a list of tags, with the fields `ext-abspath',
-`line' and `kind'."
+The result is a list of tags.  Nil is returned when no definition
+is found."
   (let ((symbol (or symbol (citre-get-symbol)))
         (tagsfile (or tagsfile (citre-tags-file-path))))
     (unless symbol
