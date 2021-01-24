@@ -787,7 +787,6 @@ doesn't exist, these 2 fields are all nil."
       (with-current-buffer buf
         (save-excursion
           (save-restriction
-            ;; TODO: is this still necessary with `base-marker'?
             (widen)
             ;; If `buf' is non-nil, base-marker will be a valid marker, so we
             ;; don't check it.
@@ -950,7 +949,6 @@ set variables according to it."
   (with-current-buffer buf
     (save-excursion
       (goto-char point)
-      ;; TODO: could we make the get definitions API also return the symbol?
       (let* ((symbol (substring-no-properties
                       (citre-peek--hack-buffer-file-name (citre-get-symbol))))
              (deflist (citre-peek--get-def-list)))

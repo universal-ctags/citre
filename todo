@@ -25,28 +25,6 @@
 
 # Functionality
 
-- Auto completion for "dot patterns"
-
-  We should come up with our own "symbol-at-point" function. By calling it we
-  get the symbol at point, and if the chars before it are ".", "->" or "::",
-  the symbol before these things. Then we can make use of "typeref" and "scope"
-  fields to get better completion results.
-
-  I can think of completing struct members now, but I want to support more "dot
-  patterns". I need to think of all (at least most of) the possibilities and
-  figure out what are those can be solved based on tags file.
-
-- Sort
-
-  We should come up with our own sort function, and not rely on the sorting of
-  ctags. We want a sort algorithm just like prescient.el, plus when required,
-  put the candidates with certain field contents before others.
-
-  I'm not sure if we want to only keep tags with certain field values, or put
-  them before others. Since we actually don't know the AST, there's chance we
-  guessed the completely wrong type of "dot pattern" and give the wrong
-  results. So I think it's better to keep other tags as well.
-
 - Jump to definition from a dependency that's not in the root of current
 
   Maybe this is not worth it, but it's nice in some situations. We need to
@@ -117,71 +95,9 @@
   substitution.
 # Misc
 
-  - See where do the dependencies live in popular package/virtualenv managers,
-    and put them in the excluded patterns for large projects.
-
-  - put "*Test", "*_test" and "*-test" in excluded patterns. I need to see what
-    are the usual names.
-
-  - Add more faces.
-
-  - Signal an error when the needed fields are not presented.
-
-    We need to think carefully about this. Technically we only need the tag
-    itself for completion, and line number for various jumping commands. But
-    it's in the plan to make Citre give more accurate results based on various
-    informations, and we want to make use of the readtags program. It's better
-    to design this behavior after these changes. We need to figure out:
-
-   - Which are the fields needed for every user commands. Citre should fail
-     when the command is called, and the needed fields are not presented. I
-     think it's safe to assume a user would use both completion and jumping
-     functionalities, so Citre should fail while parsing, to make sure all
-     necessary fields are presented.
-
-   - Which are the fields that gives better experience/UI. We should put these
-     in the manual.
-
-  - Since in the future we'll know and scan imported modules for current file,
-    the "project size" thing doesn't really matter. We'll get rid of it. Then
-    `citre-mode` is not really necessary too, it has two uses:
-
-    - Set up the hooks/functions to offer integration with Emacs built-in
-      mechanisms.
-    - Write project information, including the size.
-
-    We require `citre-mode` to be enabled when using interactive commands,
-    because calculating the size may take a while. But in the future we could
-    create a procedure to write project information if it's not presented (it
-    will be fast since we don't need the size), then use it in all the
-    interactive commands, so they can be used when `citre-mode` is not enabled.
-
-    And now there are 3 things that needs citre-mode: capf, xref, eldoc. For
-    the first two, we could create our own `citre-xref-find-definition` and
-    `citre-completion-at-point` functions, they let bind the necessary
-    variables and call xref/capf commands. In this way we could use all the
-    functionalities except eldoc integration without citre-mode. But maybe we
-    are going too far. If the user want this, they could wrap their own
-    commands.
-
-  - Some sequences (like tabs) are escaped in tags file. We need to figure out
-    how this is exactly down, and maybe do appropriate unescaping when parsing.
-    I believe they are mostly handled in the output of readtags, but we need to
-    confirm.
-
-    Ref: https://github.com/universal-ctags/libreadtags/issues/17 and
-    https://github.com/universal-ctags/ctags/pull/2459#issuecomment-597906216.
-
   - We need a `citre-doctor`. It sees if the user is using universal ctags,
     prints the current project root, and tags files in use.
 
     If the user is using universal ctags, then we can look into the pseudo tags
     and see if the output format is indeed u-ctags, and are the needed fields
     presented in the tags files.
-
-# Selectrum integration
-
-We want selectrum versions of these commands:
-
-- `citre-jump-command`
-- `citre-completion-in-region-function`

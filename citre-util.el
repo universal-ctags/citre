@@ -370,7 +370,6 @@ filters/sorters can make use of them."
 
 ;;;;; APIs: Auto-completion related
 
-;; TODO: A better filter
 (defun citre-completion-default-filter (symbol)
   "Default completion filter for SYMBOL."
   (let ((tags-file (citre-get-property 'tags-file symbol))

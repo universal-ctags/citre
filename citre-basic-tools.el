@@ -366,10 +366,6 @@ correctly."
 (define-minor-mode citre-mode
   "Ctags IDE on the True Editor"
   :lighter " Citre"
-  ;; TODO: At this time I don't know clealy if Citre mode needs to work in a
-  ;; file.  If not, we could remove this, then for example you can set
-  ;; `citre-project-root' in *scratch* buffer and test somethings in it.  Maybe
-  ;; some users would want to do this.
   (cond
    (citre-mode
     ;; Xref integration.
