@@ -396,7 +396,7 @@ is a list of tags of that kind."
   "Create Imenu index for TAG."
   (cons (citre-make-tag-str tag nil
                             '(name)
-                            '(annotation :prefix "(" :suffix ")")
+                            '(annotation :no-kind t :prefix "(" :suffix ")")
                             '(location :no-path t))
         (citre-core-locate-tag tag)))
 
