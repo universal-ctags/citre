@@ -527,23 +527,26 @@ WINDOW can be:
 - nil: Use current window.
 - `other-window': Use other window.
 - `other-window-noselect': Use other window but don't select it."
-  ;; TODO: I actually don't know well about this whole display-buffer,
-  ;; pop-to-buffer and switch-to-buffer thing.  Will come back and see if this
-  ;; docstring describes the behavior well.
   (let ((path (citre-core-get-field 'ext-abspath tag)))
     (unless path
       (error "TAG doesn't have the ext-abspath field"))
     (unless (file-exists-p path)
       (user-error "File %s doesn't exist" path))
     (let* ((buf (find-file-noselect path))
-           (current-buf (current-buffer)))
+           (current-buf (current-buffer))
+           (current-window (selected-window)))
       (if window
-          (pop-to-buffer buf)
-        (switch-to-buffer buf))
+          (pop-to-buffer
+           buf
+           '(display-buffer-use-some-window . ((inhibit-same-window . t)
+                                               (inhibit-switch-frame . t)))
+           (when (eq window 'other-window-noselect) 'norecord))
+        (pop-to-buffer buf '(display-buffer-same-window)))
       (goto-char (citre-core-locate-tag tag))
       (run-hooks 'citre-after-jump-hook)
       (when (eq window 'other-window-noselect)
-        (pop-to-buffer current-buf)))))
+        (select-window current-window)
+        (pop-to-buffer current-buf '(display-buffer-same-window) 'norecord)))))
 
 (defun citre-recenter-and-blink ()
   "Recenter point and blink after point.
