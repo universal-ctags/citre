@@ -103,6 +103,19 @@ non-nil, *and* add `substring' to `completion-styles' (for Emacs
   :type 'boolean
   :group 'citre)
 
+(defcustom citre-capf-optimize-for-popup t
+  "Non-nil means optimize for popup completion.
+This caches latest completion result, and allows typing while
+calculating completions, making it slicker to use.
+
+`company' and `auto-complete' users should leave this as t.  For
+other users, set this to nil may be slightly better, since a
+completion session can be interrupted when you call
+`completion-at-point', and while it's calculating, you press some
+key by mistake, but that doesn't happen much."
+  :type 'boolean
+  :group 'citre)
+
 ;;;; Tool: Xref integration
 
 (declare-function xref-make "xref" (summary location))
@@ -290,6 +303,18 @@ definition that is currently peeked."
 
 ;;;;; Internals
 
+(defvar citre--completion-cache
+  `(:file nil :symbol nil :bounds nil :tags-file nil :time nil :collection nil)
+  "A plist for completion cache.
+Its props are:
+
+- `:file': The file where the completion happens.
+- `:symbol': The symbol that's been completed.
+- `:bounds': The bound positions of `:symbol'.
+- `:tags-file': The tags file used for completion.
+- `:time': The last update time of the tags file.
+- `:collection': The completion string collection.")
+
 (defun citre--completion-get-annotation (str)
   "Generate annotation for STR.
 STR is a candidate in a capf session.  See the implementation of
@@ -333,6 +358,52 @@ STR is a candidate in a capf session.  See the implementation of
     (cl-remove-duplicates
      collection :test str-equal)))
 
+(defun citre--capf-get-completions (symbol)
+  "Get completions of SYMBOL for capf.
+This may return nil when `citre-capf-optimize-for-popup' is
+non-nil, and the calculation is interrupted by user input."
+  (if citre-capf-optimize-for-popup
+      (pcase (while-no-input
+               (citre-get-completions
+                symbol nil citre-capf-substr-completion))
+        ('t nil)
+        (val val))
+    (citre-get-completions symbol nil citre-capf-substr-completion)))
+
+(defun citre--capf-get-collection (symbol)
+  "Get completion collection of SYMBOL for capf."
+  (if citre-capf-optimize-for-popup
+      (let* ((cache citre--completion-cache)
+             (file (buffer-file-name))
+             (bounds (citre-get-property 'bounds symbol))
+             (tagsfile (citre-get-property 'tags-file symbol))
+             (time (gethash 'time (citre-core--tags-file-info tagsfile))))
+        (if (and citre-capf-optimize-for-popup
+                 (equal (plist-get cache :file) file)
+                 (string-prefix-p (plist-get cache :symbol) symbol)
+                 ;; We also need to make sure we are in the process of
+                 ;; completing the same whole symbol, since same symbol in
+                 ;; different positions can produce different results,
+                 ;; depending on the language support implementation.
+                 (eq (car (plist-get cache :bounds)) (car bounds))
+                 (equal (plist-get cache :tags-file) tagsfile)
+                 (equal (plist-get cache :time) time))
+            (plist-get cache :collection)
+          ;; Make sure we get a non-nil collection first, then setup the cache,
+          ;; since the calculation can be interrupted by user input, and we get
+          ;; nil, which aren't the actual completions.
+          (when-let ((collection (citre--completion-make-collection
+                                  (citre--capf-get-completions symbol))))
+            (plist-put cache :file file)
+            (plist-put cache :symbol (substring-no-properties symbol))
+            (plist-put cache :bounds bounds)
+            (plist-put cache :tags-file tagsfile)
+            (plist-put cache :time time)
+            (plist-put cache :collection collection)
+            collection)))
+    (citre--completion-make-collection
+     (citre--capf-get-completions symbol))))
+
 ;;;;; Entry point
 
 (defun citre-completion-at-point ()
@@ -341,9 +412,7 @@ STR is a candidate in a capf session.  See the implementation of
               (bounds (citre-get-property 'bounds symbol))
               (start (car bounds))
               (end (cdr bounds))
-              (completions (citre-get-completions
-                            symbol nil citre-capf-substr-completion))
-              (collection (citre--completion-make-collection completions))
+              (collection (citre--capf-get-collection symbol))
               (get-docsig
                (lambda (cand)
                  (citre-get-property 'signature cand))))

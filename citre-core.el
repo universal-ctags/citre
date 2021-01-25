@@ -254,8 +254,6 @@ See `citre-core-get-tags' to know about NAME, MATCH, CASE-FOLD,
 FILTER, SORTER and LINES.  ACTION can be nil, to get regular
 tags, or any valid actions in readtags, e.g., \"-D\", to get
 pseudo tags."
-  ;; Prevents shell injection.
-  (when lines (cl-assert (natnump lines)))
   (let* ((match (or match 'exact))
          (extras (concat
                   "-Ene"
@@ -264,8 +262,7 @@ pseudo tags."
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
-         (stderr (get-buffer-create "* readtags-stderr*"))
-         parts proc cache result err
+         cmd proc cache result stderr-msg exit-msg
          (proc-filter
           ;; Collect chunks of readtags output (STR) into RESULT.
           (lambda (proc str)
@@ -295,40 +292,60 @@ pseudo tags."
                (pcase (process-exit-status proc)
                  ;; In case the output doesn't end with a newline.
                  (0 (when cache (setq result (nconc result cache))))
-                 (status (setq err (format "readtags exits %s:\n%s"
-                                           status
-                                           (with-current-buffer stderr
-                                             (buffer-string)))))))
-              (_ (setq err (concat "readtags: " (string-trim msg))))))))
+                 (s (setq exit-msg (format "readtags exits %s\n" s)))))
+              (_ (setq exit-msg
+                       (concat "readtags: " (string-trim msg) "\n"))))))
+         (pipe (make-pipe-process
+                :name "readtags-error"
+                ;; The pipe process always creates a buffer, though we don't
+                ;; use it.  So we make it an invisible one (by prefix the name
+                ;; by a space).
+                :buffer " *readtags-error*"
+                :filter (lambda (_proc str)
+                          (if stderr-msg
+                              (setq stderr-msg (concat stderr-msg str))
+                            (setq stderr-msg str)))
+                :noquery t
+                :sentinel 'ignore)))
     ;; Program name
-    (push (or citre-readtags-program "readtags") parts)
+    (push (or citre-readtags-program "readtags") cmd)
     ;; Read from this tags file
-    (push "-t" parts)
-    (push tagsfile parts)
+    (push "-t" cmd)
+    (push tagsfile cmd)
     ;; Filter expression
-    (when filter (push "-Q" parts) (push (format "%S" filter) parts))
-    (when sorter (push "-S" parts) (push (format "%S" sorter) parts))
+    (when filter (push "-Q" cmd) (push (format "%S" filter) cmd))
+    (when sorter (push "-S" cmd) (push (format "%S" sorter) cmd))
     ;; Extra arguments
-    (push extras parts)
+    (push extras cmd)
     ;; Action
-    (if action (push action parts)
+    (if action (push action cmd)
       (if (or (null name) (string-empty-p name))
-          (push "-l" parts)
-        (push "-" parts)
-        (push name parts)))
-    (setq proc
-          (make-process :name "readtags"
-                        :buffer nil
-                        :command (nreverse parts)
-                        :connection-type 'pipe
-                        :noquery t
-                        :stderr stderr
-                        :filter proc-filter
-                        :sentinel proc-sentinel))
-    ;; Poll for the process to finish.
-    (accept-process-output proc)
-    (kill-buffer stderr)
-    (if err (error err) result)))
+          (push "-l" cmd)
+        (push "-" cmd)
+        (push name cmd)))
+    (unwind-protect
+        (progn
+          (setq proc
+                (make-process
+                 :name "readtags"
+                 :buffer nil
+                 :command (nreverse cmd)
+                 :connection-type 'pipe
+                 ;; NOTE: If we use a buffer as `:stderr' (and kill it when we
+                 ;; finish), then the async process, `while-no-input' and
+                 ;; `company-capf' don't play well.  The completions will often
+                 ;; not popup (being nil).  I don't know why.
+                 :stderr pipe
+                 :filter proc-filter
+                 :sentinel proc-sentinel))
+          ;; Poll for the process to finish.
+          (accept-process-output proc)
+          (accept-process-output pipe)
+          (if (or stderr-msg exit-msg)
+              (error (concat (or exit-msg "")
+                             (if stderr-msg (string-trim stderr-msg) "")))
+            result))
+      (kill-buffer (process-buffer pipe)))))
 
 ;;;;; Parse tagline
 
