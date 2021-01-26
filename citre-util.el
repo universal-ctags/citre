@@ -41,56 +41,25 @@
 
 ;;;; User options
 
-;;;;; Options: Project related
-
-(defcustom citre-project-denoter-files
-  '(".citre" ".projectile" ".dumbjump")
-  "List of project denoter files.
-If the project root detection fails, put a file with one of these
-names in your project root.  This list is in descending order of
-priority (i.e., if we find one, then the rest will be ignored).
-
-See `citre-project-root' to know how Citre detects the project
-root."
-  :type '(repeat string)
-  :group 'citre)
-
-(defcustom citre-project-fallback-denoter-files
-  '("Makefile" "makefile" "tags" ".tags")
-  "List of project denoter files used as fallbacks.
-These are files that may appear in some parent directory of the
-project, thus they are used only when normal detection methods
-fail.  This list is in descending order of priority (i.e., if we
-find one, then the rest will be ignored).
-
-See `citre-project-root' to know how Citre detects the project
-root."
-  :type '(repeat string)
-  :group 'citre)
-
-(defcustom citre-project-root nil
-  "Canonical path of project root directory.
-Set this in your .dir-locals.el if the project root detection
-fails, and for some reason you can't put a denoter file in the
-project root (see `citre-project-denoter-files').
-
-If you don't set this manually, Citre will detect the project
-root and set it automatically.  See `citre-project-root' to know
-how this is done."
-  :type '(choice (const nil) string)
-  :group 'citre)
-
-(make-variable-buffer-local 'citre-project-root)
+;;;;; Options: Finding tags file
 
 (defcustom citre-tags-files '(".tags" "tags")
-  "List of tags file paths.
-Relative paths to the project root or absolute paths can both be
-used as elements.  This list is in descending order of
-priority (i.e., if we find one, then the rest will be ignored)."
+  "List of tags files.
+These are searched up directory hierarchy from the file of
+current buffer, or from `default-directory' in current buffer, to
+decide which tags file to use.
+
+This list is in descending order of priority (i.e., if we find
+one, then the rest will be ignored)."
   :type '(repeat string)
   :group 'citre)
 
-(make-variable-buffer-local 'citre-tags-files)
+(defcustom citre-tags-file-alist nil
+  "Alist of directory -> tags file.
+If the buffer file is in one of the directories, the
+corresponding tags file will be used."
+  :type '(alist :key-type string :value-type string)
+  :group 'citre)
 
 ;;;;; Options: Behavior of Citre
 
@@ -140,6 +109,13 @@ Annotations include kind, type, etc."
   :type 'string
   :group 'citre)
 
+(defcustom citre-project-root-function #'citre-project-root
+  "A function that returns project root in current buffer.
+It takes no arguments.  It's used to display the path of a tag
+relatively."
+  :type 'function
+  :group 'citre)
+
 ;;;; Core API wrapper
 
 (cl-defun citre-get-tags
@@ -149,8 +125,7 @@ Annotations include kind, type, etc."
   "Get tags in tags file TAGSFILE that match NAME.
 This is like `citre-core-get-tags', except that:
 
-- TAGSFILE could be nil, and it will be find automatically under
-  current project root.
+- TAGSFILE could be nil, and it will be find automatically.
 - When MATCH is nil or `exact', CASE-FOLD is always nil,
   otherwise it's decided by `citre-case-sensitivity' and NAME.
 
@@ -180,77 +155,29 @@ and some of its fields, which can be utilized by
 
 ;;;; Helpers
 
-(defun citre--find-dir-with-denoters (file denoters)
-  "Search up directory hierarchy from FILE for a denoter file.
-DENOTERS is a list of denoter files, in the order of
-precedence (i.e., if we find one, then the rest will be ignored).
-The directory containing the denoter file will be returned.  If
-such directory doesn't exist, nil will be returned."
-  (cl-dolist (denoter denoters)
-    (let ((dir (locate-dominating-file file denoter)))
-      (when dir
-        (cl-return (file-name-directory (expand-file-name dir)))))))
+(defun citre-project-root ()
+  "Caninical path of project root of current buffer.
+This uses `project-current' internally."
+  (when-let ((project (project-current nil)))
+    (expand-file-name (cdr project))))
 
 ;;;; APIs
 
-;;;;; APIs: Project related
+;;;;; APIs: Find tags file
 
-(defun citre-project-root (&optional buffer)
-  "Find the canonical path of project root of current file.
-The following methods are tried in turn, and the first succeeded
-one determines the project root:
-
-- Return `citre-project-root' directly if it's set.
-- Search up directory hierarchy for a file in
-  `citre-project-denoter-files'.
-- Use `project-current'.  Currently it only deals with projects
-  under version control.
-- Search up directory hierarchy for a file in
-  `citre-project-fallback-denoter-files'.
-- Use the directory of current file.
-
-After the project root is found, `citre-project-root' in current
-buffer is set.  When BUFFER is non-nil, find project root for the
-file in BUFFER instead."
-  (with-current-buffer (or buffer (current-buffer))
-    (or citre-project-root
-        (when-let* ((file (or (buffer-file-name)
-                              ;; Support non-file buffers, e.g., Dired.
-                              (expand-file-name default-directory)))
-                    (dir (file-name-directory file)))
-          (setq citre-project-root
-                (or (citre--find-dir-with-denoters
-                     file citre-project-denoter-files)
-                    (when-let ((project (project-current nil dir)))
-                      (expand-file-name (cdr project)))
-                    (citre--find-dir-with-denoters
-                     file citre-project-fallback-denoter-files)
-                    dir))))))
-
-(defun citre-relative-path (path &optional project)
-  "Return PATH but relative to current project root.
-If PATH is not under the project, it's directly returned.  If
-project root PROJECT is specified, use that project instead."
-  (let* ((project (when project (expand-file-name project)))
-         (project (or project (citre-project-root)))
-         (path (expand-file-name path)))
-    (if (and project (string-prefix-p project path))
-        (file-relative-name path project)
-      path)))
-
-(defun citre-tags-file-path (&optional project)
-  "Return the canonical path of tags file in PROJECT.
-If PROJECT is not specified, use current project in buffer.  This
-looks up `citre-tags-files' to find the tags file needed, and
-throws an user error if no tags file was found."
-  (or (cl-some
-       (lambda (file)
-         (let ((tags-file (expand-file-name
-                           file
-                           (or project (citre-project-root)))))
-           (when (file-exists-p tags-file) tags-file)))
-       citre-tags-files)
-      (user-error "Tags file not found")))
+(defun citre-tags-file-path ()
+  "Return the canonical path of tags file for current buffer.
+This looks up `citre-tags-files' to find the tags file needed,
+and throws an user error if no tags file was found."
+  (let ((current-file (or (buffer-file-name) default-directory)))
+    (or
+     (cl-dolist (pair citre-tags-file-alist)
+       (when (file-in-directory-p current-file (car pair))
+         (cl-return (expand-file-name (cdr pair)))))
+     (cl-dolist (tagsfile citre-tags-files)
+       (let ((dir (locate-dominating-file current-file tagsfile)))
+         (when dir
+           (cl-return (concat (expand-file-name dir) tagsfile))))))))
 
 ;;;;; APIs: Language support framework
 
@@ -399,10 +326,9 @@ order of their name.")
   "Get completions from TAGSFILE of symbol at point.
 TAGSFILE is the canonical path of the tags file.  If SYMBOL is
 non-nil, use that symbol instead.  If TAGSFILE is not specified,
-fint it automatically under current project root.  If
-SUBSTR-COMPLETION is non-nil, get tags that contains SYMBOL, or
-get tags that starts with SYMBOL.  The case sensitivity is
-controlled by `citre-case-sensitivity'.
+fint it automatically.  If SUBSTR-COMPLETION is non-nil, get tags
+that contains SYMBOL, or get tags that starts with SYMBOL.  The
+case sensitivity is controlled by `citre-case-sensitivity'.
 
 The returned value is a list of tags.  Nil is returned when the
 completion can't be done."
@@ -420,6 +346,18 @@ completion can't be done."
                     :optional '(ext-kind-full signature typeref))))
 
 ;;;;; APIs: Displaying tags
+
+;;;;;; Internals
+
+(defun citre--relative-path (path &optional root)
+  "Return PATH but relative to ROOT.
+If PATH is not under ROOT, it's directly returned.  If ROOT is
+nil, use project in current buffer (by
+`citre-project-root-function') instead."
+  (let ((root (or root (funcall citre-project-root-function))))
+    (if (and root (file-in-directory-p path root))
+        (file-relative-name path root)
+      path)))
 
 (defun citre--make-tag-name-str (tag prop)
   "Generate a string to display the name of TAG.
@@ -481,7 +419,8 @@ PROP controls the format.  See `citre-make-tag-str' for details."
            (concat
             (if (file-exists-p abspath) ""
               citre-definition-missing-file-mark)
-            (propertize abspath 'face 'font-lock-function-name-face))
+            (propertize (citre--relative-path abspath (plist-get prop :root))
+                        'face 'font-lock-function-name-face))
          "")
        (if line
            (concat (if abspath "(" "")
@@ -498,6 +437,8 @@ PROP controls the format.  See `citre-make-tag-str' for details."
     (concat (or (plist-get prop :prefix) "")
             (string-trim str)
             (or (plist-get prop :suffix) ""))))
+
+;;;;;; The API
 
 (cl-defun citre-make-tag-str (tag separator &rest args)
   "Generate a string for TAG for displaying.
@@ -524,10 +465,11 @@ Avaliable ones are:
   relevant fields: `ext-kind-full', `typeref', `extras'.
 
 - location: Looks like \"path(line)\". `:no-path', `:no-line'
-  controsl the presence of each part.  When there's only the line
-  number, the parentheses around it are omitted.  When the path
-  doesn't exist, `citre-definition-missing-file-mark' is prefixed
-  to the path.
+  controls the presence of each part.  When there's only the line
+  number, the parentheses around it are omitted.  When `:root' is
+  specified, files under it will be displayed relative to it.
+  When the path doesn't exist,
+  `citre-definition-missing-file-mark' is prefixed to the path.
 
   relevant fields: `ext-abspath', `extra-line'.
 
@@ -581,7 +523,7 @@ length and alphabetical order of the tag names.")
   "Get definitions from tags file TAGSFILE of symbol at point.
 TAGSFILE is the canonical path of the tags file.  If SYMBOL is
 non-nil, use that symbol instead.  If TAGSFILE is not specified,
-find it automatically under current project root.
+find it automatically.
 
 The result is a list of tags.  Nil is returned when no definition
 is found."

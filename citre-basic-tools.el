@@ -268,13 +268,15 @@ definition that is currently peeked."
   (let* ((marker (point-marker))
          (symbol (citre-get-symbol))
          (definitions (citre-get-definitions))
+         (root (funcall citre-project-root-function))
          (loc-alist
           (mapcar (lambda (def)
                     (cons
-                     (citre-make-tag-str def nil
-                                         '(annotation)
-                                         '(location :suffix ":")
-                                         '(content))
+                     (citre-make-tag-str
+                      def nil
+                      '(annotation)
+                      `(location :suffix ":" :root ,root)
+                      '(content))
                      def))
                   definitions))
          (locations (mapcar #'car loc-alist)))
@@ -490,17 +492,6 @@ is a list of tags of that kind."
       (setf (cdr (nth i tags))
             (mapcar #'citre--make-imenu-index (cdr (nth i tags)))))
     tags))
-
-;;;; Tool: misc commands
-
-(defun citre-show-project-root ()
-  "Show the project root of current buffer.
-Use this command to see if Citre detects the project root
-correctly."
-  (interactive)
-  (if (citre-project-root)
-      (message (citre-project-root))
-    (user-error "Buffer is not in a project")))
 
 ;;;; Tool: Citre mode
 

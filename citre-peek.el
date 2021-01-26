@@ -712,9 +712,7 @@ but it also searches `citre-peek--temp-buffer-alist', so it can
 handle temporary buffers created during peeking.
 
 When the file is not opened, this creates a temporary buffer for
-it, sets its project root to current project root (for
-`citre-peek-through' to work) and major mode.  These buffers will
-be killed afterwards by `citre-abort'.
+it.  These buffers will be killed afterwards by `citre-abort'.
 
 When PATH doesn't exist, this returns nil."
   (if (not (file-exists-p path))
@@ -722,17 +720,13 @@ When PATH doesn't exist, this returns nil."
     (or (alist-get path citre-peek--temp-buffer-alist
                    nil nil #'equal)
         (find-buffer-visiting path)
-        (let ((buf (generate-new-buffer (format " *citre-peek-%s*" path)))
-              (current-project (citre-project-root)))
+        (let ((buf (generate-new-buffer (format " *citre-peek-%s*" path))))
           (with-current-buffer buf
             (insert-file-contents path)
             ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
             (let ((buffer-file-name path))
               (delay-mode-hooks
                 (set-auto-mode)))
-            ;; NOTE: For some weird reason, if you put this before the above
-            ;; form, `citre-project-root' will be cleared.
-            (setq citre-project-root current-project)
             (setq citre-peek--buffer-file-name path)
             ;; In case language-specific `:get-symbol' function uses
             ;; `default-directory'.
@@ -988,9 +982,10 @@ N can be negative."
 
 ;;;;; Display
 
-(defun citre-peek--make-definition-str (tag)
-  "Generate str of TAG to show in peek window."
-  (citre-make-tag-str tag nil '(annotation) '(location)))
+(defun citre-peek--make-definition-str (tag root)
+  "Generate str of TAG to show in peek window.
+ROOT is the project root."
+  (citre-make-tag-str tag nil '(annotation) `(location :root ,root)))
 
 (defun citre-peek--make-border ()
   "Return the border to be used in peek windows."
@@ -1025,6 +1020,7 @@ DEFLIST is the currently browsed def list."
 DEFLIST is the currently browsed def list."
   (let* ((idx (citre-peek--def-list-index deflist))
          (defs (citre-peek--def-list-entries deflist))
+         (root (funcall citre-project-root-function))
          (displayed-defs
           (cl-subseq defs
                      (car citre-peek--displayed-defs-interval)
@@ -1032,11 +1028,12 @@ DEFLIST is the currently browsed def list."
          (displayed-tags
           (mapcar #'citre-peek--def-entry-tag displayed-defs))
          (displayed-defs-strlist
-          (mapcar #'citre-peek--make-definition-str displayed-tags))
+          (make-list (length displayed-tags) nil))
          (displayed-idx
           (- idx (car citre-peek--displayed-defs-interval))))
     (dotimes (n (length displayed-defs))
-      (let ((line (citre-peek--make-definition-str (nth n displayed-tags))))
+      (let ((line (citre-peek--make-definition-str
+                   (nth n displayed-tags) root)))
         (when (citre-peek--def-entry-branches (nth n displayed-defs))
           (setq line (concat citre-peek-peeked-through-definition-prefix
                              line)))
