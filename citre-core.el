@@ -308,7 +308,6 @@ pseudo tags."
                           (if stderr-msg
                               (setq stderr-msg (concat stderr-msg str))
                             (setq stderr-msg str)))
-                :noquery t
                 :sentinel 'ignore)))
     ;; Program name
     (push (or citre-readtags-program "readtags") cmd)
@@ -326,29 +325,33 @@ pseudo tags."
           (push "-l" cmd)
         (push "-" cmd)
         (push name cmd)))
-    (unwind-protect
-        (progn
-          (setq proc
-                (make-process
-                 :name "readtags"
-                 :buffer nil
-                 :command (nreverse cmd)
-                 :connection-type 'pipe
-                 ;; NOTE: If we use a buffer as `:stderr' (and kill it when we
-                 ;; finish), then the async process, `while-no-input' and
-                 ;; `company-capf' don't play well.  The completions will often
-                 ;; not popup (being nil).  I don't know why.
-                 :stderr pipe
-                 :filter proc-filter
-                 :sentinel proc-sentinel))
-          ;; Poll for the process to finish.
-          (accept-process-output proc)
-          (accept-process-output pipe)
-          (if (or stderr-msg exit-msg)
-              (error (concat (or exit-msg "")
-                             (if stderr-msg (string-trim stderr-msg) "")))
-            result))
-      (kill-buffer (process-buffer pipe)))))
+    ;; NOTE: Originally, the following code is wrapped in `unwind-protect', and
+    ;; we kill (process-buffer pipe) as a clean up (`:noquery' for `pipe' was
+    ;; set to t). It turns out on Windows, `company-capf' often doesn't popup
+    ;; completions, and it frenquently causes Emacs to be frozen.  I don't know
+    ;; why we can't kill a buffer after its associated process is finished...
+    ;; Anyway, leave the buffer there doesn't harm.
+    (setq proc
+          (make-process
+           :name "readtags"
+           :buffer nil
+           :command (nreverse cmd)
+           :connection-type 'pipe
+           ;; NOTE: If we use a buffer as `:stderr' (and kill it when we
+           ;; finish), then the async process, `while-no-input' and
+           ;; `company-capf' don't play well.  The completions will often not
+           ;; popup (being nil).  I don't know why.
+           :stderr pipe
+           :filter proc-filter
+           :sentinel proc-sentinel))
+    ;; Poll for the process to finish.
+    (accept-process-output proc)
+    (accept-process-output pipe)
+    (if (or stderr-msg exit-msg)
+        (error (concat (or exit-msg "")
+                       (if stderr-msg (string-trim stderr-msg) "")))
+      result)))
+
 
 ;;;;; Parse tagline
 
