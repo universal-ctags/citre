@@ -57,8 +57,6 @@
 
 (make-variable-buffer-local 'citre-enable-capf-integration)
 
-;;;; Tool: Imenu integration
-
 (defcustom citre-enable-imenu-integration t
   "Enable imenu integration."
   :type 'boolean
@@ -440,7 +438,7 @@ non-nil, and the calculation is interrupted by user input."
           ;; :exclusive 'no
           )))
 
-;;;; Tool: Imenu
+;;;; Tool: Imenu integration
 
 (defvar-local citre--imenu-create-index-function-orig nil
   "Original value of `imenu-create-index-function' in buffer.")
