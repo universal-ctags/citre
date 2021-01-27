@@ -87,7 +87,14 @@ backslash is \"\\\\\"."
       (setq start (+ idx 2)))
     (nreverse result)))
 
-;; TODO: Do we need to support Windows style path?
+(defun citre-core--string-non-empty-p (string)
+  "Test if string STRING is an non-empty string."
+  ;; We need to test it first since `string-empty-p' returns nil on nil.
+  (and (stringp string)
+       (not (string-empty-p string))))
+
+;; NOTE: On Windows, ctags uses slash as the default directory separator, and
+;; it can be handled by Emacs, so for now we don't care about backslash.
 (defun citre-core--file-name-extension (file)
   "Return the extension of FILE.
 If it doesn't have an extension, return the file name without
@@ -97,12 +104,6 @@ This is faster than `file-name-extension'."
   (or (string-match "\\.\\([^./]+\\)$" file)
       (string-match "/\\([^/]+\\)$" file))
   (match-string 1 file))
-
-(defun citre-core--string-non-empty-p (string)
-  "Test if string STRING is an non-empty string."
-  ;; We need to test it first since `string-empty-p' returns nil on nil.
-  (and (stringp string)
-       (not (string-empty-p string))))
 
 (defmacro citre-core--error-on-arg (arg test)
   "Test ARG using TEST, and throw an error if it fails/throws an error.
@@ -133,7 +134,7 @@ Info fields and their corresponding values are:
   hash table.  It's in the style of (current-time).
 - `relative-path-p': Whether there's relative path used in the
   tags file.
-- `dir': the current working directory when generating the tags
+- `dir': The current working directory when generating the tags
   file.  This can be nil when `use-relative-path' is t, since
   `path' would be useless in this situation.
 - `one-letter-kind-p': Whether the tags file uses single-letter
@@ -192,11 +193,13 @@ returned."
   (let* ((recent-mod (file-attribute-modification-time
                       (file-attributes tagsfile)))
          (info (make-hash-table :test #'eq))
-         ;; Get a tag with relative path.  TODO: Make it work on Windows.
+         (relative-file-filter
+          (if (eq system-type 'windows-nt)
+              (not (citre-core-filter 'input "[[:alpha:]]:" 'regexp))
+            (not (citre-core-filter 'input "/" 'prefix))))
          (tag (car (citre-core-get-tags
                     tagsfile nil nil nil
-                    :filter (not (citre-core-filter
-                                  'input "/" 'prefix))
+                    :filter relative-file-filter
                     :require '(input pattern kind) :lines 1)))
          (relative-path-p (when tag t))
          (tag (or tag
@@ -956,7 +959,6 @@ tags that don't have `kind' field."
        (citre-core-filter 'kind (concat "^(" (string-join kinds "|") ")$")
                           'regexp nil nil ignore-missing)))))
 
-;; TODO: Windows.
 (defun citre-core-filter-input (filename tagsfile &optional match)
   "Return a filter expression that matches the input field by FILENAME.
 FILENAME should be a canonical path.  The generated filter can
@@ -975,8 +977,12 @@ MATCH can be:
          (info (citre-core--tags-file-info tagsfile))
          (cwd (gethash 'dir info))
          (relative-filename (when (and (gethash 'relative-path-p info)
-                                       (string-prefix-p cwd filename))
-                              (substring filename (length cwd)))))
+                                       (file-in-directory-p filename cwd))
+                              (file-relative-name filename cwd))))
+    (when (eq system-type 'windows-nt)
+      ;; Ctags on windows generates directory symbol in capital letter, while
+      ;; `buffer-file-name' returns it in small letter.
+      (setf (aref filename 0) (upcase (aref filename 0))))
     (push (citre-core-filter 'input filename match) filter)
     (when relative-filename
       (push (citre-core-filter 'input relative-filename match) filter))
