@@ -387,8 +387,11 @@ non-nil, and the calculation is interrupted by user input."
                  ;; different positions can produce different results,
                  ;; depending on the language support implementation.
                  (eq (car (plist-get cache :bounds)) (car bounds))
-                 (not (xor (plist-get cache :substr)
-                           citre-capf-substr-completion)))
+                 ;; Just in case the user set `citre-capf-substr-completion' to
+                 ;; something can't compare by `eq', we use `null' to make sure
+                 ;; we are comparing t or nil.
+                 (eq (null (plist-get cache :substr))
+                     (null citre-capf-substr-completion)))
             (plist-get cache :collection)
           ;; Make sure we get a non-nil collection first, then setup the cache,
           ;; since the calculation can be interrupted by user input, and we get
