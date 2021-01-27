@@ -68,8 +68,8 @@ non-nil."
   :type 'integer
   :group 'citre)
 
-(defcustom citre-peek-locations-height 3
-  "Number of locations displayed in the peek window."
+(defcustom citre-peek-definitions-height 3
+  "Number of definitions displayed in the peek window."
   :type 'integer
   :group 'citre)
 
@@ -919,15 +919,16 @@ push its def list into the branches of current def entry."
 (defun citre-peek--setup-displayed-defs-interval (&optional deflist)
   "Set `citre-peek--displayed-defs-interval' based on DEFLIST.
 DEFLIST is an instance of `citre-peek--def-list'.  The interval
-is set so that it doesn't exceeds `citre-peek-locations-height',
-and also fits the number of entries in DEFLIST.
+is set so that it doesn't exceeds
+`citre-peek-definitions-height', and also fits the number of
+entries in DEFLIST.
 
 When DEFLIST is nil, the currently browsed deflist is used."
   (let* ((deflist (or deflist (citre-peek--current-def-list)))
          (len (citre-peek--def-list-length deflist))
          (idx (citre-peek--def-list-index deflist))
          start end lines overflow)
-    (setq lines (min citre-peek-locations-height len))
+    (setq lines (min citre-peek-definitions-height len))
     (setq start idx)
     (setq end (+ idx (1- lines)))
     (setq overflow (max 0 (- end (1- len))))

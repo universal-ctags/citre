@@ -66,9 +66,9 @@
 
 ;;;;; Options: `citre-jump' related
 
-(defcustom citre-select-location-function
-  #'citre-select-location-completing-read
-  "The function for the user to select a location from a list.
+(defcustom citre-jump-select-definition-function
+  #'citre-jump-completing-read
+  "The function for the user to select a definition from a list.
 It receives 2 arguments:
 
 - A list of one or more strings to show the definitions.  The
@@ -79,7 +79,7 @@ It receives 2 arguments:
 - A string of the symbol name that's interested in.  The function
   can show it to the user.
 
-See `citre-select-location-completing-read' for an example of
+See `citre-jump-completing-read' for an example of
 implementation."
   :type 'function
   :group 'citre)
@@ -247,14 +247,13 @@ simple tag name matching.  This function is for it."
 (defvar citre--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
 
-(defun citre-select-location-completing-read (locations symbol)
-  "Select an element in LOCATIONS, with SYMBOL as a prompt.
+(defun citre-jump-completing-read (definitions symbol)
+  "Select an element in DEFINITIONS, with SYMBOL as a prompt.
 This uses the `completing-read' interface.  See
-`citre-select-location-function' for the use of this function."
-  (pcase (length locations)
-    (1 (car locations))
-    (_ (completing-read (format "%s: " symbol)
-                        locations nil t))))
+`citre-jump-select-definition-function' for the use of this function."
+  (pcase (length definitions)
+    (1 (car definitions))
+    (_ (completing-read (format "%s: " symbol) definitions nil t))))
 
 ;;;;; Commands
 
@@ -280,9 +279,10 @@ definition that is currently peeked."
          (locations (mapcar #'car loc-alist)))
     (if (null locations)
         (user-error "Can't find definition for %s" symbol)
-      (citre-goto-tag (alist-get (funcall citre-select-location-function
-                                          locations symbol)
-                                 loc-alist nil nil #'equal)))
+      (citre-goto-tag (alist-get
+                       (funcall citre-jump-select-definition-function
+                                locations symbol)
+                       loc-alist nil nil #'equal)))
     (ring-insert citre--marker-ring marker)))
 
 (defun citre-jump-back ()
