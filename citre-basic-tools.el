@@ -306,15 +306,18 @@ definition that is currently peeked."
 ;;;;; Internals
 
 (defvar citre--completion-cache
-  `(:file nil :symbol nil :bounds nil :tags-file nil :time nil :collection nil)
+  `(:file nil :symbol nil :bounds nil :substr nil :collection nil)
   "A plist for completion cache.
 Its props are:
 
 - `:file': The file where the completion happens.
 - `:symbol': The symbol that's been completed.
 - `:bounds': The bound positions of `:symbol'.
-- `:tags-file': The tags file used for completion.
-- `:time': The last update time of the tags file.
+- `:substr': Whether substring completion is used.  This is
+  needed since in the same position, user may use popup
+  completion that does prefix completion, and use their own
+  command that let binds `citre-capf-substr-completion' to t and
+  call `completion-at-point'.
 - `:collection': The completion string collection.")
 
 (defun citre--completion-get-annotation (str)
@@ -377,9 +380,7 @@ non-nil, and the calculation is interrupted by user input."
   (if citre-capf-optimize-for-popup
       (let* ((cache citre--completion-cache)
              (file (buffer-file-name))
-             (bounds (citre-get-property 'bounds symbol))
-             (tagsfile (citre-get-property 'tags-file symbol))
-             (time (gethash 'time (citre-core--tags-file-info tagsfile))))
+             (bounds (citre-get-property 'bounds symbol)))
         (if (and citre-capf-optimize-for-popup
                  (equal (plist-get cache :file) file)
                  (string-prefix-p (plist-get cache :symbol) symbol)
@@ -388,8 +389,8 @@ non-nil, and the calculation is interrupted by user input."
                  ;; different positions can produce different results,
                  ;; depending on the language support implementation.
                  (eq (car (plist-get cache :bounds)) (car bounds))
-                 (equal (plist-get cache :tags-file) tagsfile)
-                 (equal (plist-get cache :time) time))
+                 (not (xor (plist-get cache :substr)
+                           citre-capf-substr-completion)))
             (plist-get cache :collection)
           ;; Make sure we get a non-nil collection first, then setup the cache,
           ;; since the calculation can be interrupted by user input, and we get
@@ -399,8 +400,7 @@ non-nil, and the calculation is interrupted by user input."
             (plist-put cache :file file)
             (plist-put cache :symbol (substring-no-properties symbol))
             (plist-put cache :bounds bounds)
-            (plist-put cache :tags-file tagsfile)
-            (plist-put cache :time time)
+            (plist-put cache :substr citre-capf-substr-completion)
             (plist-put cache :collection collection)
             collection)))
     (citre--completion-make-collection
