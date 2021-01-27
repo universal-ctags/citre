@@ -519,6 +519,12 @@ is a list of tags of that kind."
       (setq imenu-create-index-function
             citre--imenu-create-index-function-orig)))))
 
+(defun citre-auto-enable-citre-mode ()
+  "Enable `citre-mode' when a tags file can be found.
+Put this in `find-file-hook' to automatically enable `citre-mode'
+when opening a file."
+  (when (citre-tags-file-path) (citre-mode)))
+
 (provide 'citre-basic-tools)
 
 ;; Local Variables:
