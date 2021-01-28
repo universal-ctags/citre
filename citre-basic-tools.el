@@ -257,6 +257,7 @@ This uses the `completing-read' interface.  See
 
 ;;;;; Commands
 
+;;;###autoload
 (defun citre-jump ()
   "Jump to the definition of the symbol at point.
 When there's multiple definitions, it lets you pick one using the
@@ -520,6 +521,7 @@ is a list of tags of that kind."
       (setq imenu-create-index-function
             citre-imenu--create-index-function-orig)))))
 
+;;;###autoload
 (defun citre-auto-enable-citre-mode ()
   "Enable `citre-mode' when a tags file can be found.
 Put this in `find-file-hook' to automatically enable `citre-mode'

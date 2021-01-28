@@ -1124,6 +1124,7 @@ recalculated."
 
 ;;;;; Create/end/restore peek sessions
 
+;;;###autoload
 (defun citre-peek (&optional buf point)
   "Peek the definition of the symbol at point.
 When BUF or POINT is nil, it's set to the current buffer and
@@ -1136,6 +1137,7 @@ point."
     (citre-peek--setup-session buf point))
   (citre-peek--mode))
 
+;;;###autoload
 (defun citre-ace-peek ()
   "Peek the definition of a symbol on screen using ace jump.
 Press a key in `citre-peek-ace-pick-symbol-at-point-keys' to pick
