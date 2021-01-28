@@ -1031,7 +1031,13 @@ DEFLIST is the currently browsed def list."
          (displayed-defs-strlist
           (make-list (length displayed-tags) nil))
          (displayed-idx
-          (- idx (car citre-peek--displayed-defs-interval))))
+          (- idx (car citre-peek--displayed-defs-interval)))
+         (bg-selected (if (< (display-color-cells) 88)
+                          (list :inverse-video t :extend t)
+                        (list :background citre-peek--bg-selected :extend t)))
+         (bg-alt (if (< (display-color-cells) 88)
+                     (list :extend t)
+                   (list :background citre-peek--bg-alt :extend t))))
     (dotimes (n (length displayed-defs))
       (let ((line (citre-peek--make-definition-str
                    (nth n displayed-tags) root)))
@@ -1041,13 +1047,9 @@ DEFLIST is the currently browsed def list."
         (setq line (concat (citre--fit-line line) "\n"))
         (if (eq n displayed-idx)
             (setf (nth n displayed-defs-strlist)
-                  (citre--add-face line
-                                   (list :background citre-peek--bg-selected
-                                         :extend t)))
+                  (citre--add-face line bg-selected))
           (setf (nth n displayed-defs-strlist)
-                (citre--add-face line
-                                 (list :background citre-peek--bg-alt
-                                       :extend t))))))
+                (citre--add-face line bg-alt)))))
     (string-join displayed-defs-strlist)))
 
 (defun citre-peek--session-info (deflist)
