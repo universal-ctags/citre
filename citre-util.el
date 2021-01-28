@@ -63,22 +63,15 @@ corresponding tags file will be used."
 
 ;;;;; Options: Behavior of Citre
 
-(defcustom citre-case-sensitivity 'smart
-  "Case sensitivity of auto-completion.  Can be:
-
-- `sensitive': Always do case sensitive completion.
-- `insensitive': Always do case insensitive completion.
-- `smart': Be sensive when completing a symbol with uppercase
-  letters or underscores, otherwise be insensitive.
+(defcustom citre-completion-case-sensitive t
+  "Case sensitivity of auto-completion.
 
 Note for developers: Actually this doesn't affect auto-completion
 directly.  This option controls the behavior of `citre-get-tags'
 when its argument MATCH is not nil or `exact', and when this is
 the case, it's likely that the user is getting tags for
 auto-completion."
-  :type '(choice (const :tag "Sensitive" sensitive)
-                 (const :tag "Insensitive" insensitive)
-                 (const :tag "Smart" smart))
+  :type 'boolean
   :group 'citre)
 
 (defcustom citre-after-jump-hook '(citre-recenter-and-blink)
@@ -136,9 +129,9 @@ relatively."
   "Get tags in tags file TAGSFILE that match NAME.
 This is like `citre-core-get-tags', except that:
 
-- TAGSFILE could be nil, and it will be find automatically.
-- When MATCH is nil or `exact', CASE-FOLD is always nil,
-  otherwise it's decided by `citre-case-sensitivity' and NAME.
+- TAGSFILE could be nil, and it will be find automatically.  When
+- MATCH is nil or `exact', CASE-FOLD is always nil, otherwise
+- it's decided by `citre-completion-case-sensitive' and NAME.
 
 TAGSFILE is the canonical path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
@@ -147,22 +140,13 @@ see `citre-core-get-tags'.
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-core-get-field'."
-  (let* ((tagsfile- (or tagsfile (citre-tags-file-path)))
-         (case-fold- (pcase citre-case-sensitivity
-                       ('sensitive nil)
-                       ('insensitive t)
-                       ('smart (if (memq match '(nil exact))
-                                   nil
-                                 (if (and name
-                                          (string= (downcase name) name)
-                                          (not (string-match "_" name)))
-                                     t nil))))))
-    (citre-core-get-tags tagsfile- name match case-fold-
-                         :filter filter :sorter sorter
-                         :require require :optional optional
-                         :exclude exclude
-                         :parse-all-fields parse-all-fields
-                         :lines lines)))
+  (citre-core-get-tags (or tagsfile (citre-tags-file-path)) name match
+                       (not citre-completion-case-sensitive)
+                       :filter filter :sorter sorter
+                       :require require :optional optional
+                       :exclude exclude
+                       :parse-all-fields parse-all-fields
+                       :lines lines))
 
 ;;;; Helpers
 
@@ -339,7 +323,8 @@ TAGSFILE is the canonical path of the tags file.  If SYMBOL is
 non-nil, use that symbol instead.  If TAGSFILE is not specified,
 fint it automatically.  If SUBSTR-COMPLETION is non-nil, get tags
 that contains SYMBOL, or get tags that starts with SYMBOL.  The
-case sensitivity is controlled by `citre-case-sensitivity'.
+case sensitivity is controlled by
+`citre-completion-case-sensitive'.
 
 The returned value is a list of tags.  Nil is returned when the
 completion can't be done."
