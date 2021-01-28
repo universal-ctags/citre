@@ -154,8 +154,8 @@ and some of its fields, which can be utilized by
                        ('smart (if (memq match '(nil exact))
                                    nil
                                  (if (and name
-                                          (or (string= (downcase name) name)
-                                              (string-match "_" name)))
+                                          (string= (downcase name) name)
+                                          (not (string-match "_" name)))
                                      t nil))))))
     (citre-core-get-tags tagsfile- name match case-fold-
                          :filter filter :sorter sorter
