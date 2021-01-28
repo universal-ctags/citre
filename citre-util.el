@@ -97,15 +97,26 @@ auto-completion."
 Annotations include kind, type, etc."
   :group 'citre)
 
-(defcustom citre-definition-missing-file-mark
-  (propertize "!" 'face 'warning)
-  "Mark added before missing files in definitions."
+(defcustom citre-definition-annotation-separator
+  (propertize "/" 'face 'citre-definition-annotation-face)
+  "The separator between kind and type in annotation."
   :type 'string
   :group 'citre)
 
 (defcustom citre-definition-reference-mark
   (propertize "<R>" 'face 'citre-definition-annotation-face)
   "Mark added for references in definitions."
+  :type 'string
+  :group 'citre)
+
+(defface citre-definition-path-face
+  '((t :inherit font-lock-function-name-face))
+  "Face used for the path in a definition."
+  :group 'citre)
+
+(defcustom citre-definition-missing-file-mark
+  (propertize "!" 'face 'warning)
+  "Mark added before missing files in definitions."
   :type 'string
   :group 'citre)
 
@@ -345,7 +356,7 @@ completion can't be done."
                     :require '(name)
                     :optional '(ext-kind-full signature typeref))))
 
-;;;;; APIs: Displaying tags
+;;;;; APIs: Display tags
 
 ;;;;;; Internals
 
@@ -397,10 +408,9 @@ PROP controls the format.  See `citre-make-tag-str' for details."
       (concat
        (propertize (or (plist-get prop :prefix) "") 'face face)
        (if ref-first (or reference ""))
-       (propertize (concat (or kind "")
-                           (if (and kind type) "/" "")
-                           (or type ""))
-                   'face face)
+       (concat (propertize (or kind "") 'face face)
+               (if (and kind type) citre-definition-annotation-separator "")
+               (propertize (or type "") 'face face))
        (if (not ref-first) (or reference ""))
        (propertize (or (plist-get prop :suffix) "") 'face face)))))
 
@@ -420,7 +430,7 @@ PROP controls the format.  See `citre-make-tag-str' for details."
             (if (file-exists-p abspath) ""
               citre-definition-missing-file-mark)
             (propertize (citre--relative-path abspath (plist-get prop :root))
-                        'face 'font-lock-function-name-face))
+                        'face 'citre-definition-path-face))
          "")
        (if line
            (concat (if abspath "(" "")

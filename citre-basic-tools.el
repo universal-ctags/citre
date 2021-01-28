@@ -167,7 +167,7 @@ number if they know the file is renamed/moved to which file."
   "Make xref object of TAG."
   (let* ((path (citre-core-get-field 'ext-abspath tag))
          (file-existance
-          (if (file-exists-p path) "" "*missing*"))
+          (if (file-exists-p path) "" citre-definition-missing-file-mark))
          (line (citre-xref--get-linum tag)))
     (xref-make
      (citre-make-tag-str tag nil
@@ -323,15 +323,15 @@ Its props are:
 STR is a candidate in a capf session.  See the implementation of
 `citre-completion-at-point'."
   (let* ((kind (citre-get-property 'kind str))
-         (type (citre-get-property 'type str)))
+         (type (citre-get-property 'type str))
+         (face 'citre-definition-annotation-face))
     (when (or kind type)
-      (propertize
-       (concat " ("
-               (or kind "")
-               (if (and kind type) "/" "")
-               (or type "")
-               ")")
-       'face 'citre-definition-annotation-face))))
+      (concat
+       (propertize " (" 'face face)
+       (propertize (or kind "") 'face face)
+       (if (and kind type) citre-definition-annotation-separator "")
+       (propertize (or type "") 'face face)
+       (propertize ")" 'face face)))))
 
 (defun citre--completion-make-collection (tags)
   "Make collection for auto-completion of TAGS."
