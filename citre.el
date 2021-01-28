@@ -33,6 +33,7 @@
 (require 'citre-basic-tools)
 (require 'citre-peek)
 
+(require 'citre-lang-c)
 (require 'citre-lang-fileref)
 
 (provide 'citre)
