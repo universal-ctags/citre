@@ -56,7 +56,7 @@ one, then the rest will be ignored)."
 
 (defcustom citre-tags-file-alist nil
   "Alist of directory -> tags file.
-If the buffer file is in one of the directories, the
+If current file in buffer is in one of the directories, the
 corresponding tags file will be used."
   :type '(alist :key-type string :value-type string)
   :group 'citre)
@@ -223,7 +223,7 @@ A value of it is a plist.  Its props and values are:
   text in it as a symbol, so when your function doesn't work well
   for the user, they can manually specify which part to get.
   `citre-get-marked-symbol' implements this, and is also used by
-  `citre-get-symbol'.
+  `citre-get-symbol-default'.
 
 - `:completion-filter': The filter for auto-completion.
 
@@ -489,7 +489,7 @@ Avaliable ones are:
 
 All components have `:prefix' and `:suffix' properties to attach
 extra prefix and suffix strings to them.  When a component or
-some parts of it can't be generated, they are simply omitted.
+some parts of it can't be generated, they are omitted.
 
 SEPARATOR specifies the separator between components.  A space is
 used when it's nil."

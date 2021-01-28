@@ -106,10 +106,11 @@ This is faster than `file-name-extension'."
   (match-string 1 file))
 
 (defmacro citre-core--error-on-arg (arg test)
-  "Test ARG using TEST, and throw an error if it fails/throws an error.
-When calling the APIs, some arguments are calculated on the fly,
-and they may have problems like being empty, or not having the
-right type for being nil.  This should be used to test them."
+  "Test ARG using TEST, and throw an error if it fails.
+When calling the APIs, some arguments are likely to be calculated
+based on information fetched from the environment, and they may
+have problems like being empty, or not having the right type for
+being nil.  This should be used to test them."
   `(unless (ignore-errors (funcall ,test ,arg))
      (error "%s fails on %s.  It is a %s: %S"
             (quote ,test) (upcase (symbol-name (quote ,arg)))
@@ -135,7 +136,7 @@ Info fields and their corresponding values are:
 - `relative-path-p': Whether there's relative path used in the
   tags file.
 - `dir': The current working directory when generating the tags
-  file.  This can be nil when `use-relative-path' is t, since
+  file.  This can be nil when `relative-path-p' is t, since
   `path' would be useless in this situation.
 - `one-letter-kind-p': Whether the tags file uses single-letter
   kind field.
@@ -144,14 +145,14 @@ Info fields and their corresponding values are:
   `citre-core--kind-name-single-to-full-table', or nil if the
   TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
-(defun citre--core-get-dir (tag ptag-cwd tagsfile relative-path-p)
+(defun citre-core--get-dir (tag ptag-cwd tagsfile relative-path-p)
   "Get the `dir' info of TAGSFILE.
 TAG is a tag from the file, PTAG-CWD is the value of TAG_PROC_CWD
 pseudo tag.  RELATIVE-PATH-P indicates whether the tags file uses
 relative path."
   (or ptag-cwd
-      ;; Further inspect it only when relative path is used.
       (let ((cwd-guess (file-name-directory tagsfile)))
+        ;; Further inspect it only when relative path is used.
         (when relative-path-p
           (or (when (file-exists-p
                      (expand-file-name (gethash 'input tag)
@@ -160,7 +161,7 @@ relative path."
               (read-directory-name
                (format "Root dir of tags file %s: " tagsfile)))))))
 
-(defun citre--core-get-kind-table (kind-descs)
+(defun citre-core--get-kind-table (kind-descs)
   "Get the `kind-table' info.
 KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
   (when kind-descs
@@ -181,8 +182,8 @@ KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
 ;; loop from happening.  We use the following rules:
 ;;
 ;; - We must not ask for extension fields (i.e., fields that don't exists in
-;;   the tags file, but defined by Citre) here to get tags file info.  -
-;;   `citre-core-get-tags', when used to get only regular fields (i.e.,
+;;   the tags file, but defined by Citre) here to get tags file info.
+;; - `citre-core-get-tags', when used to get only regular fields (i.e.,
 ;;   non-extension fields), must not ask for tags file info (which is what we
 ;;   are doing).
 
@@ -215,14 +216,14 @@ returned."
     (puthash 'time recent-mod info)
     ;; path
     (puthash 'relative-path-p relative-path-p info)
-    (puthash 'dir (citre--core-get-dir tag ptag-cwd tagsfile relative-path-p)
+    (puthash 'dir (citre-core--get-dir tag ptag-cwd tagsfile relative-path-p)
              info)
     ;; kind
     (puthash 'one-letter-kind-p
              (eq 1 (length (citre-core-get-field 'kind tag)))
              info)
     (puthash 'kind-table
-             (citre--core-get-kind-table kind-descs)
+             (citre-core--get-kind-table kind-descs)
              info)
     info))
 
@@ -232,7 +233,7 @@ returned."
 
 (defun citre-core--get-lines
     (tagsfile &optional name match case-fold filter sorter action lines)
-  "Get lines in tags file TAGSFILE using readtags.
+  "Get lines in TAGSFILE using readtags.
 See `citre-core-get-tags' to know about NAME, MATCH, CASE-FOLD,
 FILTER, SORTER and LINES.  ACTION can be nil, to get regular
 tags, or any valid actions in readtags, e.g., \"-D\", to get
@@ -266,7 +267,7 @@ pseudo tags."
          (proc-sentinel
           (lambda (proc msg)
             ;; The MSG passed to the sentinel function is not reliable since it
-            ;; changes as the environment language changes.  So we use
+            ;; changes as the locale environment changes.  So we use
             ;; `process-status'.
             (pcase (process-status proc)
               ;; The signal is sent by us as there are enough LINES in RESULT.
@@ -337,7 +338,7 @@ pseudo tags."
 
 (defun citre-core--read-field-value (value)
   "Translate escaped sequences in VALUE.
-See man tags(5) to know about the escaped sequences.  VALUE
+See tags(5) manpage to know about the escaped sequences.  VALUE
 should be a field value in a tags file."
   (if-let ((backslash-idx
             (citre-core--string-match-all-escaping-backslash value)))
@@ -367,8 +368,8 @@ should be a field value in a tags file."
 
 (defun citre-core--forward-pattern (line pos)
   "Jump over the pattern field.
-LINE is a tag line, POS is the start position of the pattern
-field in it.  This returns its end position."
+LINE is a tagline, POS is the start position of the pattern field
+in it.  This returns its end position."
   ;; If pattern begins with a number, it will be like one of
   ;;
   ;; - 20;"
@@ -399,9 +400,9 @@ field in it.  This returns its end position."
 
 (defun citre-core--lexer-forward-field-name (line length lexer)
   "Move the lexer forward the following field name.
-LINE is a tag line.  LENGTH is its length.  LEXER is a vector
-like [POS N], where POS is the beginning position of a field, and
-it's the Nth field in the line (N counts from 0).
+LINE is a tagline.  LENGTH is its length.  LEXER is a vector like
+[POS N], where POS is the beginning position of a field, and it's
+the Nth field in the line (N counts from 0).
 
 This sets POS to the beginning of the field value, and returns
 the field name as a symbol.  When there's no more field to parse,
@@ -436,9 +437,9 @@ this returns nil, and the caller should stop parsing."
 (defun citre-core--lexer-forward-field-value
     (line length lexer &optional parse-value)
   "Move the lexer forward the following field value.
-LINE is a tag line.  LENGTH is its length.  LEXER is a vector
-like [POS N], where POS is the beginning position of a field
-value, and it's the Nth field in the line (N counts from 0).
+LINE is a tagline.  LENGTH is its length.  LEXER is a vector like
+[POS N], where POS is the beginning position of a field value,
+and it's the Nth field in the line (N counts from 0).
 
 This sets POS to the beginning of the next field, and add 1 to N.
 If PARSE-VALUE is non-nil, returns the field value."
@@ -485,10 +486,10 @@ OPTIONAL or EXT-DEP to make sure they are captured.
 TAGSFILE-INFO is needed to offer additional information for these
 extension fields.  It is the additional info of the tags file
 containing LINE.  Such TAGSFILE-INFO should be get using
-`citre-core--get-tags-file-info'.
+`citre-core-tags-file-info'.
 
 The arguments must satisfy certain conditions, which the caller
-should take care of.  `citre--core-parse-line' doesn't check them
+should take care of.  `citre-core--parse-line' doesn't check them
 for the sake of performance.  Other than those mentioned above,
 we still have:
 
@@ -608,10 +609,8 @@ TAGSFILE-INFO is the additional info that FIELD depends on."
 
 (defun citre-core--get-ext-abspath (tag tagsfile-info)
   "Return the absolute path of the input file.
-This needs the `input' field to be presented in TAG, and if it's
-value is a relative path, `path' info in TAGSFILE-INFO is used.
-If the `path' info doesn't contain the current working directory
-when generating the tags file, an error will be signaled."
+This needs the `input' field to be presented in TAG, and if its
+value is a relative path, `path' info in TAGSFILE-INFO is used."
   (let ((input (or (gethash 'input tag)
                    (error "\"input\" field not found in TAG"))))
     (if (file-name-absolute-p input)
@@ -650,8 +649,7 @@ If this fails, the single-letter kind is returned directly."
     (tagsfile &optional name match case-fold
               &key filter sorter
               require optional exclude parse-all-fields lines)
-  "Get tags in tags file TAGSFILE based on the arguments.
-
+  "Get tags in TAGSFILE.
 This is like `citre-core-get-tags', which actually calls this
 function internally.  The difference is this is a interface
 that's closer to actual readtags command line calls.  The
@@ -708,7 +706,7 @@ LINES, see `citre-core-get-tags'."
              tagsfile name match case-fold
              filter sorter nil lines))))
 
-;;;; Internals: Extension fields from tags
+;;;; Internals: Extra extension fields
 
 (defvar citre-core-extra-ext-fields-table
   #s(hash-table
@@ -734,10 +732,10 @@ should return nil, rather than signal an error, so it feels more
 like `gethash', which makes sense since the tags are indeed hash
 tables.
 
-This table is intended to be extended by libraries that uses
-citre-core.  They should not modify existing key-value pairs in
-this table, and the added keys should be prefixed by the name of
-the library to avoid naming conflict.")
+Packages that uses citre-core could extend this table.  They
+should not modify existing key-value pairs in this table, and the
+added keys should be prefixed by the name of the library to avoid
+naming conflict.")
 
 (defun citre-core--get-line-from-tag (tag)
   "Get the line number from TAG.
@@ -851,8 +849,8 @@ Otherwise it's directly returned."
                                &optional case-fold invert keep-missing)
   "Return a filter expression that matches STR1 and STR2.
 Both STRs can be a string, or a symbol of the field name.  STR2
-can be a list of strings if MATCH is `csv-contain', see below.
-MATCH could be:
+can also be a list of strings if MATCH is `csv-contain', see
+below.  MATCH could be:
 
 - `eq': See if STR1 equals STR2.
 - `prefix': See if STR1 is prefixed by STR2.
@@ -1120,7 +1118,7 @@ NAME should not start with \"!_\".  Run
 
 to know the valid NAMEs.  The return value is a list, and each
 element of it is another list consists of the fields separated by
-tabs in a pseudo tag line."
+tabs in a pseudo tagline."
   (citre-core--error-on-arg name #'citre-core--string-non-empty-p)
   (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
   (let* ((name (concat "!_" name))
@@ -1136,8 +1134,7 @@ tabs in a pseudo tag line."
     (tagsfile &optional name match case-fold
               &key filter sorter
               require optional exclude parse-all-fields lines)
-  "Get tags in tags file TAGSFILE based on the arguments.
-
+  "Get tags in TAGSFILE.
 TAGSFILE is the canonical path of tags file.  The meaning of the
 optional arguments are:
 
@@ -1197,20 +1194,18 @@ OPTIONAL and EXCLUDE should not be used together.  When both
 OPTIONAL and EXCLUDE are not presented, then only the fields in
 REQUIRE are parsed, unless PARSE-ALL-FIELDS is non-nil.
 
-Fields should be symbols.  Please notice these fields:
+Fields should be symbols.  Please notice these field names:
 
 - `name': The name of the tag itself.
 - `input': The file containing the tag.
 - `pattern': EX command used to search the tag in the file.
 
-Citre treats some fields specially:
-
-- `scope': It's splitted into 2 fields: `scope-kind' and
-  `scope-name'.  It's recommended to generate tags file with
-  --fields=+Z, or this field will not be prefixed by \"scope:\"
-  in the tags file, and there's no reliable way to know such a
-  field is about scope.  Currently when this happens, the class
-  and struct scope is handled properly.
+If the tags file is not generated with --fields=+Z, then a
+`scope' field like \"scope:class:A\" becomes \"class:A\".  If
+this happens, there's no reliable way to know such a field is
+actually a `scope' field.  Currently, when the scope is class or
+struct, Citre parses them correctly.  Otherwise the scope name is
+used as the field name.
 
 Certain fields may offer ambiguous information.  To ascertain
 them, Citre offers its own extension fields:
@@ -1283,20 +1278,19 @@ real-time based on TAG.  The built-in ones are:
 
 - `extra-line': The line number of the tag.  This uses the `line'
   field directly, and if it's not presented, get the line number
-  from the pattern field if it's a combined field.  If both can't
+  from the pattern field if it's recorded there.  If both can't
   be done, return nil.
 
 - `extra-lang': The language.  It uses the `language' field if
   it's presented, or guesses the language by the file extension.
   When both fails, the file extension (or the file name, if it
-  doesn't have an extension) is returned.  If this also
-  fails (i.e. TAG doesn't contain an `input' field), return nil.
+  doesn't have an extension) is returned.
 
 - `extra-matched-str': The substring in the source file that's
   matched by ctags when generating the tag.  It's often the whole
   line containing the tag.  This depends on the `pattern' field,
-  and returns nil if it doesn't record the matched
-  string (e.g. in tags file generated using the -n option)."
+  and returns nil if it doesn't record the matched string (e.g.,
+  in tags file generated using the -n option)."
   (let ((maybe-split (if after-colon
                          #'citre-core--string-after-1st-colon
                        #'identity))
@@ -1437,7 +1431,7 @@ The search is helped by:
 
 - The pattern field.
 - The line field, if the pattern is not a combined
-  pattern (i.e. not contatining the line number).
+  pattern (i.e., not contatining the line number).
 - The name of the tag.
 
 The pattern and name field need to be presented, or an error will

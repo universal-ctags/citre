@@ -110,7 +110,7 @@ calculating completions, making it slicker to use.
 other users, set this to nil may be slightly better, since a
 completion session can be interrupted when you call
 `completion-at-point', and while it's calculating, you press some
-key by mistake, but that doesn't happen much."
+key by mistake, but that doesn't happen very often."
   :type 'boolean
   :group 'citre)
 
@@ -244,7 +244,7 @@ simple tag name matching.  This function is for it."
 
 ;;;;; Internals
 
-(defvar citre--marker-ring (make-ring 50)
+(defvar citre-jump--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
 
 (defun citre-jump-completing-read (definitions symbol)
@@ -259,8 +259,9 @@ This uses the `completing-read' interface.  See
 
 (defun citre-jump ()
   "Jump to the definition of the symbol at point.
-During an active `citre-peek' session, this jumps to the
-definition that is currently peeked."
+When there's multiple definitions, it lets you pick one using the
+`completing-read' UI, or you could use your own UI by customizing
+`citre-select-definition-function'."
   (interactive)
   (let* ((marker (point-marker))
          (symbol (citre-get-symbol))
@@ -283,12 +284,12 @@ definition that is currently peeked."
                        (funcall citre-jump-select-definition-function
                                 locations symbol)
                        loc-alist nil nil #'equal)))
-    (ring-insert citre--marker-ring marker)))
+    (ring-insert citre-jump--marker-ring marker)))
 
 (defun citre-jump-back ()
   "Go back to the position before last `citre-jump'."
   (interactive)
-  (let ((ring citre--marker-ring))
+  (let ((ring citre-jump--marker-ring))
     (when (ring-empty-p ring)
       (user-error "No more previous history"))
     (let ((marker (ring-remove ring 0)))
@@ -303,7 +304,7 @@ definition that is currently peeked."
 
 ;;;;; Internals
 
-(defvar citre--completion-cache
+(defvar citre-capf--cache
   `(:file nil :symbol nil :bounds nil :substr nil :collection nil)
   "A plist for completion cache.
 Its props are:
@@ -318,7 +319,7 @@ Its props are:
   call `completion-at-point'.
 - `:collection': The completion string collection.")
 
-(defun citre--completion-get-annotation (str)
+(defun citre-capf--get-annotation (str)
   "Generate annotation for STR.
 STR is a candidate in a capf session.  See the implementation of
 `citre-completion-at-point'."
@@ -333,8 +334,8 @@ STR is a candidate in a capf session.  See the implementation of
        (propertize (or type "") 'face face)
        (propertize ")" 'face face)))))
 
-(defun citre--completion-make-collection (tags)
-  "Make collection for auto-completion of TAGS."
+(defun citre-capf--make-collection (tags)
+  "Make auto-completion string collection from TAGS."
   (let* ((collection
           (mapcar
            (lambda (tag)
@@ -361,7 +362,7 @@ STR is a candidate in a capf session.  See the implementation of
     (cl-remove-duplicates
      collection :test str-equal)))
 
-(defun citre--capf-get-completions (symbol)
+(defun citre-capf--get-completions (symbol)
   "Get completions of SYMBOL for capf.
 This may return nil when `citre-capf-optimize-for-popup' is
 non-nil, and the calculation is interrupted by user input."
@@ -373,10 +374,10 @@ non-nil, and the calculation is interrupted by user input."
         (val val))
     (citre-get-completions symbol nil citre-capf-substr-completion)))
 
-(defun citre--capf-get-collection (symbol)
+(defun citre-capf--get-collection (symbol)
   "Get completion collection of SYMBOL for capf."
   (if citre-capf-optimize-for-popup
-      (let* ((cache citre--completion-cache)
+      (let* ((cache citre-capf--cache)
              (file (buffer-file-name))
              (bounds (citre-get-property 'bounds symbol)))
         (if (and citre-capf-optimize-for-popup
@@ -396,16 +397,16 @@ non-nil, and the calculation is interrupted by user input."
           ;; Make sure we get a non-nil collection first, then setup the cache,
           ;; since the calculation can be interrupted by user input, and we get
           ;; nil, which aren't the actual completions.
-          (when-let ((collection (citre--completion-make-collection
-                                  (citre--capf-get-completions symbol))))
+          (when-let ((collection (citre-capf--make-collection
+                                  (citre-capf--get-completions symbol))))
             (plist-put cache :file file)
             (plist-put cache :symbol (substring-no-properties symbol))
             (plist-put cache :bounds bounds)
             (plist-put cache :substr citre-capf-substr-completion)
             (plist-put cache :collection collection)
             collection)))
-    (citre--completion-make-collection
-     (citre--capf-get-completions symbol))))
+    (citre-capf--make-collection
+     (citre-capf--get-completions symbol))))
 
 ;;;;; Entry point
 
@@ -415,12 +416,12 @@ non-nil, and the calculation is interrupted by user input."
               (bounds (citre-get-property 'bounds symbol))
               (start (car bounds))
               (end (cdr bounds))
-              (collection (citre--capf-get-collection symbol))
+              (collection (citre-capf--get-collection symbol))
               (get-docsig
                (lambda (cand)
                  (citre-get-property 'signature cand))))
     (list start end collection
-          :annotation-function #'citre--completion-get-annotation
+          :annotation-function #'citre-capf--get-annotation
           :company-docsig get-docsig
           ;; This makes our completion function a "non-exclusive" one, which
           ;; means to try the next completion function when current completion
@@ -443,10 +444,10 @@ non-nil, and the calculation is interrupted by user input."
 
 ;;;; Tool: Imenu integration
 
-(defvar-local citre--imenu-create-index-function-orig nil
+(defvar-local citre-imenu--create-index-function-orig nil
   "Original value of `imenu-create-index-function' in buffer.")
 
-(defun citre--classify-tags (tags)
+(defun citre-imenu--classify-tags (tags)
   "Classify TAGS based on the `ext-kind-full' field.
 This creates an alist, its key is `kind' field value, and value
 is a list of tags of that kind."
@@ -464,7 +465,7 @@ is a list of tags of that kind."
                       (compare-strings str1 nil nil str2 nil nil))
              :key #'car)))
 
-(defun citre--make-imenu-index (tag)
+(defun citre-imenu--make-index (tag)
   "Create Imenu index for TAG."
   (cons (citre-make-tag-str tag nil
                             '(name)
@@ -488,17 +489,17 @@ is a list of tags of that kind."
                 :sorter (citre-core-sorter 'line)
                 :require '(name pattern)
                 :optional '(ext-kind-full line typeref extras)))
-         (tags (citre--classify-tags tags)))
+         (tags (citre-imenu--classify-tags tags)))
     (dotimes (i (length tags))
       (setf (cdr (nth i tags))
-            (mapcar #'citre--make-imenu-index (cdr (nth i tags)))))
+            (mapcar #'citre-imenu--make-index (cdr (nth i tags)))))
     tags))
 
 ;;;; Tool: Citre mode
 
 ;;;###autoload
 (define-minor-mode citre-mode
-  "Ctags IDE on the True Editor"
+  "Enable `completion-at-point', xref and imenu integration."
   :lighter " Citre"
   (cond
    (citre-mode
@@ -508,7 +509,7 @@ is a list of tags of that kind."
       (add-hook 'completion-at-point-functions
                 #'citre-completion-at-point nil t))
     (when citre-enable-imenu-integration
-      (setq citre--imenu-create-index-function-orig
+      (setq citre-imenu--create-index-function-orig
             imenu-create-index-function)
       (setq imenu-create-index-function #'citre-imenu-create-index-function)))
    (t
@@ -517,7 +518,7 @@ is a list of tags of that kind."
                  #'citre-completion-at-point t)
     (when citre-enable-imenu-integration
       (setq imenu-create-index-function
-            citre--imenu-create-index-function-orig)))))
+            citre-imenu--create-index-function-orig)))))
 
 (defun citre-auto-enable-citre-mode ()
   "Enable `citre-mode' when a tags file can be found.

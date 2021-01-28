@@ -76,7 +76,7 @@ non-nil."
 ;;;;; Keybindings
 
 (defcustom citre-peek-ace-keys '(?a ?s ?d ?f ?j ?k ?l ?\;)
-  "Ace keys used for `citre-peek-through'."
+  "Ace keys used for `citre-peek-through' and `citre-ace-peek'."
   :type '(repeat :tag "Keys" character)
   :group 'citre)
 
@@ -131,9 +131,9 @@ non-nil."
 You can customize the appearance of the borders by setting the
 height and background properties of this face.
 
-In the terminal version of Emacs, a dashed pattern is used as the
-border, and only the background property of this face is used, as
-the color of the dashes."
+In terminal Emacs, a dashed pattern is used as the border, and
+only the background property of this face is used, as the color
+of the dashes."
   :group 'citre)
 
 (defface citre-peek-ace-str-face
@@ -395,8 +395,8 @@ returned by `citre--ace-key-seqs' or `citre--pop-ace-key-seqs'."
 
 (defun citre--fit-line (str)
   "Fit STR in current window.
-When STR is too long, it will be truncated, and \"...\" is added
-at the end."
+When STR is too long, it will be truncated, and
+`citre-peek-ellipsis' is added at the end."
   ;; Depending on the wrapping behavior, in some terminals, a line with exact
   ;; (window-body-width) characters can be wrapped. So we minus it by one.
   (let ((limit (1- (window-body-width))))
@@ -550,21 +550,30 @@ any symbol."
 
 ;; NOTE: Here's a list of when should each state variable be changed.  Keep
 ;; these in mind when you are developing citre-peek related commands.
-
-;; - `citre-peek--session-root-list': Set this only for a new peek session.
 ;;
-;; - `citre-peek--depth-in-root-list': Set this to 1 for a new peek session,
-;;   and modify it when moving forward/backward in the chain (including peeking
-;;   through).  Make sure it's >= 0 and <= maximum possible depth.
+;; - `citre-peek--depth-in-root-list': Set this to 0 or 1 for a new peek
+;;   session (see `citre-peek--setup-session'), and modify it when moving
+;;   forward/backward in the chain (including peeking through).  Make sure it's
+;;   >= 0 and <= maximum possible depth.
 ;;
 ;; - `citre-peek--displayed-defs-interval': Set this for a new peek session,
-;;   and when browsing the def list, and when moving in the chain.
+;;   when browsing the def list, and when moving in the chain.
 ;;
-;; - `citre-peek--temp-buffer-alist': Set this when doing ace jump (peeking
-;;   through for now), and clean it up after a succeeded/canceled jump.
+;; - `citre-peek--symbol-bounds', `citre-peek--ace-seqs': Set these for ace
+;;   jump, and clean it up afterwards.
 ;;
-;; - `citre-peek--symbol-bounds', `citre-peek--ace-seqs': Set these when
-;;   peeking through, and clean it up after
+;; - `citre-peek--content-update': Set this to t when the content in the peek
+;;   window is updated.  This variable is for preventing recalculate the
+;;   content after every command.
+;;
+;; Variables below are not going to change much, and newly added commands may
+;; not need to care about them:
+;;
+;; - `citre-peek--session-root-list': Set this only for a new peek session.
+;;
+;; - `citre-peek--temp-buffer-alist': Add pairs to this when peeking a new
+;;   non-visiting file, and clean it up when abort current peek session (i.e.,
+;;   when disabling `citre-mode').
 ;;
 ;; - `citre-peek--ov', `citre-peek--bg'(-alt, -selected): You shouldn't use
 ;;   them directly.  These are controlled by `citre-peek--mode', and it makes
@@ -572,12 +581,8 @@ any symbol."
 ;;   are set up, enable `citre-peek-mode' sets up the UI, and disable
 ;;   `citre-peek--mode' hides the UI.
 ;;
-;; - `citre-peek--content-update': Set this to t when the content in the peek
-;;   window is updated.  This variable is for preventing recalculate the
-;;   content after every command.
-;;
-;; - `citre-peek--buffer-file-name': Normally you don't need to care about it.
-;;   It's automatically set by `citre-peek--find-file-buffer'.
+;; - `citre-peek--buffer-file-name': It's automatically set by
+;;   `citre-peek--find-file-buffer'.
 
 (defvar citre-peek--session-root-list nil
   "The root def list of current peek session.")
@@ -593,7 +598,7 @@ entry, and cdr the index of the last one.")
 (defvar citre-peek--temp-buffer-alist nil
   "Files and their temporary buffers that don't exist before peeking.
 Its keys are file paths, values are buffers.  The buffers will be
-killed after `citre-peek-abort'.")
+killed after disabling `citre-peek--mode'.")
 
 (defvar citre-peek--symbol-bounds nil
   "Symbol bounds for ace jump.
@@ -766,7 +771,7 @@ Nil is returned when the file in the tag doesn't exist."
 ENTRY is an instance of `citre-peek--def-entry'.  Its
 `base-marker' and `line-offset' slots are used, or initialized if
 they are unset.  `line-offset' is limited so it doesn't go beyond
-the beinning/end of buffer.
+the beginning/end of buffer.
 
 A cons pair (BUF . POINT) is returned.  If the file in the tag
 doesn't exist, these 2 fields are all nil."
@@ -886,7 +891,8 @@ The def list is an instance of `citre-peek--def-list', with its
 `entries' slot only contains one def entry pointing to the
 current line, and NAME being the name field of the tag.
 
-The returned def list is the root def list of the peek session."
+The returned def list can be used as the root def list of the
+peek session."
   (let* ((tag (citre--make-tag-of-current-location name))
          (deflist (citre-peek--def-list-create (list tag) nil)))
     deflist))
