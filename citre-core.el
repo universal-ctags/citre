@@ -226,26 +226,6 @@ returned."
              info)
     info))
 
-(defun citre-core--tags-file-info (tagsfile)
-  "Return the additional info FIELDS of tags file TAGSFILE.
-TAGSFILE is the canonical path of the tags file.  The return
-value is a valid value in `citre--tags-file-info-alist'.
-
-This function caches the info, and uses the cache when possible."
-  (unless (file-exists-p tagsfile)
-    (error "%s doesn't exist" tagsfile))
-  (let ((recent-mod (file-attribute-modification-time
-                     (file-attributes tagsfile)))
-        (info (alist-get tagsfile
-                         citre-core--tags-file-info-alist
-                         nil nil #'equal)))
-    (if (and info (equal (gethash 'time info) recent-mod))
-        info
-      (setf (alist-get tagsfile
-                       citre-core--tags-file-info-alist
-                       nil nil #'equal)
-            (citre-core--fetch-tags-file-info tagsfile)))))
-
 ;;;; Internals: Tags file filtering & parsing
 
 ;;;;; Get lines
@@ -715,7 +695,7 @@ LINES, see `citre-core-get-tags'."
                     (cl-set-difference optional ext-fields)))
          (exclude (cl-delete-duplicates exclude))
          (info (when (or require-ext optional-ext)
-                 (citre-core--tags-file-info tagsfile))))
+                 (citre-core-tags-file-info tagsfile))))
     (when (cl-intersection exclude ext-fields)
       (error "EXCLUDE shouldn't contain extension fields"))
     (mapcar (lambda (line)
@@ -795,6 +775,28 @@ It tries these in turn:
             extension))))
 
 ;;;; APIs
+
+;;;;; Tags file info
+
+(defun citre-core-tags-file-info (tagsfile)
+  "Return the additional info of tags file TAGSFILE.
+TAGSFILE is the canonical path of the tags file.  The return
+value is a valid value in `citre--tags-file-info-alist'.
+
+This function caches the info, and uses the cache when possible."
+  (unless (file-exists-p tagsfile)
+    (error "%s doesn't exist" tagsfile))
+  (let ((recent-mod (file-attribute-modification-time
+                     (file-attributes tagsfile)))
+        (info (alist-get tagsfile
+                         citre-core--tags-file-info-alist
+                         nil nil #'equal)))
+    (if (and info (equal (gethash 'time info) recent-mod))
+        info
+      (setf (alist-get tagsfile
+                       citre-core--tags-file-info-alist
+                       nil nil #'equal)
+            (citre-core--fetch-tags-file-info tagsfile)))))
 
 ;;;;; Build filter expressions
 
@@ -944,7 +946,7 @@ filter based on that.  When IGNORE-MISSING is non-nil, also keep
 tags that don't have `kind' field."
   (let (kinds)
     (if tagsfile
-        (if (gethash 'one-letter-kind-p (citre-core--tags-file-info tagsfile))
+        (if (gethash 'one-letter-kind-p (citre-core-tags-file-info tagsfile))
             (setq kinds (gethash kind
                                  citre-core--kind-name-full-to-single-table))
           (setq kinds kind))
@@ -977,7 +979,7 @@ MATCH can be:
          (match (pcase match
                   ((or 'nil 'eq) 'eq)
                   ('in-dir 'prefix)))
-         (info (citre-core--tags-file-info tagsfile))
+         (info (citre-core-tags-file-info tagsfile))
          (cwd (gethash 'dir info))
          (relative-filename (when (and (gethash 'relative-path-p info)
                                        (file-in-directory-p filename cwd))
