@@ -48,6 +48,8 @@
   :type 'boolean
   :group 'citre)
 
+;;;###autoload
+(put 'citre-enable-xref-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-xref-integration)
 
 (defcustom citre-enable-capf-integration t
@@ -55,6 +57,8 @@
   :type 'boolean
   :group 'citre)
 
+;;;###autoload
+(put 'citre-enable-capf-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-capf-integration)
 
 (defcustom citre-enable-imenu-integration t
@@ -62,6 +66,8 @@
   :type 'boolean
   :group 'citre)
 
+;;;###autoload
+(put 'citre-enable-imenu-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-imenu-integration)
 
 ;;;;; Options: `citre-jump' related
