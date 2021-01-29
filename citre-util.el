@@ -57,8 +57,26 @@ one, then the rest will be ignored)."
 (defcustom citre-tags-file-alist nil
   "Alist of directory -> tags file.
 If current file in buffer is in one of the directories, the
-corresponding tags file will be used."
+corresponding tags file will be used.
+
+This is a buffer-local variable so you can customize it on a
+per-project basis.  Relative paths in it will be expanded against
+the project root, which is detected by
+`citre-project-root-function'."
   :type '(alist :key-type string :value-type string)
+  :group 'citre)
+
+;;;###autoload
+(put 'citre-tags-file-alist 'safe-local-variable #'listp)
+(make-variable-buffer-local 'citre-tags-file-alist)
+
+(defcustom citre-project-root-function #'citre-project-root
+  "A function that returns project root in current buffer.
+It takes no arguments.  It's used for:
+
+- Displaying the path of a tag relatively.
+- Expanding relative paths in `citre-tags-file-alist'."
+  :type 'function
   :group 'citre)
 
 ;;;;; Options: Behavior of Citre
@@ -113,13 +131,6 @@ Annotations include kind, type, etc."
   :type 'string
   :group 'citre)
 
-(defcustom citre-project-root-function #'citre-project-root
-  "A function that returns project root in current buffer.
-It takes no arguments.  It's used to display the path of a tag
-relatively."
-  :type 'function
-  :group 'citre)
-
 ;;;; Core API wrapper
 
 (cl-defun citre-get-tags
@@ -164,11 +175,18 @@ This uses `project-current' internally."
   "Return the canonical path of tags file for current buffer.
 This looks up `citre-tags-files' to find the tags file needed,
 and throws an user error if no tags file was found."
-  (let ((current-file (or (buffer-file-name) default-directory)))
+  (let ((current-file (or (buffer-file-name) default-directory))
+        (project (funcall citre-project-root-function)))
     (or
      (cl-dolist (pair citre-tags-file-alist)
-       (when (file-in-directory-p current-file (car pair))
-         (cl-return (expand-file-name (cdr pair)))))
+       (when (and (or (not (file-name-absolute-p (car pair)))
+                      (not (file-name-absolute-p (cdr pair))))
+                  (null project))
+         (user-error "Relative path used in `citre-tags-file-alist', \
+but project root can't be decided by `citre-project-root-function'"))
+       (when (file-in-directory-p current-file
+                                  (expand-file-name (car pair) project))
+         (cl-return (expand-file-name (cdr pair) project))))
      (cl-dolist (tagsfile citre-tags-files)
        (let ((dir (locate-dominating-file current-file tagsfile)))
          (when dir
