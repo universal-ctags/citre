@@ -735,7 +735,8 @@ When PATH doesn't exist, this returns nil."
             (setq citre-peek--buffer-file-name path)
             ;; In case language-specific `:get-symbol' function uses
             ;; `default-directory'.
-            (setq default-directory (file-name-directory path)))
+            (setq default-directory (file-name-directory path))
+            (hack-dir-local-variables-non-file-buffer))
           (push (cons path buf) citre-peek--temp-buffer-alist)
           buf))))
 
