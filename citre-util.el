@@ -211,11 +211,11 @@ A value of it is a plist.  Its props and values are:
   beginning/end positions of the symbol.
 
   You can use other properties to record the information you need
-  for filtering/sorting the tags, see the props below.
-  `citre-file-path' for the canonical path of current file, and
-  `citre-tags-file' for the canonical path of tags file are
-  automatically attached to the returned value, so
-  filters/sorters can make use of them.
+  for filtering/sorting the tags, see the props below.  Citre
+  automatically attach 2 more props to the returned value:
+  `citre-file-path' for the canonical path of current file (when
+  in a file buffer), and `citre-tags-file' for the canonical path
+  of tags file, so filters/sorters can make use of them.
 
   If you don't specify this prop, `citre-get-symbol-default' is
   used as fallback.  You can also use it internally, and add more
@@ -324,9 +324,12 @@ filters/sorters can make use of them."
        ;; not used anywhere else, so we could do this.
        ,(citre-core-filter-kind "file" tags-file)
        ;; Exclude tags that have "file" scope, and is not in this file.
-       (and (not ,(citre-core-filter-input file-path tags-file))
-            (or ,(citre-core-filter-field-exist 'file)
-                ,(citre-core-filter 'extras "fileScope" 'csv-contain)))))))
+       ,(if file-path
+            `(and (not ,(citre-core-filter-input file-path tags-file))
+                  (or ,(citre-core-filter-field-exist 'file)
+                      ,(citre-core-filter 'extras "fileScope"
+                                          'csv-contain)))
+          'false)))))
 
 (defvar citre-completion-default-sorter
   (citre-core-sorter
@@ -520,9 +523,12 @@ used when it's nil."
        ,(citre-core-filter 'extras '("anonymous" "inputFile") 'csv-contain)
        ,(citre-core-filter-kind "file" tags-file)
        ;; Exclude tags that have "file" scope, and is not in this file.
-       (and (not ,(citre-core-filter-input file-path tags-file))
-            (or ,(citre-core-filter-field-exist 'file)
-                ,(citre-core-filter 'extras "fileScope" 'csv-contain)))))))
+       ,(if file-path
+            `(and (not ,(citre-core-filter-input file-path tags-file))
+                  (or ,(citre-core-filter-field-exist 'file)
+                      ,(citre-core-filter 'extras "fileScope"
+                                          'csv-contain)))
+          'false)))))
 
 (defvar citre-definition-default-sorter
   (citre-core-sorter
