@@ -424,6 +424,13 @@ non-nil, and the calculation is interrupted by user input."
               (start (car bounds))
               (end (cdr bounds))
               (collection (citre-capf--get-collection symbol))
+              (collection
+               (lambda (str pred action)
+                 (if (eq action 'metadata)
+                     '(metadata
+                       (cycle-sort-function . identity)
+                       (display-sort-function . identity))
+                   (complete-with-action action collection str pred))))
               (get-docsig
                (lambda (cand)
                  (citre-get-property 'signature cand))))
