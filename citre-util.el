@@ -171,26 +171,33 @@ This uses `project-current' internally."
 
 ;;;;; APIs: Find tags file
 
+(defvar-local citre--tags-file nil
+  "Buffer-local cache for tags file path.")
+
 (defun citre-tags-file-path ()
   "Return the canonical path of tags file for current buffer.
 This looks up `citre-tags-files' to find the tags file needed,
 and throws an user error if no tags file was found."
-  (let ((current-file (or (buffer-file-name) default-directory))
-        (project (funcall citre-project-root-function)))
-    (or
-     (cl-dolist (pair citre-tags-file-alist)
-       (when (and (or (not (file-name-absolute-p (car pair)))
-                      (not (file-name-absolute-p (cdr pair))))
-                  (null project))
-         (user-error "Relative path used in `citre-tags-file-alist', \
+  (if (and citre--tags-file (file-exists-p citre--tags-file))
+      citre--tags-file
+    (let ((current-file (or (buffer-file-name) default-directory))
+          (project (funcall citre-project-root-function)))
+      (or
+       (cl-dolist (pair citre-tags-file-alist)
+         (when (and (or (not (file-name-absolute-p (car pair)))
+                        (not (file-name-absolute-p (cdr pair))))
+                    (null project))
+           (user-error "Relative path used in `citre-tags-file-alist', \
 but project root can't be decided by `citre-project-root-function'"))
-       (when (file-in-directory-p current-file
-                                  (expand-file-name (car pair) project))
-         (cl-return (expand-file-name (cdr pair) project))))
-     (cl-dolist (tagsfile citre-tags-files)
-       (let ((dir (locate-dominating-file current-file tagsfile)))
-         (when dir
-           (cl-return (concat (expand-file-name dir) tagsfile))))))))
+         (when (file-in-directory-p current-file
+                                    (expand-file-name (car pair) project))
+           (cl-return (setq citre--tags-file
+                            (expand-file-name (cdr pair) project)))))
+       (cl-dolist (tagsfile citre-tags-files)
+         (let ((dir (locate-dominating-file current-file tagsfile)))
+           (when dir
+             (cl-return (setq citre--tags-file
+                              (concat (expand-file-name dir) tagsfile))))))))))
 
 ;;;;; APIs: Language support framework
 
