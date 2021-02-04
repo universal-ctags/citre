@@ -816,21 +816,20 @@ matching."
 
 (defun citre-core--csv-contain-regexp-builder (str)
   "Build a regexp that matches a CSV string that contains STR.
-STR can also be a list of strings, then the regexp matches any
-element in STR.
+STR can also be a list of strings, then the regexp matches a CSV
+string that contains any element in STR.
 
 This is for use in readtags filter."
   (let ((string-or-list-of-string-p
          (lambda (str)
            (or (stringp str)
-               (null (cl-position nil (mapcar #'stringp str)))))))
+               (and str (null (cl-position nil (mapcar #'stringp str))))))))
     (citre-core--error-on-arg str string-or-list-of-string-p))
   (when (stringp str)
     (setq str (list str)))
-  (concat "(^|,) ?"
-          ;; TODO: implement a `regexp-quote' for ERE.
-          (mapconcat #'regexp-quote str "|")
-          "(,|$)"))
+  (concat "(^|,) ?("
+          (mapconcat #'citre-core-regexp-quote str "|")
+          ")(,|$)"))
 
 (defun citre-core--filter-case-fold-string-builder (str case-fold)
   "Convert STR by CASE-FOLD.
@@ -844,6 +843,13 @@ Otherwise it's directly returned."
     str))
 
 ;;;;;; APIs
+
+(defun citre-core-regexp-quote (str)
+  "Return a regexp that matches STR in readtags filter expressions.
+Readtags uses POSIX extended regular expressions (ERE), which is
+different from regexp in Emacs."
+  ;; (rx (or "(" ")" "[" "]" "{" "}" "." "*" "+" "^" "$" "|" "?" "\\"))
+  (replace-regexp-in-string "[]$(-+.?[\\{|}^]" "\\\\\\&" str))
 
 (defun citre-core-filter (str1 str2 match
                                &optional case-fold invert keep-missing)
@@ -926,10 +932,16 @@ be accurate.
 
 Run \"ctags --list-languages\" to see valid values of LANG.  Be
 careful about the capitalization!"
-  (let* ((ext (gethash lang citre-core--lang-extension-table))
-         (regexp (concat "\\.(" (string-join ext "|") ")$")))
+  (let* ((ext (gethash lang citre-core--lang-extension-table)))
     `(or ,(citre-core-filter 'language lang 'eq)
-         ,(citre-core-filter 'input regexp 'regexp))))
+         ,(if ext
+              (citre-core-filter
+               'input
+               (concat "\\.("
+                       (string-join (mapcar #'citre-core-regexp-quote ext) "|")
+                       ")$")
+               'regexp)
+            'true))))
 
 (defun citre-core-filter-kind (kind &optional tagsfile ignore-missing)
   "Return a filter expression that matches the kind field by KIND.
@@ -959,8 +971,12 @@ tags that don't have `kind' field."
       ((pred stringp)
        (citre-core-filter 'kind kinds 'eq nil nil ignore-missing))
       ((pred listp)
-       (citre-core-filter 'kind (concat "^(" (string-join kinds "|") ")$")
-                          'regexp nil nil ignore-missing)))))
+       (citre-core-filter
+        'kind
+        (concat "^("
+                (string-join (mapcar #'citre-core-regexp-quote kinds) "|")
+                ")$")
+        'regexp nil nil ignore-missing)))))
 
 (defun citre-core-filter-input (filename tagsfile &optional match)
   "Return a filter expression that matches the input field by FILENAME.
