@@ -428,6 +428,7 @@ non-nil, and the calculation is interrupted by user input."
                (lambda (str pred action)
                  (if (eq action 'metadata)
                      '(metadata
+                       (category . citre)
                        (cycle-sort-function . identity)
                        (display-sort-function . identity))
                    (complete-with-action action collection str pred))))
