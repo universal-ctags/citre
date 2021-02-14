@@ -1,10 +1,10 @@
-;;; citre.el --- Ctags IDE on the True Editor -*- lexical-binding: t -*-
+;;; citre-config.el --- Default config for Citre -*- lexical-binding: t -*-
 
-;; Copyright (C) 2020 Hao Wang
+;; Copyright (C) 2021 Hao WANG
 
-;; Author: Hao Wang <amaikinono@gmail.com>
-;; Maintainer: Hao Wang <amaikinono@gmail.com>
-;; Created: 05 Feb 2020
+;; Author: Hao WANG <amaikinono@gmail.com>
+;; Maintainer: Hao WANG <amaikinono@gmail.com>
+;; Created: 14 Feb 2021
 ;; Keywords: convenience, tools
 ;; Homepage: https://github.com/AmaiKinono/citre
 ;; Version: 0
@@ -26,14 +26,20 @@
 
 ;;; Commentary:
 
+;; This is a default configuration for Citre.  It enables all language support
+;; that Citre provides.  You can use this as a reference and write your own
+;; config.
+
 ;;; Code:
 
-;;;; Libraries
+(require 'citre)
 
-(require 'citre-basic-tools)
-(require 'citre-peek)
+(with-eval-after-load 'cc-mode (require 'citre-lang-c))
+(with-eval-after-load 'dired (require 'citre-lang-fileref))
 
-(provide 'citre)
+(add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
+
+(provide 'citre-config)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -43,4 +49,4 @@
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre.el ends here
+;;; citre-config.el ends here
