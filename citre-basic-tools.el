@@ -368,18 +368,6 @@ STR is a candidate in a capf session.  See the implementation of
     (cl-remove-duplicates
      collection :test str-equal)))
 
-(defun citre-capf--get-completions (symbol)
-  "Get completions of SYMBOL for capf.
-This may return nil when `citre-capf-optimize-for-popup' is
-non-nil, and the calculation is interrupted by user input."
-  (if citre-capf-optimize-for-popup
-      (pcase (while-no-input
-               (citre-get-completions
-                symbol nil citre-capf-substr-completion))
-        ('t nil)
-        (val val))
-    (citre-get-completions symbol nil citre-capf-substr-completion)))
-
 (defun citre-capf--get-collection (symbol)
   "Get completion collection of SYMBOL for capf."
   (if citre-capf-optimize-for-popup
@@ -403,8 +391,13 @@ non-nil, and the calculation is interrupted by user input."
           ;; Make sure we get a non-nil collection first, then setup the cache,
           ;; since the calculation can be interrupted by user input, and we get
           ;; nil, which aren't the actual completions.
-          (when-let ((collection (citre-capf--make-collection
-                                  (citre-capf--get-completions symbol))))
+          (when-let ((collection
+                      (pcase (while-no-input
+                               (citre-capf--make-collection
+                                (citre-get-completions
+                                 symbol nil citre-capf-substr-completion)))
+                        ('t nil)
+                        (val val))))
             (plist-put cache :file file)
             (plist-put cache :symbol (substring-no-properties symbol))
             (plist-put cache :bounds bounds)
@@ -412,7 +405,7 @@ non-nil, and the calculation is interrupted by user input."
             (plist-put cache :collection collection)
             collection)))
     (citre-capf--make-collection
-     (citre-capf--get-completions symbol))))
+     (citre-get-completions symbol nil citre-capf-substr-completion))))
 
 ;;;;; Entry point
 
