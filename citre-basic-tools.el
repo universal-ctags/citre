@@ -126,8 +126,7 @@ key by mistake, but that doesn't happen very often."
 (declare-function xref-make-file-location "xref" (file line column))
 
 (defvar citre-xref--filter
-  `(not (or ,(citre-core-filter 'extras '("anonymous inputFile") 'csv-contain)
-            ,(citre-core-filter-kind "file")))
+  `(not ,(citre-core-filter 'extras "anonymous" 'csv-contain))
   "Filter for finding definitions when the symbol is inputted by user.")
 
 (defvar citre-xref--completion-table-cache
