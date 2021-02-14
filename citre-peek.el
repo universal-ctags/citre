@@ -42,6 +42,12 @@
 (require 'citre-util)
 (require 'color)
 
+;; We use these functions only in xref buffer, and they will be avaliable at
+;; that time.
+(declare-function xref--item-at-point "xref" ())
+(declare-function xref-item-location "xref" (arg &rest args))
+(declare-function eieio-oref "eieio" (obj slot))
+
 ;;;; User options
 
 ;;;;; Behavior
@@ -220,7 +226,7 @@ The modified list is returned."
   (setf (nthcdr n list) (push newelt (nthcdr n list)))
   list)
 
-;;;;; Recording positions of lines/symbols
+;;;;; Create "fake" tags
 
 (defun citre--make-tag-of-current-location (name)
   "Make a tag of the current line, with the name field being NAME.
@@ -236,6 +242,19 @@ This is for generating the \"entry\" point of the symbol chain."
     (puthash 'ext-abspath (buffer-file-name) tag)
     (puthash 'pattern pat tag)
     (puthash 'line (number-to-string (line-number-at-pos)) tag)
+    tag))
+
+(defun citre--make-tag-of-current-xref-item ()
+  "Make a tag for current item in xref buffer.
+This is for peeking the location of the item."
+  (let* ((item (or (xref--item-at-point)
+                   (user-error "No reference at point")))
+         (location (xref-item-location item))
+         (tag (make-hash-table :test #'eq))
+         (file (eieio-oref location 'file))
+         (line (eieio-oref location 'line)))
+    (puthash 'ext-abspath (expand-file-name file) tag)
+    (puthash 'line (number-to-string line) tag)
     tag))
 
 ;;;;; Ace jump
@@ -901,8 +920,12 @@ peek session."
 (defun citre-peek--get-def-list ()
   "Return the def list of symbol under point."
   (citre-peek--hack-buffer-file-name
-    (let* ((symbol (substring-no-properties (citre-get-symbol)))
-           (definitions (citre-get-definitions))
+    (let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
+                       citre-peek-root-symbol-str
+                     (substring-no-properties (citre-get-symbol))))
+           (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
+                            (list (citre--make-tag-of-current-xref-item))
+                          (citre-get-definitions)))
            (deflist (citre-peek--def-list-create definitions symbol)))
       (when (null definitions)
         (user-error "Can't find definition for %s" symbol))

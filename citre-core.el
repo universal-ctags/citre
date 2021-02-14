@@ -1450,9 +1450,6 @@ The search is helped by:
   pattern (i.e., not contatining the line number).
 - The name of the tag.
 
-The pattern and name field need to be presented, or an error will
-be signaled.
-
 This function does its best to find the tag if the file has been
 changed, and even when the line including the tag itself has been
 changed.  See the code for details.  If the search fails
