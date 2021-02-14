@@ -1462,11 +1462,9 @@ This function has no side-effect on the buffer.  Upper components
 could wrap this function to provide a desired UI for jumping to
 the position of a tag."
   (pcase-let*
-      ((name (or (citre-core-get-field 'name tag)
-                 (error "NAME field doesn't exist")))
-       (pat (or (citre-core-get-field 'pattern tag)
-                (error "PATTERN field doesn't exist")))
-       (`(,line ,pat) (citre-core--split-pattern pat))
+      ((name (or (citre-core-get-field 'name tag)))
+       (pat (or (citre-core-get-field 'pattern tag)))
+       (`(,line ,pat) (when pat (citre-core--split-pattern pat)))
        (line (or (citre-core-get-field 'line tag) line))
        (`(,str ,from-beg ,to-end)
         (when pat (citre-core--parse-search-pattern pat)))
@@ -1488,15 +1486,16 @@ the position of a tag."
             (concat pat-beg (regexp-quote str) pat-end)
             lim)
            ;; Maybe the indentation or trailing whitespaces has changed, or
-           ;; something is added after.
+           ;; something is added after.  From now on we also use case-fold
+           ;; search to deal with projects that uses a case-insensitive
+           ;; language and don't have a consistant style on it.
            (citre-core--find-nearest-regexp
             (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
-            lim)
-           ;; The content is changed.  Try cutting from the end of the tag
-           ;; name and search.  From now on we also use case-fold search to
-           ;; deal with projects that uses a case-insensitive language and
-           ;; don't have a consistant style on it.
-           (when-let ((bound (when (let ((case-fold-search nil))
+            lim 'case-fold)
+           ;; The content is changed.  Try cutting from the end of the tag name
+           ;; and search.
+           (when-let ((name name)
+                      (bound (when (let ((case-fold-search nil))
                                      (string-match (regexp-quote name) str))
                                (match-end 0)))
                       (str (substring str 0 bound)))
@@ -1504,8 +1503,9 @@ the position of a tag."
               (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
               lim 'case-fold))
            ;; Last try: search for the tag name.
-           (citre-core--find-nearest-regexp (regexp-quote name)
-                                            lim 'case-fold)))
+           (when name
+             (citre-core--find-nearest-regexp (regexp-quote name)
+                                              lim 'case-fold))))
         (if use-linum (line-number-at-pos) (point))))))
 
 (provide 'citre-core)
