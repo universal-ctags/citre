@@ -138,9 +138,9 @@ and tweak it to your own need.
 
 ``` elisp
 (use-package citre
-  :init
-  (add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
+  :defer t
   :config
+  (require 'citre-config)
   (setq
    ;; Set this if readtags is not in your path.
    citre-readtags-program "/path/to/readtags"
