@@ -32,12 +32,39 @@
 
 ;;; Code:
 
-(require 'citre)
+;;;; Auto enabling `citre-mode'
+
+(add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
+
+;;;; Language supports
 
 (with-eval-after-load 'cc-mode (require 'citre-lang-c))
 (with-eval-after-load 'dired (require 'citre-lang-fileref))
 
-(add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
+;;;; Autoload
+
+;; These functions are set to autoload from "citre-peek.el" and
+;; "citre-basic-tools.el", and these files don't require `citre'.  So if lazy
+;; load is used, `citre' is never required. This can happen when `:defer t' is
+;; used in `use-package', and the user puts their config in `:config' block.
+;; Those config won't be executed.  So, we manually autoloads them, and ask the
+;; user to put `(require 'citre-config)' in `:init' block, for lazy load to
+;; work.
+
+;; If you don't use `citre-config' and you write your own config, and:
+;;
+;; - You use simple `require' to load `citre', no `use-package' or other lazy
+;;   load tricks.
+;; - Or you load `citre-peek' and `citre-basic-tools' directly, not using
+;;   `citre'.
+;;
+;; Then you probably don't need these in your config.
+
+(autoload 'citre-jump "citre")
+(autoload 'citre-mode "citre")
+(autoload 'citre-peek "citre")
+(autoload 'citre-ace-peek "citre")
+(autoload 'citre-auto-enable-citre-mode "citre")
 
 (provide 'citre-config)
 

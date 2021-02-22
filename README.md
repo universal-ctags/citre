@@ -139,18 +139,20 @@ and tweak it to your own need.
 ``` elisp
 (use-package citre
   :defer t
-  :config
+  :init
+  ;; This is needed in `:init' block for lazy load to work.
   (require 'citre-config)
+  ;; Bind your frequently used commands.
+  (global-set-key (kbd "C-x c j") 'citre-jump)
+  (global-set-key (kbd "C-x c J") 'citre-jump-back)
+  (global-set-key (kbd "C-x c p") 'citre-ace-peek)
+  :config
   (setq
    ;; Set this if readtags is not in your path.
    citre-readtags-program "/path/to/readtags"
    ;; Set this if you use project management plugin like projectile.  It's
    ;; only used to display paths relatively, and doesn't affect actual use.
-   citre-project-root-function #'projectile-project-root)
-  ;; Bind your frequently used commands.
-  (global-set-key (kbd "C-x c j") 'citre-jump)
-  (global-set-key (kbd "C-x c J") 'citre-jump-back)
-  (global-set-key (kbd "C-x c p") 'citre-ace-peek))
+   citre-project-root-function #'projectile-project-root))
 ```
 
 See the [user manual](docs/user-manual/toc.md) to know more customizable
