@@ -67,13 +67,20 @@
       ;; referenced differently in different files.  We only keep the
       ;; non-directory part.  By doing so we can't match #includes that uses
       ;; paths, but we make use of binary search of readtags.
-      (let ((symbol (file-name-nondirectory
-                     (buffer-substring-no-properties
-                      (car bounds) (cdr bounds)))))
+      (let* ((xsymbol (buffer-substring-no-properties
+                       (car bounds) (cdr bounds)))
+             (symbol (file-name-nondirectory xsymbol))
+             ;; Remove upper components above ../
+             ;; ../linux/foo.h => linux/foo.h
+             (path (if (string-match (rx (* "../") (group (* anything)))
+                                     xsymbol)
+                       (match-string 1 xsymbol)
+                     xsymbol)))
         (citre-put-property symbol
                             'bounds (cons (- (cdr bounds) (length symbol))
                                           (cdr bounds))
-                            'syntax 'header)))))
+                            'syntax 'header
+                            'literal-path path)))))
 
 (defun citre-lang-c--get-normal-symbol ()
   "Get non-header symbol at point."
@@ -120,8 +127,11 @@
       ;; Sort on the kinds.
       ,(pcase (citre-get-property 'syntax symbol)
          ('header
-          (citre-core-sorter
-           `(filter ,(citre-core-filter-kind "header" tagsfile) -)))
+          (apply #'citre-core-sorter
+                 `(filter ,(citre-core-filter-kind "header" tagsfile) -)
+                 (and-let* ((path (citre-get-property 'literal-path symbol)))
+                   (list
+                    `(filter ,(citre-core-filter 'input path 'suffix) +)))))
          ('member
           (citre-core-sorter
            `(filter ,(citre-core-filter-kind "member" tagsfile) +)))
