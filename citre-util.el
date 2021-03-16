@@ -356,9 +356,9 @@ case sensitivity is controlled by
 
 The returned value is a list of tags.  Nil is returned when the
 completion can't be done."
-  (let ((symbol (or symbol (citre-get-symbol)))
-        (tagsfile (or tagsfile (citre-tags-file-path)))
-        (match (if substr-completion 'substr 'prefix)))
+  (when-let* ((symbol (or symbol (citre-get-symbol)))
+              (tagsfile (or tagsfile (citre-tags-file-path)))
+              (match (if substr-completion 'substr 'prefix)))
     (citre-get-tags tagsfile symbol match
                     :filter (or (citre--get-value-in-language-alist
                                  :completion-filter symbol)
@@ -554,7 +554,9 @@ find it automatically.
 The result is a list of tags.  Nil is returned when no definition
 is found."
   (let ((symbol (or symbol (citre-get-symbol)))
-        (tagsfile (or tagsfile (citre-tags-file-path))))
+        (tagsfile (or tagsfile
+                      (citre-tags-file-path)
+                      (user-error "Can't find tagsfile"))))
     (unless symbol
       (user-error "No symbol at point"))
     (citre-get-tags tagsfile symbol 'exact

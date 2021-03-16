@@ -782,6 +782,7 @@ TAGSFILE is the canonical path of the tags file.  The return
 value is a valid value in `citre--tags-file-info-alist'.
 
 This function caches the info, and uses the cache when possible."
+  (citre-core--error-on-arg tagsfile #'stringp)
   (unless (file-exists-p tagsfile)
     (error "%s doesn't exist" tagsfile))
   (let ((recent-mod (file-attribute-modification-time
