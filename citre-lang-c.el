@@ -91,11 +91,12 @@
         (goto-char (car bounds))
         (when (looking-back (rx (or "->" ".")) (- (point) 2))
           (setq syntax 'member)))
-      (unless syntax
-        (save-excursion
-          (goto-char (cdr bounds))
-          (when (looking-at (rx (* " ") "("))
-            (setq syntax 'function))))
+      (save-excursion
+        (goto-char (cdr bounds))
+        (when (looking-at (rx (* " ") "("))
+          (setq syntax (if (eq syntax 'member)
+                           'callable-member
+                         'function))))
       (citre-put-property symbol 'syntax syntax))))
 
 (defun citre-lang-c-get-symbol ()
@@ -135,6 +136,24 @@
          ('member
           (citre-core-sorter
            `(filter ,(citre-core-filter-kind "member" tagsfile) +)))
+         ('callable-member
+          (citre-core-sorter
+           `(filter ,(citre-core-filter-kind "member" tagsfile) +)
+           ;; If a member is callable, its typeref field may include
+           ;; "(*)" as substring.
+           ;;
+           ;; e.g. f in
+           ;; ---
+           ;; struct s {
+           ;;    int (*f) (void);
+           ;; };
+           ;; ---
+           ;; is tagged like:
+           ;;
+           ;; f	input.c	2;"	...typeref:typename:int (*)(void)
+           ;; +-----------------------------------------^^^
+           ;; `- This is the clue for finding callable members.
+           `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
          ('function
           (citre-core-sorter
            `(filter (or ,(citre-core-filter-kind "function" tagsfile)
