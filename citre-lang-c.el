@@ -63,12 +63,12 @@
                   (rx "#include"
                       (* space) (or "<" "\""))
                   (line-beginning-position))))
-      ;; Path name can be used in #include directive, so the same header can be
-      ;; referenced differently in different files.  We only keep the
-      ;; non-directory part.  By doing so we can't match #includes that uses
-      ;; paths, but we make use of binary search of readtags.
       (let* ((xsymbol (buffer-substring-no-properties
                        (car bounds) (cdr bounds)))
+             ;; Path name can be used in #include directive, so the same header
+             ;; can be referenced differently in different files.  We only keep
+             ;; the non-directory part.  By doing so we can't match #includes
+             ;; that uses paths, but we make use of binary search of readtags.
              (symbol (file-name-nondirectory xsymbol))
              ;; Remove upper components above ../
              ;; ../linux/foo.h => linux/foo.h
@@ -181,6 +181,11 @@
          ('member
           (citre-core-sorter
            `(filter ,(citre-core-filter-kind "member" tagsfile) +)))
+         ('callable-member
+          (citre-core-sorter
+           `(filter ,(citre-core-filter-kind "member" tagsfile) +)
+           ;; See the comment in `citre-lang-c-definition-sorter'.
+           `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
          ('function
           (citre-core-sorter
            `(filter (or ,(citre-core-filter-kind "function" tagsfile)
