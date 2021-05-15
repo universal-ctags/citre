@@ -106,4 +106,16 @@ TBW
 
 ## The big picture of code reading
 
-TBW
+Code reading is all about finding connections between different locations in a
+project. When solving a complex problem, your tour in the codebase becomes
+long, and you'll eventually want to take note of the connections you've already
+found, in order to keep your brain from overloading.
+
+I've developed [Clue](https://github.com/AmaiKinono/clue) for this purpose.
+With it, you could copy a location as a link, and paste it in your note. The
+note can be any plain text file, so you can use any markup language you like.
+
+`citre-peek` has nice integration with Clue: When in a peek window, you can
+call `citre-peek-copy-clue-link` to copy the currently browsed line as a clue
+link. Since you can quickly browse the code reading history in the peek window,
+it easy and fast to write a code-reading note this way.

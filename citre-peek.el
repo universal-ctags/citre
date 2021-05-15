@@ -48,6 +48,10 @@
 (declare-function xref-item-location "xref" (arg &rest args))
 (declare-function eieio-oref "eieio" (obj slot))
 
+;; We use this function for integration with the package "clue".  We don't
+;; require it as it's not necessary for citre-peek to work.
+(declare-function clue-copy-location "clue" (file line &optional project))
+
 ;;;; User options
 
 ;;;;; Behavior
@@ -1412,6 +1416,26 @@ that the depth is not less than 0."
     (citre-peek-restore)
     (when citre-peek-backward-in-chain-after-jump
       (citre-peek-chain-backward))))
+
+(defun citre-peek-copy-clue-link ()
+  "Copy currently browsed line in the peek window as a clue link.
+This depends on the package
+\"Clue\" (https://github.com/AmaiKinono/clue)."
+  (interactive)
+  (pcase-let* ((entry (citre-peek--current-def-entry))
+               (tag (citre-peek--def-entry-tag entry))
+               (`(,buf . ,pos) (citre-peek--get-buf-and-pos entry))
+               (file (citre-core-get-field 'ext-abspath tag))
+               (line) (project))
+    (if buf
+        (with-current-buffer buf
+          (save-excursion
+            (goto-char pos)
+            (setq line (line-number-at-pos)))
+          (citre-peek--hack-buffer-file-name
+            (setq project (funcall citre-project-root-function)))
+          (clue-copy-location file line project))
+      (user-error "The file doesn't exist"))))
 
 (provide 'citre-peek)
 
