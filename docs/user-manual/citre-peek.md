@@ -102,7 +102,11 @@ branch after current symbol; Type `M-l D` to delete all branches after it.
 After you close the peek window by `C-g`, you can restore the peek session by
 `citre-peek-restore`.
 
-TBW
+Sometimes we may want to save a peek session, quickly peek some other things,
+and then restore the saved session. This can be done by
+`citre-peek-save-session` and `citre-peek-load-session`. Notice the "save" here
+doesn't mean to save a session to the disk. It just keeps the session alive
+during the current Emacs session.
 
 ## The big picture of code reading
 

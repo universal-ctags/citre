@@ -493,7 +493,7 @@ not affected by its surroundings."
 ;; definition, and another is a list called *branches*, which we'll soon
 ;; explain.
 
-;; In a peek session, you are always browsing a def entry.  When you peek
+;; In a *peek session*, you are always browsing a def entry.  When you peek
 ;; through a symbol, a new def list is created.  To keep a complete history of
 ;; your code reading session, this def list is pushed into the branches of the
 ;; current browsed def entry.
@@ -508,6 +508,31 @@ not affected by its surroundings."
 ;;     - def list C
 ;;   - def entry 3
 ;;   ...
+
+(cl-defstruct (citre-peek--session
+               (:constructor nil)
+               (:constructor
+                citre-peek--session-create
+                (root-list
+                 depth
+                 &optional name))
+               (:copier nil))
+  "Citre-peek session."
+  (root-list
+   nil
+   :documentation
+   "The root def list in this peek session."
+   :type "citre-peek--def-list")
+  (depth
+   nil
+   :documentation
+   "The depth of currently browsed def list in this session."
+   :type "integer")
+  (name
+   nil
+   :documentation
+   "The name of this session."
+   :type "nil or string"))
 
 (cl-defstruct (citre-peek--def-entry
                (:constructor nil)
@@ -574,11 +599,6 @@ any symbol."
 ;; NOTE: Here's a list of when should each state variable be changed.  Keep
 ;; these in mind when you are developing citre-peek related commands.
 ;;
-;; - `citre-peek--depth-in-root-list': Set this to 0 or 1 for a new peek
-;;   session (see `citre-peek--setup-session'), and modify it when moving
-;;   forward/backward in the chain (including peeking through).  Make sure it's
-;;   >= 0 and <= maximum possible depth.
-;;
 ;; - `citre-peek--displayed-defs-interval': Set this for a new peek session,
 ;;   when browsing the def list, and when moving in the chain.
 ;;
@@ -589,7 +609,16 @@ any symbol."
 ;;   window is updated.  This variable is for preventing recalculate the
 ;;   content after every command.
 ;;
-;; Variables below are not going to change much, and newly added commands may
+;; We know our currently browsed def list in a session by the `depth' slot in
+;; the `citre-peek--session'.  It can be modified by
+;; `citre-peek--session-depth-add':
+;;
+;; - Set it to 0 or 1 for a new peek session (see `citre-peek--make-session').
+;;
+;; - Modify it when moving forward/backward in the chain (including peeking
+;;   through).  Make sure it's >= 0 and <= maximum possible depth.
+;;
+;; These variables are not going to change much, and newly added commands may
 ;; not need to care about them:
 ;;
 ;; - `citre-peek--session-root-list': Set this only for a new peek session.
@@ -607,11 +636,11 @@ any symbol."
 ;; - `citre-peek--buffer-file-name': It's automatically set by
 ;;   `citre-peek--find-file-buffer'.
 
-(defvar citre-peek--session-root-list nil
-  "The root def list of current peek session.")
+(defvar citre-peek--current-session nil
+  "Current peek session.")
 
-(defvar citre-peek--depth-in-root-list nil
-  "The depth of currently browsed def list in the root list.")
+(defvar citre-peek--saved-sessions nil
+  "Saved peek sessions.")
 
 (defvar citre-peek--displayed-defs-interval nil
   "The interval of displayed def entries in currently browsed def list.
@@ -891,12 +920,33 @@ DEFLIST and BRANCH are instances of `citre-peek--def-list'."
         (citre-peek--def-entry-branches
          (citre-peek--current-entry-in-def-list deflist))))
 
+;;;;; Methods for `citre-peek--session'
+
+(defun citre-peek--session-depth-add (n &optional session)
+  "Offset the current depth of peek session SESSION by N.
+If SESSION is nil, use the currently active session."
+  (let* ((session (or session citre-peek--current-session))
+         (depth (citre-peek--session-depth session)))
+    (setf (citre-peek--session-depth session) (+ depth n))))
+
 ;;;;; Find currently browsed item in the tree
 
-(defun citre-peek--current-def-list ()
-  "Return the currently browsed def list."
-  (let ((deflist citre-peek--session-root-list))
-    (dotimes (_ citre-peek--depth-in-root-list)
+;; NOTE: Find the current session using the variable
+;; `citre-peek--current-session'.
+
+(defun citre-peek--current-root-list (&optional session)
+  "Return the root list in a peek session SESSION.
+If SESSION is nil, use the currently active session."
+  (let* ((session (or session citre-peek--current-session)))
+    (citre-peek--session-root-list session)))
+
+(defun citre-peek--current-def-list (&optional session)
+  "Return the currently browsed def list in a peek session SESSION.
+If SESSION is nil, use the currently active session."
+  (let* ((session (or session citre-peek--current-session))
+         (deflist (citre-peek--session-root-list session))
+         (depth (citre-peek--session-depth session)))
+    (dotimes (_ depth)
       (let* ((entry (citre-peek--current-entry-in-def-list deflist))
              (branches (citre-peek--def-entry-branches entry)))
         (setq deflist (car branches))))
@@ -907,7 +957,7 @@ DEFLIST and BRANCH are instances of `citre-peek--def-list'."
   (citre-peek--current-entry-in-def-list
    (citre-peek--current-def-list)))
 
-;;;;; Create def lists
+;;;;; Create def lists & sessions
 
 (defun citre-peek--make-def-list-of-current-location (name)
   "Return a def list of current location.
@@ -945,8 +995,28 @@ push its def list into the branches of current def entry."
       (let* ((branch (citre-peek--get-def-list)))
         (citre-peek--push-branch-in-current-entry-in-def-list
          (citre-peek--current-def-list) branch)
-        (cl-incf citre-peek--depth-in-root-list)
+        (citre-peek--session-depth-add 1)
         (citre-peek--setup-displayed-defs-interval branch)))))
+
+(defun citre-peek--make-session (buf point)
+  "Make a peek session.
+It grabs the definitions of the symbol in BUF under POINT, and
+creates a peek session for it."
+  (with-current-buffer buf
+    (save-excursion
+      (goto-char point)
+      (let* ((symbol (substring-no-properties
+                      (citre-peek--hack-buffer-file-name (citre-get-symbol))))
+             (deflist (citre-peek--get-def-list)))
+        ;; For file buffers, we create a root def list for current position, so
+        ;; the user can go back to it later.
+        (if (buffer-file-name)
+            (let ((root-list (citre-peek--make-def-list-of-current-location
+                              symbol)))
+              (citre-peek--push-branch-in-current-entry-in-def-list
+               root-list deflist)
+              (citre-peek--session-create root-list 1))
+          (citre-peek--session-create deflist 0))))))
 
 ;;;;; Manage session state
 
@@ -971,29 +1041,12 @@ When DEFLIST is nil, the currently browsed deflist is used."
     (setq citre-peek--displayed-defs-interval
           (cons start end))))
 
-(defun citre-peek--setup-session (buf point)
-  "Set up state variables for peek session.
-It grabs the definitions of the symbol in BUF under POINT, and
-set variables according to it."
-  (with-current-buffer buf
-    (save-excursion
-      (goto-char point)
-      (let* ((symbol (substring-no-properties
-                      (citre-peek--hack-buffer-file-name (citre-get-symbol))))
-             (deflist (citre-peek--get-def-list)))
-        ;; For file buffers, we create a root def list for current position, so
-        ;; the user can go back to it later.
-        (if (buffer-file-name)
-            (let ((root-list (citre-peek--make-def-list-of-current-location
-                              symbol)))
-              (citre-peek--push-branch-in-current-entry-in-def-list
-               root-list deflist)
-              (setq citre-peek--session-root-list root-list)
-              (setq citre-peek--depth-in-root-list 1))
-          (setq citre-peek--session-root-list deflist)
-          (setq citre-peek--depth-in-root-list 0))
-        (citre-peek--setup-displayed-defs-interval deflist)
-        (setq citre-peek--content-update t)))))
+(defun citre-peek--setup-session (session)
+  "Set up state variables for browsing a peek session SESSION."
+  (setq citre-peek--current-session session)
+  (citre-peek--setup-displayed-defs-interval
+   (citre-peek--current-def-list session))
+  (setq citre-peek--content-update t))
 
 (defun citre-peek--def-index-forward (n)
   "In a peek window, move N steps forward in the definition list.
@@ -1095,8 +1148,10 @@ definitions, and the current chain in the code reading history."
          (len (citre-peek--def-list-length deflist))
          ;; We need to traverse the tree from the beginning to create the
          ;; chain.
-         (deflist citre-peek--session-root-list)
+         (deflist (citre-peek--current-root-list))
          (depth 0)
+         (current-depth (citre-peek--session-depth
+                         citre-peek--current-session))
          chain
          session-info)
     (while deflist
@@ -1105,7 +1160,7 @@ definitions, and the current chain in the code reading history."
              (branches (citre-peek--def-entry-branches entry)))
         (unless symbol
           (setq symbol citre-peek-root-symbol-str))
-        (if (eq depth citre-peek--depth-in-root-list)
+        (if (eq depth current-depth)
             (setq symbol
                   (concat
                    citre-peek-current-symbol-prefix
@@ -1162,7 +1217,7 @@ point."
     (citre-peek-abort))
   (let ((buf (or buf (current-buffer)))
         (point (or point (point))))
-    (citre-peek--setup-session buf point))
+    (citre-peek--setup-session (citre-peek--make-session buf point)))
   (citre-peek--mode))
 
 ;;;###autoload
@@ -1211,7 +1266,7 @@ function while filling its arglist."
   "Restore recent peek session."
   (interactive)
   (unless citre-peek--mode
-    (if citre-peek--session-root-list
+    (if citre-peek--current-session
         (citre-peek--mode)
       (user-error "No peek session to restore"))))
 
@@ -1254,7 +1309,7 @@ the depth is not greater than the maximum depth."
   (let ((max-depth-p (null (citre-peek--def-entry-branches
                             (citre-peek--current-def-entry)))))
     (unless max-depth-p
-      (cl-incf citre-peek--depth-in-root-list)
+      (citre-peek--session-depth-add 1 citre-peek--current-session)
       (citre-peek--setup-displayed-defs-interval)
       (setq citre-peek--content-update t))))
 
@@ -1264,8 +1319,8 @@ This subtracts 1 from the currently browsed depth.  It's ensured
 that the depth is not less than 0."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (unless (eq citre-peek--depth-in-root-list 0)
-    (cl-incf citre-peek--depth-in-root-list -1)
+  (unless (eq (citre-peek--session-depth citre-peek--current-session) 0)
+    (citre-peek--session-depth-add -1 citre-peek--current-session)
     (citre-peek--setup-displayed-defs-interval)
     (setq citre-peek--content-update t)))
 
@@ -1366,6 +1421,44 @@ that the depth is not less than 0."
                 "Deleting all branches under this symbol.  Continue? "))
       (setf (citre-peek--def-entry-branches entry) nil)
       (setq citre-peek--content-update t))))
+
+;;;;; Save/load peek session
+
+(defun citre-peek-save-session ()
+  "Save current peek session.
+This doesn't mean to save it on the disk, but to keep it alive
+during the current Emacs session.
+
+A Saved session can be loaded by `citre-peek-load-session'."
+  ;; The only way for a session to have a name is to save it.
+  (interactive)
+  (unless citre-peek--current-session
+    (user-error "No active session"))
+  (if (citre-peek--session-name citre-peek--current-session)
+      (message "Session already saved.")
+    (let* ((names (mapcar #'citre-peek--session-name
+                          citre-peek--saved-sessions))
+           name)
+      (setq name (read-string "Give it a name: "))
+      (while (member name names)
+        (setq name (read-string
+                    (format "%s already exists. Give it another name: "
+                            name))))
+      (setf (citre-peek--session-name citre-peek--current-session) name)
+      (push citre-peek--current-session citre-peek--saved-sessions))))
+
+(defun citre-peek-load-session ()
+  "Load a peek session."
+  (interactive)
+  (let ((name-session-alist
+         (mapcar (lambda (session)
+                   (cons (citre-peek--session-name session) session))
+                 citre-peek--saved-sessions)))
+    (citre-peek--setup-session
+     (alist-get (completing-read "Session: " name-session-alist nil t)
+                name-session-alist
+                nil nil #'equal))
+    (citre-peek--mode)))
 
 ;;;;; Others
 
