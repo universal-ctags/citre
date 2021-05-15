@@ -161,8 +161,12 @@ options.
 ## Manuals
 
 - [User Manual](docs/user-manual/toc.md)
-- [Developer Manual](docs/developer-manual/toc.md) (still under construction
-  and contains outdated information)
+- [Developer Manual](docs/developer-manual/toc.md)
+
+[This chapter](docs/developer-manual/design-principle.md) in the developer
+manual talks about the strengths/weaknesses of ctags, and the design principle
+of Citre. Non-developers are also encouraged to read it to know more about
+these tools.
 
 ## Current status
 
