@@ -779,7 +779,7 @@ It tries these in turn:
 (defun citre-core-tags-file-info (tagsfile)
   "Return the additional info of tags file TAGSFILE.
 TAGSFILE is the canonical path of the tags file.  The return
-value is a valid value in `citre--tags-file-info-alist'.
+value is a valid value in `citre-core--tags-file-info-alist'.
 
 This function caches the info, and uses the cache when possible."
   (citre-core--error-on-arg tagsfile #'stringp)

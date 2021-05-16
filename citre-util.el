@@ -140,9 +140,10 @@ Annotations include kind, type, etc."
   "Get tags in tags file TAGSFILE that match NAME.
 This is like `citre-core-get-tags', except that:
 
-- TAGSFILE could be nil, and it will be find automatically.  When
-- MATCH is nil or `exact', CASE-FOLD is always nil, otherwise
-- it's decided by `citre-completion-case-sensitive' and NAME.
+- TAGSFILE could be nil, and it will be find automatically.
+- When MATCH is nil or `exact', CASE-FOLD is always nil,
+  otherwise it's decided by `citre-completion-case-sensitive' and
+  NAME.
 
 TAGSFILE is the canonical path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
@@ -228,9 +229,9 @@ A value of it is a plist.  Its props and values are:
   used as fallback.  You can also use it internally, and add more
   properties you need.
 
-  When there's an inactive region, it's recommended to get the
-  text in it as a symbol, so when your function doesn't work well
-  for the user, they can manually specify which part to get.
+  When there's an active region, it's recommended to get the text
+  in it as a symbol, so when your function doesn't work well for
+  the user, they can manually specify which part to get.
   `citre-get-marked-symbol' implements this, and is also used by
   `citre-get-symbol-default'.
 
