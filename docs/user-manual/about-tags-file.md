@@ -5,7 +5,8 @@
 The tags file is a list of taglines. A tagline looks like:
 
 ```
-citre-peek	citre-peek.el	/^(defun citre-peek (&optional buf point)$/;"	kind:function	line:1121...
+citre-peek	citre-peek.el	/^(defun citre-peek (&optional buf point)$/;"	\
+kind:function	line:1121...
 ```
 
 It is some *fields* separated by tab characters. Each field records some info
@@ -39,7 +40,8 @@ Using command line arguments, we can tweak which kinds, fields and extra tag
 types to include in a tags file. For example, we can enable all of them:
 
 ```console
-$ ctags --languages=c,c++,... --kinds-all='*' --fields='*' --fields-all='*' --extras='*' --extras-all='*' -R
+$ ctags --languages=c,c++,... --kinds-all='*' --fields='*' --fields-all='*' \
+> --extras='*' --extras-all='*' -R
 ```
 
 But this may be too much. The recommended command line in
@@ -62,7 +64,8 @@ You can further reduce the size by not generating the search pattern, but then
 you can't jump to a tag accurately when the file containing it is edited:
 
 ```console
-$ ctags --languages=c,c++,... -n --kinds-all='*' --fields=+KESfnt --extras=+fr -R
+$ ctags --languages=c,c++,... -n --kinds-all='*' --fields=+KESfnt \
+> --extras=+fr -R
 ```
 
 To learn about the meaning of the flags, run:

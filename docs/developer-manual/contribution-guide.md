@@ -18,6 +18,9 @@ CI is triggered on pull requests, or on pushes to the master/develop branch.
   - It's the first line in a docstring
   - It contains a web link
 
+Code or shell commands in the docs may contain long lines. In these cases,
+break the line by a `\`.
+
 Don't worry to much as we also have style tests when you run `$ make` and on
 the CI.
 

@@ -48,7 +48,11 @@ for f in scripts/*.sh; do
         && error "Lone line found in $f";
 done
 
-# TODO: Check long lines for docs.
+for f in *.md docs/*/*.md; do
+    info "[style, longline] $f"
+    grep -n '.\{80,\}' $f | grep -v "\(http://\)\|\(https://\)" \
+        && error "Lone line found in $f";
+done
 
 ## Check indentation
 
