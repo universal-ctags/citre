@@ -61,7 +61,7 @@
   :type 'boolean
   :group 'citre)
 
-(defcustom citre-peek-backward-in-chain-after-jump t
+(defcustom citre-peek-backward-in-chain-after-jump nil
   "Non-nil means move backward in the chain after `citre-peek-jump'.
 This means after you jump to a definition location, the peek
 window will show where it's used/called/referenced.
