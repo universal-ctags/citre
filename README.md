@@ -1,6 +1,8 @@
-# Citre
+<p align="center">
+  <img src="logo.svg" alt="logo">
+</p>
 
-*<center>Ctags IDE on the True Editor!</center>*
+<p align="center"><i>Ctags IDE on the True Editor!</i></p>
 
 ## What is it?
 
