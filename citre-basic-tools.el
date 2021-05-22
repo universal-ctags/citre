@@ -26,6 +26,11 @@
 
 ;;; Commentary:
 
+;; Basic user tools, including:
+
+;; - `completion-at-point', xref and imenu integration.
+;; - `citre-jump', a `completing-read' UI for jumping to definition.
+
 ;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and

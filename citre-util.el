@@ -26,6 +26,9 @@
 
 ;;; Commentary:
 
+;; The basis of user tools offered by Citre.  See
+;; docs/developer-manual/project-structure.md.
+
 ;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and

@@ -26,6 +26,16 @@
 
 ;;; Commentary:
 
+;; citre-peek is a powerful code reading tool.  Whether you just want to
+;; quickly peek the implementation of a function, or need to understand a long
+;; and branched call chain to solve a complex problem, citre-peek is the best
+;; tool for you.
+
+;; Read the following docs to know how to use citre-peek:
+;;
+;; - README.md
+;; - docs/user-manual/citre-peek.md
+
 ;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and

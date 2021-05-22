@@ -26,6 +26,11 @@
 
 ;;; Commentary:
 
+;; Citre is an advanced Ctags (or actually, readtags) frontend for Emacs.
+
+;; Read README.md to know about Citre.  If you haven't received such a file,
+;; please visit https://github.com/AmaiKinono/citre.
+
 ;;; Code:
 
 ;;;; Libraries
