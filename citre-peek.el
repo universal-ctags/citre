@@ -90,7 +90,7 @@ non-nil."
   :type '(repeat :tag "Keys" character)
   :group 'citre)
 
-(defcustom citre-peek-cancel-ace-keys '(?\C-g ?q)
+(defcustom citre-peek-ace-cancel-keys '(?\C-g ?q)
   "Keys used for cancel an ace session."
   :type '(repeat :tag "Keys" character)
   :group 'citre)
@@ -985,8 +985,8 @@ peek session."
         (user-error "Can't find definition for %s" symbol))
       deflist)))
 
-(defun citre-peek--create-branch (buf point)
-  "Create new branch in the history.
+(defun citre-peek--make-branch (buf point)
+  "Create a new branch in the history.
 It grabs the definitions of the symbol in BUF under POINT, and
 push its def list into the branches of current def entry."
   (with-current-buffer buf
@@ -999,7 +999,7 @@ push its def list into the branches of current def entry."
         (citre-peek--setup-displayed-defs-interval branch)))))
 
 (defun citre-peek--make-session (buf point)
-  "Make a peek session.
+  "Create a peek session.
 It grabs the definitions of the symbol in BUF under POINT, and
 creates a peek session for it."
   (with-current-buffer buf
@@ -1242,7 +1242,7 @@ function while filling its arglist."
       (while (progn
                (citre--attach-ace-overlay sym-bounds ace-seqs)
                (setq key (read-key "Ace char:")))
-        (when (memq key citre-peek-cancel-ace-keys)
+        (when (memq key citre-peek-ace-cancel-keys)
           (citre--clean-ace-ov)
           (cl-return))
         (when (memq key citre-peek-ace-pick-symbol-at-point-keys)
@@ -1482,7 +1482,7 @@ A Saved session can be loaded by `citre-peek-load-session'."
     (citre-peek--update-display 'force)
     (cl-block nil
       (while (setq key (read-key "Ace char:"))
-        (when (memq key citre-peek-cancel-ace-keys)
+        (when (memq key citre-peek-ace-cancel-keys)
           (setq citre-peek--symbol-bounds nil)
           (setq citre-peek--ace-seqs nil)
           (citre-peek--update-display 'force)
@@ -1491,7 +1491,7 @@ A Saved session can be loaded by `citre-peek-load-session'."
           ((and (pred integerp) i)
            (citre-peek-make-current-def-first)
            (let ((pos (car (nth i (cdr citre-peek--symbol-bounds)))))
-             (citre-peek--create-branch buf pos))
+             (citre-peek--make-branch buf pos))
            (setq citre-peek--symbol-bounds nil)
            (setq citre-peek--ace-seqs nil)
            (cl-return))
