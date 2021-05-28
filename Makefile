@@ -18,6 +18,10 @@ compile: clean
 style:
 	$(SHELL) scripts/style.sh
 
+.PHONY: test-tags
+test-tags:
+	$(SHELL) scripts/update-test-tags.sh
+
 .PHONY: clean
 clean:
 	rm -f ./*.elc

@@ -1,6 +1,6 @@
 ;;; common.el --- Common code to run before each test
 
-(defconst default-tags "target.tags"
+(defconst default-tags "tags"
   "Default tags file under each test case directory.")
 
 (setq citre-readtags-program (getenv "READTAGS"))
