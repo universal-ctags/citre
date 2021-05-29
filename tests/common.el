@@ -15,3 +15,15 @@ the working directory being a test case directory to ensure this
 work correctly."
   (let ((file (or file default-tags)))
     (expand-file-name (concat default-directory file))))
+
+(defun map-get-field (field tags)
+  "Map the \"get FIELD\" operation over a list TAGS."
+  (mapcar (lambda (tag) (citre-core-get-field field tag)) tags))
+
+(defun set-equal (a b)
+  "Check if lists A and B are equal in the sense of sets."
+  (let ((a (cl-remove-duplicates a :test #'equal))
+        (b (cl-remove-duplicates b :test #'equal)))
+    (and (equal (length a) (length b))
+         (equal (length (cl-intersection a b :test #'equal))
+                (length a)))))

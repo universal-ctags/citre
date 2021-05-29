@@ -1,2 +1,2 @@
---fields=Kz{line}{signature}
+--fields=Kz{typeref}{end}{line}{signature}
 -L ctags.d/src.list
