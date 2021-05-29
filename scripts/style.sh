@@ -3,37 +3,15 @@
 # Copyright (C) 2020 Hao WANG
 # License: GPL v3, or (at your option) any later version
 
-EMACS=${EMACS:=emacs}
-
-PASSED_FACE="\033[1;32m"
-ERROR_FACE="\033[1;31m"
-NORMAL_FACE="\033[0m"
-
-info()
-{
-    printf '%s\n' "$@"
-}
-
-pass()
-{
-    printf $PASSED_FACE
-    printf '[style] %s' "$@"
-    printf "$NORMAL_FACE\n"
-}
-
-error()
-{
-    printf $ERROR_FACE 1>&2
-    printf '[style] %s' "$@" 1>&2
-    printf "$NORMAL_FACE\n" 1>&2
-    exit 1
-}
+. "./scripts/common.sh"
 
 ## Check long lines
 
+ITEM="style, longline"
+
 for f in *.el tests/common.el tests/*/test.el; do
     if [ $f != "citre-core-tables.el" ]; then
-        info "[style, longline] $f"
+        info "$f"
         # Allow long lines that are the first lines of the file, contains web
         # links, or are the first lines of docstrings.
         grep -n '.\{80,\}' $f \
@@ -43,21 +21,23 @@ for f in *.el tests/common.el tests/*/test.el; do
 done
 
 for f in scripts/*.sh; do
-    info "[style, longline] $f"
+    info "$f"
     grep -n '.\{80,\}' $f | grep -v "\(http://\)\|\(https://\)" \
         && error "Lone line found in $f";
 done
 
 for f in *.md docs/*/*.md; do
-    info "[style, longline] $f"
+    info "$f"
     grep -n '.\{80,\}' $f | grep -v "\(http://\)\|\(https://\)" \
         && error "Lone line found in $f";
 done
 
 ## Check indentation
 
+ITEM="style, indent"
+
 for f in *.el tests/common.el tests/*/test.el; do
-    info "[style, indent] $f"
+    info "$f"
     # Some macros may have indent declarations. We (eval-buffer) to apply them.
     (if ! $EMACS -Q --batch -L . \
           --eval "(setq inhibit-message t)" \
@@ -73,8 +53,10 @@ done
 
 ## Checkdoc
 
+ITEM="style, checkdoc"
+
 for f in *.el; do
-    info "[style, checkdoc] $f"
+    info "$f"
     (if $EMACS -Q --batch \
                --eval "(setq checkdoc-verb-check-experimental-flag nil)" \
                --eval "(checkdoc-file \"$f\")" 2>&1 \
@@ -84,6 +66,8 @@ for f in *.el; do
      exit 0
     ) || exit 1
 done
+
+ITEM="style"
 
 pass "Style check passed :)"
 exit 0

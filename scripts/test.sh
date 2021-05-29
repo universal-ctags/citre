@@ -3,38 +3,15 @@
 # Copyright (C) 2020 Masatake YAMATO
 # License: GPL v3, or (at your option) any later version
 
-# NOTE: READTAGS is also useable. It's handled in tests/common.el.
-EMACS=${EMACS:=emacs}
+. "./scripts/common.sh"
+ITEM="test"
+
 PRELOAD="citre-core-tables.el citre-core.el citre-util.el \
 citre-basic-tools.el citre-peek.el citre-lang-c.el citre-lang-fileref.el
 citre.el citre-config.el"
 
-PASSED_FACE="\033[1;32m"
-ERROR_FACE="\033[1;31m"
-NORMAL_FACE="\033[0m"
-
 d=$(pwd)
 preload_options=
-
-info()
-{
-    printf '[test] %s\n' "$@"
-}
-
-pass()
-{
-    printf $PASSED_FACE
-    printf '[test] %s' "$@"
-    printf "$NORMAL_FACE\n"
-}
-
-error()
-{
-    printf $ERROR_FACE 1>&2
-    printf '[test] %s' "$@" 1>&2
-    printf "$NORMAL_FACE\n" 1>&2
-    exit 1
-}
 
 for p in $PRELOAD; do
     [ ! -e  $p ] && error "Cannot find $p."
