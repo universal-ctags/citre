@@ -991,6 +991,10 @@ MATCH can be:
 
 - nil or `eq': Match input fields that is FILENAME.
 - `in-dir': Match input fields that is in directory FILENAME."
+  (when (eq system-type 'windows-nt)
+      ;; Ctags on windows generates directory symbol in capital letter, while
+      ;; `buffer-file-name' returns it in small letter.
+      (setf (aref filename 0) (upcase (aref filename 0))))
   (let* ((filter (list 'or))
          (match (pcase match
                   ((or 'nil 'eq) 'eq)
@@ -998,12 +1002,8 @@ MATCH can be:
          (info (citre-core-tags-file-info tagsfile))
          (cwd (gethash 'dir info))
          (relative-filename (when (and (gethash 'relative-path-p info)
-                                       (file-in-directory-p filename cwd))
-                              (file-relative-name filename cwd))))
-    (when (eq system-type 'windows-nt)
-      ;; Ctags on windows generates directory symbol in capital letter, while
-      ;; `buffer-file-name' returns it in small letter.
-      (setf (aref filename 0) (upcase (aref filename 0))))
+                                       (string-prefix-p cwd filename))
+                              (substring filename (length cwd)))))
     (push (citre-core-filter 'input filename match) filter)
     (when relative-filename
       (push (citre-core-filter 'input relative-filename match) filter))
