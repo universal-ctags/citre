@@ -793,10 +793,13 @@ This function caches the info, and uses the cache when possible."
                          nil nil #'equal)))
     (if (and info (equal (gethash 'time info) recent-mod))
         info
-      (setf (alist-get tagsfile
-                       citre-core--tags-file-info-alist
-                       nil nil #'equal)
-            (citre-core--fetch-tags-file-info tagsfile)))))
+      (let ((info (citre-core--fetch-tags-file-info tagsfile)))
+        ;; Seems `setf' in Emacs 26 doesn't return the last VAL.
+        (setf (alist-get tagsfile
+                         citre-core--tags-file-info-alist
+                         nil nil #'equal)
+              info)
+        info))))
 
 ;;;;; Build filter expressions
 
