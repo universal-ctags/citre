@@ -197,8 +197,8 @@ returned."
          (info (make-hash-table :test #'eq))
          (relative-file-filter
           (if (eq system-type 'windows-nt)
-              (not (citre-core-filter 'input "[[:alpha:]]:" 'regexp))
-            (not (citre-core-filter 'input "/" 'prefix))))
+              (citre-core-filter 'input "[[:alpha:]]:" 'regexp nil 'invert)
+            (citre-core-filter 'input "/" 'prefix nil 'invert)))
          (tag (car (citre-core-get-tags
                     tagsfile nil nil nil
                     :filter relative-file-filter
