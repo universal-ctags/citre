@@ -27,3 +27,16 @@ work correctly."
     (and (equal (length a) (length b))
          (equal (length (cl-intersection a b :test #'equal))
                 (length a)))))
+
+(defun make-tag (&rest data)
+  "Make a tag from DATA.
+DATA is a sequence of FIELD VALUE pairs."
+  (let ((tag (make-hash-table :test #'eq))
+        (i 0)
+        (len (length data)))
+    (while (< (1+ (* 2 i)) len)
+      (let ((field (nth (* 2 i) data))
+            (val (nth (1+ (* 2 i)) data)))
+        (puthash field val tag))
+      (cl-incf i))
+    tag))
