@@ -264,7 +264,7 @@ pseudo tags."
             ;; Delete the process when we gather enough lines.
             (when (and lines (>= (length result) lines))
               (setq result (cl-subseq result 0 lines))
-              (delete-process proc))))
+              (quit-process proc))))
          (proc-sentinel
           (lambda (proc msg)
             ;; The MSG passed to the sentinel function is not reliable since it
