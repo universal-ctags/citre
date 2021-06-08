@@ -6,7 +6,7 @@
 ;; Maintainer: Hao WANG <amaikinono@gmail.com>
 ;; Created: 18 Jan 2021
 ;; Keywords: convenience, tools
-;; Homepage: https://github.com/AmaiKinono/citre
+;; Homepage: https://github.com/universal-ctags/citre
 ;; Version: 0
 
 ;; This file is NOT part of GNU Emacs.

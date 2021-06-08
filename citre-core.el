@@ -6,7 +6,7 @@
 ;; Maintainer: Hao Wang <amaikinono@gmail.com>
 ;; Created: 04 May 2020
 ;; Keywords: convenience, tools
-;; Homepage: https://github.com/AmaiKinono/citre
+;; Homepage: https://github.com/universal-ctags/citre
 ;; Version: 0
 
 ;; This file is NOT part of GNU Emacs.
@@ -50,7 +50,7 @@
   :group 'convenience
   :group 'tools
   :prefix "citre-"
-  :link '(url-link "https://github.com/AmaiKinono/citre"))
+  :link '(url-link "https://github.com/universal-ctags/citre"))
 
 (defcustom citre-readtags-program nil
   "The name or path of the readtags program.

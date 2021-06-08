@@ -83,7 +83,7 @@ If you don't have readtags executable in your PATH, customize
 1. Clone this repository:
 
    ```console
-   $ git clone https://github.com/AmaiKinono/citre.git /path/to/citre
+   $ git clone https://github.com/universal-ctags/citre.git /path/to/citre
    ```
 
 2. Add the path to your `load-path` in your Emacs configuration:
