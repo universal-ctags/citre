@@ -8,6 +8,7 @@
 ;; Keywords: convenience, tools
 ;; Homepage: https://github.com/universal-ctags/citre
 ;; Version: 0
+;; Package-Requires: ((emacs "26.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -25,6 +26,8 @@
 ;; along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+
+;; Lookup tables used by citre-core.el.
 
 ;;; Code:
 
