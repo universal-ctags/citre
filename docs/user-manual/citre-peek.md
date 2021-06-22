@@ -119,7 +119,17 @@ I've developed [Clue](https://github.com/AmaiKinono/clue) for this purpose.
 With it, you could copy a location as a link, and paste it in your note. The
 note can be any plain text file, so you can use any markup language you like.
 
-`citre-peek` has nice integration with Clue: When in a peek window, you can
-call `citre-peek-copy-clue-link` to copy the currently browsed line as a clue
-link. Since you can quickly browse the code reading history in the peek window,
-it easy and fast to write a code-reading note this way.
+`citre-peek` has nice integration with Clue: When in a peek window:
+
+- You can call `citre-peek-copy-clue-link` to copy the currently browsed line
+  as a clue link. The link can then be pasted by `clue-paste`.
+- Or you can call `citre-peek-paste-clue-link` to directly paste a link to the
+  line.
+
+Since you can restore the peek window in your note file buffer, You can:
+
+- Browse the code reading history,
+- Find the locations needed,
+- Paste their links in your note.
+
+It feels easy and slick to write a code reading note in this way.

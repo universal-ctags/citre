@@ -58,6 +58,7 @@
 ;; We use this function for integration with the package "clue".  We don't
 ;; require it as it's not necessary for citre-peek to work.
 (declare-function clue-copy-location "clue" (file line &optional project))
+(declare-function clue-paste-location "clue" (file line &optional project))
 
 ;;;; User options
 
@@ -1517,11 +1518,13 @@ A Saved session can be loaded by `citre-peek-load-session'."
     (when citre-peek-backward-in-chain-after-jump
       (citre-peek-chain-backward))))
 
-(defun citre-peek-copy-clue-link ()
-  "Copy currently browsed line in the peek window as a clue link.
-This depends on the package
-\"Clue\" (https://github.com/AmaiKinono/clue)."
-  (interactive)
+;;;;; Clue integration
+
+(defun citre-peek--current-line-clue-location ()
+  "Return the location of the first line in peek window.
+This location is for using in Clue API calls."
+  (unless citre-peek--current-session
+    (user-error "No active peek session"))
   (pcase-let* ((entry (citre-peek--current-def-entry))
                (tag (citre-peek--def-entry-tag entry))
                (`(,buf . ,pos) (citre-peek--get-buf-and-pos entry))
@@ -1534,8 +1537,28 @@ This depends on the package
             (setq line (line-number-at-pos)))
           (citre-peek--hack-buffer-file-name
             (setq project (funcall citre-project-root-function)))
-          (clue-copy-location file line project))
+          `(,file ,line ,project))
       (user-error "The file doesn't exist"))))
+
+(defun citre-peek-copy-clue-link ()
+  "Copy currently browsed line in the peek window as a clue link.
+The copied link can then be pasted by `clue-paste'.
+
+This depends on the package
+\"Clue\" (https://github.com/AmaiKinono/clue)."
+  (interactive)
+  (pcase-let* ((`(,file ,line ,project)
+                (citre-peek--current-line-clue-location)))
+    (clue-copy-location file line project)))
+
+(defun citre-peek-paste-clue-link ()
+  "Paste currently browsed line in the peek window as a clue link.
+This depends on the package
+\"Clue\" (https://github.com/AmaiKinono/clue)."
+  (interactive)
+  (pcase-let* ((`(,file ,line ,project)
+                (citre-peek--current-line-clue-location)))
+    (clue-paste-location file line project)))
 
 (provide 'citre-peek)
 
