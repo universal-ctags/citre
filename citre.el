@@ -6,7 +6,7 @@
 ;; Maintainer: Hao Wang <amaikinono@gmail.com>
 ;; Created: 05 Feb 2020
 ;; Keywords: convenience, tools
-;; Homepage: https://github.com/AmaiKinono/citre
+;; Homepage: https://github.com/universal-ctags/citre
 ;; Version: 0
 ;; Package-Requires: ((emacs "26.1"))
 
@@ -30,7 +30,7 @@
 ;; Citre is an advanced Ctags (or actually, readtags) frontend for Emacs.
 
 ;; Read README.md to know about Citre.  If you haven't received such a file,
-;; please visit https://github.com/AmaiKinono/citre.
+;; please visit https://github.com/universal-ctags/citre.
 
 ;;; Code:
 
