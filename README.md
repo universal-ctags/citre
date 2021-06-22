@@ -31,14 +31,15 @@ Let's see them in action!
 
   ![citre-jump](citre-jump.jpg)
 
-- `citre-peek`. It opens a "peek window" to show the definition. Notice the
-  code reading history at the bottom of the peek window:
+- `citre-peek`. It opens a "peek window" to show the definition of a symbol:
 
   ![citre-peek](citre-peek.jpg)
 
-  Do you hate having to switch between a lot of buffers and clean up unused
-  ones while reading code? The history of `citre-peek` is a tree that you can
-  browse and edit, without leaving current buffer!
+  And there's more. Notice the code reading history at the bottom of the peek
+  window. Do you hate having to switch between a lot of buffers while reading
+  code? With `citre-peek`, you can peek a symbol in the peek window. This
+  allows a tree-like code reading history, that you can browse and edit,
+  without leaving current buffer!
 
 All above screenshots were taken in a huge project (the Linux kernel), and
 Citre is still fast, because readtags performes binary search on the tags file.
