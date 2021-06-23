@@ -49,6 +49,10 @@
 (require 'citre-util)
 (require 'color)
 
+;; Suppress compiler warning
+
+(eval-when-compile (require 'xref))
+
 ;; We use these functions only in xref buffer, and they will be avaliable at
 ;; that time.
 (declare-function xref--item-at-point "xref" ())
