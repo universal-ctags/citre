@@ -81,6 +81,9 @@ If you don't have readtags executable in your PATH, customize
 
 ### Installation
 
+You can install `citre` from [MELPA](https://melpa.org). Below are instructions
+to manually install Citre.
+
 1. Clone this repository:
 
    ```console
