@@ -86,7 +86,7 @@ You can use `.tags` as the tags file name by `-f .tags`, then if your
 tracking it.
 
 Supported tags file names can be seen and modified in `citre-tags-files`. These
-file names are search up directory hierarchy from the current file, and if one
+file names are searchd up directory hierarchy from the current file, and if one
 of them is found, they are used as the tags file for current buffer. This means
 you can put tags file under different directories in the same project, to use
 different tags files in them.
