@@ -76,6 +76,15 @@
 (put 'citre-enable-imenu-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-imenu-integration)
 
+;;;;; Options: Generate/update tags file
+
+(defcustom citre-ctags-program nil
+  "The name or path of the ctags program.
+Citre requires ctags program provided by Universal Ctags.  Set
+this if ctags is not in your PATH, or its name is not \"ctags\""
+  :type 'string
+  :group 'citre)
+
 ;;;;; Options: `citre-jump' related
 
 (defcustom citre-jump-select-definition-function
@@ -125,6 +134,109 @@ completion session can be interrupted when you call
 key by mistake, but that doesn't happen very often."
   :type 'boolean
   :group 'citre)
+
+;;;; Tool: Generate/update tags file
+
+;;;;; Command
+
+(defun citre-update-tags-file (&optional tagsfile cwd)
+  "Update the tags file of current project in cache dir.
+When no such tags file is found, create one by
+`citre-create-tags-file'.
+
+If a canonical path TAGSFILE is specified, update it.  If
+canonical path CWD is non-nil, run ctags under it.
+
+This requires the ctags program provided by Universal Ctags."
+  (interactive)
+  (if-let* ((tagsfile (or tagsfile (citre-tags-file-path)))
+            (tagsfile (file-local-name tagsfile))
+            (cwd (or cwd
+                     (gethash 'dir (citre-core-tags-file-info tagsfile))
+                     (error "TAG_PROC_CWD ptag doesn't found in %s"
+                            tagsfile)))
+            (cwd (citre-expand-file-name-maybe-remote cwd))
+            (cwd-local (file-local-name cwd))
+            (name (file-name-nondirectory tagsfile))
+            (is-cache-tagsfile-p
+             (string-match (concat (regexp-quote
+                                    ;; Last part of cwd
+                                    (file-name-nondirectory
+                                     (directory-file-name cwd-local)))
+                                   "-" (md5 cwd-local) "-\\(.*\\).tags")
+                           name)))
+      (let ((ctags (or citre-ctags-program "ctags"))
+            (langs (match-string 1 name))
+            (default-directory cwd)
+            cmd)
+        (push ctags cmd)
+        (push "-f" cmd)
+        (push tagsfile cmd)
+        (unless (string-empty-p langs)
+          (push (format "--languages=%s" langs) cmd))
+        (push "--kinds-all=*" cmd)
+        (push "--fields=*" cmd)
+        (push "--extras=*" cmd)
+        ;; Exclude Emacs lock files. TODO: user option for this
+        (push "--exclude=.#*" cmd)
+        (push "-R" cmd)
+        (push "." cmd)
+        (make-process
+         :name "ctags"
+         :buffer (get-buffer-create "*ctags*")
+         :command (nreverse cmd)
+         :connection-type 'pipe
+         :stderr nil
+         :sentinel
+         (lambda (proc _msg)
+           (pcase (process-status proc)
+             ('exit
+              (pcase (process-exit-status proc)
+                (0 (message "tags file update finished"))
+                (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
+             (s (user-error "Abnormal status of ctags: %s" s))))
+         ;; TODO: Set default-directory properly
+         :file-handler t))
+    (when (y-or-n-p "Can't find tags file in cache dir.  Create one? ")
+      (citre-create-tags-file)
+      ;; TODO: We use internal variable of citre-util.el here.  Do we really
+      ;; need an API for this?  Do we need to clean this in all buffers?
+      (setq citre--tags-file nil))))
+
+(defun citre-create-tags-file ()
+  "Create a tags file in cache dir.
+This requires the ctags program provided by Universal Ctags."
+  (interactive)
+  (let* ((ctags (or citre-ctags-program "ctags"))
+         (cache-dir (or (citre-tags-cache-dirs)
+                        (user-error "No cache dir specified in \
+`citre-tags-file-cache-dirs'")))
+         (root (expand-file-name
+                (read-directory-name
+                 "Project root dir: "
+                 (funcall citre-project-root-function) nil t)))
+         (langs (with-temp-buffer
+                  (call-process ctags nil (current-buffer) nil
+                                "--list-languages")
+                  (split-string (buffer-string) "\n" t)))
+         (langs (completing-read-multiple
+                 "Languages to scan (empty input means using them all): "
+                 langs nil t ""))
+         tagsfile)
+    ;; Choose a cache dir
+    (if (cdr cache-dir)
+        (while (string-empty-p
+                (setq cache-dir
+                      (completing-read "Select a dir to save tags file: "
+                                       cache-dir nil t))))
+      (setq cache-dir (car cache-dir)))
+    (unless (file-exists-p cache-dir)
+      (make-directory cache-dir))
+    (setq cache-dir (file-local-name cache-dir))
+    ;; Assemble the tags file name
+    (setq tagsfile (expand-file-name (citre-cache-tags-file-name root langs)
+                                     cache-dir))
+    (citre-update-tags-file tagsfile root)))
 
 ;;;; Tool: Xref integration
 
