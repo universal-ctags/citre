@@ -202,6 +202,48 @@ manual talks about the strengths/weaknesses of ctags, and the design principle
 of Citre. Non-developers are also encouraged to read it to know more about
 these tools.
 
+## FAQ
+
+- Q: What are the advantages of Citre & Ctags over etags, gtags, language
+  servers...
+
+  A: See [this documentation](docs/user-manual/compare-with-other-tools.md).
+
+- Q: Why doesn't Citre support automatically update tags file?
+
+  A: Citre uses both line number and a search pattern to locate a tag. When the
+  file containing the tag is edited, Citre could still locate the tag using the
+  search pattern. Citre even tries to locate the tag when the line containing
+  the tag itself is edited.
+
+  So, jumping to definition is still useable when the file is edited. There's
+  no need to frequently update the tags file.
+
+  You may ask "what if I add new definitions, or modify/delete existing ones?"
+  The truth is, if your codebase is reasonably large that you have to index
+  them by Ctags, then small edits won't cause much trouble. You can just
+  regenerate the tags file when needed.
+
+- Q: How many languages does Citre support?
+
+  A: Citre supports all languages that Ctags support. The latest [Universal
+  Ctags](https://github.com/universal-ctags/ctags) support 134(!) languages:
+
+  ```console
+  $ ctags --list-languages | wc -l
+  134
+  ```
+
+  Besides, you could [define your own parser with
+  regex](http://docs.ctags.io/en/latest/man/ctags-optlib.7.html) to support
+  more languages.
+
+- Q: But seems for now Citre only has support code for C...
+
+  A: No matter what's the language, as long as you have a tags file for it,
+  then Citre works out of the box. Language-specific support is for extra minor
+  goodies, see the "Commentary" section in each language-support code file.
+
 ## Current status
 
 Citre is in its alpha stage. The authors are still exploring the designing and
