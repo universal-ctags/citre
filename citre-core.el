@@ -248,7 +248,7 @@ pseudo tags."
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
-         cmd proc cache result stderr-msg exit-msg
+         cmd proc cache result exit-msg
          (proc-filter
           ;; Collect chunks of readtags output (STR) into RESULT.
           (lambda (proc str)
@@ -265,33 +265,8 @@ pseudo tags."
             ;; Delete the process when we gather enough lines.
             (when (and lines (>= (length result) lines))
               (setq result (cl-subseq result 0 lines))
-              (quit-process proc))))
-         (proc-sentinel
-          (lambda (proc msg)
-            ;; The MSG passed to the sentinel function is not reliable since it
-            ;; changes as the locale environment changes.  So we use
-            ;; `process-status'.
-            (pcase (process-status proc)
-              ;; The signal is sent by us as there are enough LINES in RESULT.
-              ('signal nil)
-              ('exit
-               (pcase (process-exit-status proc)
-                 ;; In case the output doesn't end with a newline.
-                 (0 (when cache (setq result (nconc result cache))))
-                 (s (setq exit-msg (format "readtags exits %s\n" s)))))
-              (_ (setq exit-msg
-                       (concat "readtags: " (string-trim msg) "\n"))))))
-         (pipe (make-pipe-process
-                :name "readtags-error"
-                ;; The pipe process always creates a buffer, though we don't
-                ;; use it.  So we make it an invisible one (by prefix the name
-                ;; by a space).
-                :buffer " *readtags-error*"
-                :filter (lambda (_proc str)
-                          (if stderr-msg
-                              (setq stderr-msg (concat stderr-msg str))
-                            (setq stderr-msg str)))
-                :sentinel 'ignore)))
+              (when (process-live-p proc)
+                (interrupt-process proc))))))
     ;; Program name
     (push (or citre-readtags-program "readtags") cmd)
     ;; Read from this tags file
@@ -308,33 +283,36 @@ pseudo tags."
           (push "-l" cmd)
         (push "-" cmd)
         (push name cmd)))
-    ;; NOTE: Originally, the following code is wrapped in `unwind-protect', and
-    ;; we kill (process-buffer pipe) as a clean up (`:noquery' for `pipe' was
-    ;; set to t). It turns out on Windows, `company-capf' often doesn't popup
-    ;; completions, and it frenquently causes Emacs to be frozen.  I don't know
-    ;; why we can't kill a buffer after its associated process is finished...
-    ;; Anyway, leave the buffer there doesn't harm.
-    (setq proc
-          (make-process
-           :name "readtags"
-           :buffer nil
-           :command (nreverse cmd)
-           :connection-type 'pipe
-           ;; NOTE: If we use a buffer as `:stderr' (and kill it when we
-           ;; finish), then the async process, `while-no-input' and
-           ;; `company-capf' don't play well.  The completions will often not
-           ;; popup (being nil).  I don't know why.
-           :stderr pipe
-           :filter proc-filter
-           :sentinel proc-sentinel))
-    ;; Poll for the process to finish.
-    (accept-process-output proc)
-    (accept-process-output pipe)
-    (if (or stderr-msg exit-msg)
-        (error (concat (or exit-msg "")
-                       (if stderr-msg (string-trim stderr-msg) "")))
-      result)))
-
+    (unwind-protect
+        (progn
+          (setq proc
+                (make-process
+                 :name "readtags"
+                 :buffer nil
+                 :command (nreverse cmd)
+                 :connection-type 'pipe
+                 ;; NOTE: Using a buffer or pipe for :stderr has caused a lot
+                 ;; of troubles on Windows.
+                 :stderr nil
+                 :filter proc-filter
+                 :sentinel nil))
+          ;; Poll for the process to finish.
+          (while (accept-process-output proc))
+          (pcase (process-status proc)
+            ;; The signal is sent by us as there are enough LINES in RESULT.
+            ('signal nil)
+            ('exit
+             (pcase (process-exit-status proc)
+               ;; In case the output doesn't end with a newline.
+               (0 (when cache (setq result (nconc result cache))))
+               (s (setq exit-msg (format "readtags exits %s\n" s)))))
+            (s (setq exit-msg (format "abnormal status of readtags: %s\n" s))))
+          (if exit-msg
+              (error (concat (or exit-msg "")
+                             (string-join result "\n")))
+            result))
+      (when (process-live-p proc)
+        (interrupt-process proc)))))
 
 ;;;;; Parse tagline
 
