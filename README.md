@@ -120,7 +120,7 @@ in your project root:
 $ ctags --languages=c,c++,... --kinds-all='*' --fields='*' --extras='*' -R
 ```
 
-See the [user manual](docs/user-manual/about-tags-file.md) to know more about
+See [this user manual](docs/user-manual/about-tags-file.md) to know more about
 tags file format, and how to tweak the info included in a tags file.
 
 *Note:* Emacs users are more familiar with the TAGS format. TAGS format is
@@ -149,13 +149,12 @@ $ ctags -o .tags --languages=c,c++,... ...
 
 ### Use Citre
 
-`citre-mode` is used to enable `completion-at-point`, xref and imenu
-integration. If you also use `company`, make sure `company-capf` is in
-`company-backends`.
+Use `citre-mode` to enable `completion-at-point`, xref and imenu integration.
+If you also use `company`, make sure `company-capf` is in `company-backends`.
 
 By default, `citre-mode` is automatically enabled when you open a file, and a
-tags file is found for it. If you don't use `citre-config`, you can put this in
-your configuration:
+tags file can be found for it. If you don't use `citre-config`, you can put
+this in your configuration:
 
 ``` elisp
 (add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
@@ -163,7 +162,7 @@ your configuration:
 
 `citre-jump` and `citre-peek` works without `citre-mode`. Type `M-x citre-jump`
 on a symbol to jump to its definition, `M-x citre-jump-back` to go back in the
-jump history. About `citre-peek`, See [user
+jump history. About `citre-peek`, See [this user
 manual](docs/user-manual/citre-peek.md) to know how to use it.
 
 Here's a example configuration using
@@ -189,7 +188,7 @@ and tweak it to your own need.
    citre-project-root-function #'projectile-project-root))
 ```
 
-See the [user manual](docs/user-manual/toc.md) to know more customizable
+See [this user manual](docs/user-manual/toc.md) to know more customizable
 options.
 
 ## Manuals
@@ -234,7 +233,7 @@ these tools.
   134
   ```
 
-  Besides, you could [define your own parser with
+  Besides, you could [define your own parser using
   regex](http://docs.ctags.io/en/latest/man/ctags-optlib.7.html) to support
   more languages.
 
