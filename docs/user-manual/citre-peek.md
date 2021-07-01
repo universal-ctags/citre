@@ -74,8 +74,8 @@ becomes:
 ```
 
 And you'll find the definition where you peeked through is prefixed by a `*`.
-If it's not the first one in the definition list, it's also moved to the first
-position.
+If it was not the first one in the definition list, it's also moved to the
+first position.
 
 You can type `S-<up>` and `S-<down>` to move the current definition up and
 down, or `M-l f` to make it the first one.
