@@ -16,6 +16,10 @@ keybindings to browse in the peek window:
 
 These keys are defined in `citre-peek-keymap`, and can be customized.
 
+Pro tip: if your cursor is near the bottom of the window, the peek window won't
+be fully displayed. Press `C-l` (the `recenter` command) to center the cursor
+in the window.
+
 Here's a little bonus: You can use `citre-peek` in an xref buffer to peek the
 location of current item.
 
@@ -42,7 +46,8 @@ line will look like:
 `sdf` is the ace string. Type it to peek the definition of `function`.
 
 If you don't type the ace string, but press `RET`, than the symbol under point
-will be used, like `citre-peek`.
+will be used, just like `citre-peek`. Therefore, `citre-ace-peek` could
+completely replace `citre-peek`.
 
 The keys used in an ace session can be customized by `citre-peek-ace-keys`,
 `citre-peek-cancel-ace-keys` and `citre-peek-ace-pick-symbol-at-point-keys`.
