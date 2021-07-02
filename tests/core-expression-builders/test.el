@@ -77,48 +77,28 @@
                  '(and $kind ((string->regexp "^(function|f)$"
                                               :case-fold false)
                               $kind))))
-  (should (equal (citre-core-filter-kind "function" nil t)
+  (should (equal (citre-core-filter-kind "function" t)
                  '(or (not $kind) ((string->regexp "^(function|f)$"
                                                    :case-fold false)
-                                   $kind))))
-  (should (equal (citre-core-filter-kind
-                  "function" (expand-test-file "tags-single-letter-kind"))
-                 '(and $kind (eq? $kind "f"))))
-  (should (equal (citre-core-filter-kind
-                  "function" (expand-test-file "tags-full-length-kind"))
-                 '(and $kind (eq? $kind "function")))))
+                                   $kind)))))
 
 (ert-deftest test-filter-input ()
   "Test `citre-core-filter-input'."
   (should (equal (citre-core-filter-input
-                  "/path/to/test.el" (expand-test-file "tags-absolute-path"))
-                 '(or (and $input (eq? $input "/path/to/test.el")))))
-  (should (equal (citre-core-filter-input
-                  "/path/to/test.el" (expand-test-file "tags-absolute-path")
-                  'eq)
-                 '(or (and $input (eq? $input "/path/to/test.el")))))
-  (should (equal (citre-core-filter-input
-                  "/path/to/" (expand-test-file "tags-absolute-path")
-                  'in-dir)
-                 '(or (and $input (prefix? $input "/path/to/")))))
-  (should (equal (citre-core-filter-input
-                  "/path/to/test.el" (expand-test-file "tags-relative-path"))
-                 ;; This is desired, as even if FILENAME is under CWD, if its
-                 ;; full path is passed to ctags, the input field uses the full
-                 ;; path.
+                  "/path/to/test.el" (expand-test-file))
                  '(or (and $input (eq? $input "/path/to/test.el"))
                       (and $input (eq? $input "test.el")))))
   (should (equal (citre-core-filter-input
-                  "/path/to/test.el" (expand-test-file "tags-relative-path")
+                  "/path/to/test.el" (expand-test-file)
                   'eq)
                  '(or (and $input (eq? $input "/path/to/test.el"))
                       (and $input (eq? $input "test.el")))))
   (should (equal (citre-core-filter-input
-                  "/path/" (expand-test-file "tags-relative-path")
+                  "/path/" (expand-test-file)
                   'in-dir)
                  '(or (and $input (prefix? $input "/path/")))))
   (should (equal (citre-core-filter-input
-                  "/path/to/somewhere/" (expand-test-file "tags-relative-path")
+                  "/path/to/somewhere/" (expand-test-file)
                   'in-dir)
                  '(or (and $input (prefix? $input "/path/to/somewhere/"))
                       (and $input (prefix? $input "somewhere/"))))))

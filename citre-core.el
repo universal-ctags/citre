@@ -135,33 +135,21 @@ Info fields and their corresponding values are:
 
 - `time': The last update time of the file info, which is, the
   hash table.  It's in the style of (current-time).
-- `relative-path-p': Whether there's relative path used in the
-  tags file.
 - `dir': The current working directory when generating the tags
-  file.  This can be nil when `relative-path-p' is t, since
-  `path' would be useless in this situation.
-- `one-letter-kind-p': Whether the tags file uses single-letter
-  kind field.
+  file.  This can be nil before a tag using relative path
+  requires us to ascertain it.
 - `kind-table': A hash table for getting full-length kinds from
   single-letter kinds, like
   `citre-core--kind-name-single-to-full-table', or nil if the
   TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
-(defun citre-core--get-dir (tag ptag-cwd tagsfile relative-path-p)
+;; TODO: Utilize info from upper components to guess the CWD more accurately.
+(defun citre-core--get-dir (ptag-cwd tagsfile)
   "Get the `dir' info of TAGSFILE.
-TAG is a tag from the file, PTAG-CWD is the value of TAG_PROC_CWD
-pseudo tag.  RELATIVE-PATH-P indicates whether the tags file uses
-relative path."
+PTAG-CWD is the value of TAG_PROC_CWD pseudo tag.  If it's nil,
+we simply return the dir containing the tag."
   (or ptag-cwd
-      (let ((cwd-guess (file-name-directory tagsfile)))
-        ;; Further inspect it only when relative path is used.
-        (when relative-path-p
-          (or (when (file-exists-p
-                     (expand-file-name (gethash 'input tag)
-                                       cwd-guess))
-                cwd-guess)
-              (read-directory-name
-               (format "Root dir of tags file %s: " tagsfile)))))))
+      (file-name-directory tagsfile)))
 
 (defun citre-core--get-kind-table (kind-descs)
   "Get the `kind-table' info.
@@ -179,16 +167,6 @@ KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
           (puthash kind kind-full (gethash lang table))))
       table)))
 
-;; NOTE: Since we call the `citre-core-get-tags' API to get sample tags for
-;; analysis, and that in turn requires tags file info, we must prevent infinite
-;; loop from happening.  We use the following rules:
-;;
-;; - We must not ask for extension fields (i.e., fields that don't exists in
-;;   the tags file, but defined by Citre) here to get tags file info.
-;; - `citre-core-get-tags', when used to get only regular fields (i.e.,
-;;   non-extension fields), must not ask for tags file info (which is what we
-;;   are doing).
-
 (defun citre-core--fetch-tags-file-info (tagsfile)
   "Write the additional info of TAGSFILE to `citre--tags-file-info-alist'.
 TAGSFILE is the canonical path of the tags file.  The info is
@@ -196,34 +174,16 @@ returned."
   (let* ((recent-mod (file-attribute-modification-time
                       (file-attributes tagsfile)))
          (info (make-hash-table :test #'eq))
-         (relative-file-filter
-          (if (eq system-type 'windows-nt)
-              (citre-core-filter 'input "[[:alpha:]]:" 'regexp nil 'invert)
-            (citre-core-filter 'input "/" 'prefix nil 'invert)))
-         (tag (car (citre-core-get-tags
-                    tagsfile nil nil nil
-                    :filter relative-file-filter
-                    :require '(input pattern kind) :lines 1)))
-         (relative-path-p (when tag t))
-         (tag (or tag
-                  ;; If tags file uses relative path, get its first tag.
-                  (car (citre-core-get-tags
-                        tagsfile nil nil nil
-                        :require '(input pattern kind) :lines 1))
-                  (error "Invalid tags file")))
          (ptag-cwd (nth 1 (car (citre-core-get-pseudo-tags
                                 "TAG_PROC_CWD" tagsfile))))
          (kind-descs (citre-core-get-pseudo-tags
                       "TAG_KIND_DESCRIPTION" tagsfile 'prefix)))
+    ;; time
     (puthash 'time recent-mod info)
-    ;; path
-    (puthash 'relative-path-p relative-path-p info)
-    (puthash 'dir (citre-core--get-dir tag ptag-cwd tagsfile relative-path-p)
+    ;; dir
+    (puthash 'dir (citre-core--get-dir ptag-cwd tagsfile)
              info)
-    ;; kind
-    (puthash 'one-letter-kind-p
-             (eq 1 (length (citre-core-get-field 'kind tag)))
-             info)
+    ;; kind-table
     (puthash 'kind-table
              (citre-core--get-kind-table kind-descs)
              info)
@@ -612,16 +572,16 @@ returned directly.  If not, then:
   presented.
 
 If this fails, the single-letter kind is returned directly."
-  (if-let ((one-letter-kind-p (gethash 'one-letter-kind-p tagsfile-info)))
-      (if-let* ((kind (gethash 'kind tag))
-                (lang (citre-core--get-lang-from-tag tag))
-                (table (or (gethash 'kind-table tagsfile-info)
-                           citre-core--kind-name-single-to-full-table))
-                (table (gethash lang table))
-                (kind-full (gethash kind table)))
-          kind-full
-        kind)
-    (gethash 'kind tag)))
+  (if-let* ((kind (gethash 'kind tag))
+            ;; Check if the kind is single letter.
+            (single-letter-p (eq (length kind) 1))
+            (lang (citre-core--get-lang-from-tag tag))
+            (table (or (gethash 'kind-table tagsfile-info)
+                       citre-core--kind-name-single-to-full-table))
+            (table (gethash lang table))
+            (kind-full (gethash kind table)))
+      kind-full
+    kind))
 
 ;;;;; Get tags from tags files
 
@@ -927,7 +887,7 @@ careful about the capitalization!"
                'regexp)
             'true))))
 
-(defun citre-core-filter-kind (kind &optional tagsfile ignore-missing)
+(defun citre-core-filter-kind (kind &optional ignore-missing)
   "Return a filter expression that matches the kind field by KIND.
 KIND should be a full-length kind.  The generated filter works on
 tags file using single-letter `kind' field, but it will match
@@ -938,29 +898,14 @@ When TAGSFILE is non-nil, it detects if the tags file uses
 single-letter kind, and generate simpler (and presumably faster)
 filter based on that.  When IGNORE-MISSING is non-nil, also keep
 tags that don't have `kind' field."
-  (let (kinds)
-    (if tagsfile
-        (if (gethash 'one-letter-kind-p (citre-core-tags-file-info tagsfile))
-            (setq kinds (gethash kind
-                                 citre-core--kind-name-full-to-single-table))
-          (setq kinds kind))
-      (setq kinds (gethash kind citre-core--kind-name-full-to-single-table))
-      (push kind kinds))
-    (when (and (listp kinds) (eq (length kinds) 1))
-      (setq kinds (car kinds)))
-    (pcase kinds
-      ;; This can happen when the tags file uses single-letter kind, a new kind
-      ;; is added to a language parser, and we didn't update the lookup table.
-      ('nil 'true)
-      ((pred stringp)
-       (citre-core-filter 'kind kinds 'eq nil nil ignore-missing))
-      ((pred listp)
-       (citre-core-filter
-        'kind
-        (concat "^("
-                (string-join (mapcar #'citre-core-regexp-quote kinds) "|")
-                ")$")
-        'regexp nil nil ignore-missing)))))
+  (let ((kinds (gethash kind citre-core--kind-name-full-to-single-table)))
+    (push kind kinds)
+    (citre-core-filter
+     'kind
+     (concat "^("
+             (string-join (mapcar #'citre-core-regexp-quote kinds) "|")
+             ")$")
+     'regexp nil nil ignore-missing)))
 
 (defun citre-core-filter-input (filename tagsfile &optional match)
   "Return a filter expression that matches the input field by FILENAME.
@@ -973,20 +918,23 @@ MATCH can be:
 
 - nil or `eq': Match input fields that is FILENAME.
 - `in-dir': Match input fields that is in directory FILENAME."
-  (when (eq system-type 'windows-nt)
-    ;; Ctags on windows generates directory symbol in capital letter, while
-    ;; `buffer-file-name' returns it in small letter.
-    (setf (aref filename 0) (upcase (aref filename 0))))
   (let* ((filter (list 'or))
          (match (pcase match
                   ((or 'nil 'eq) 'eq)
                   ('in-dir 'prefix)))
          (info (citre-core-tags-file-info tagsfile))
          (cwd (gethash 'dir info))
-         (relative-filename (when (and (gethash 'relative-path-p info)
-                                       (string-prefix-p cwd filename)
+         relative-filename)
+    (when (eq system-type 'windows-nt)
+      ;; Ctags on windows generates directory symbol in capital letter, while
+      ;; `buffer-file-name' returns it in small letter.
+      (setf (aref filename 0) (upcase (aref filename 0)))
+      ;; `cwd' may not come from the ptag, but guessed by Citre, so we need to
+      ;; do the same thing.
+      (setf (aref cwd 0) (upcase (aref cwd 0))))
+    (setq relative-filename (when (and (string-prefix-p cwd filename)
                                        (not (equal cwd filename)))
-                              (substring filename (length cwd)))))
+                              (substring filename (length cwd))))
     (push (citre-core-filter 'input filename match) filter)
     (when relative-filename
       (push (citre-core-filter 'input relative-filename match) filter))

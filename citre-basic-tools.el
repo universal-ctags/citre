@@ -498,7 +498,7 @@ is a list of tags of that kind."
                              'extras
                              '("anonymous" "reference" "inputFile")
                              'csv-contain)
-                           ,(citre-core-filter-kind "file" tags-file)))
+                           ,(citre-core-filter-kind "file")))
                 :sorter (citre-core-sorter 'line)
                 :require '(name pattern)
                 :optional '(ext-kind-full line typeref extras)))

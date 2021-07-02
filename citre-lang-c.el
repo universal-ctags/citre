@@ -109,60 +109,58 @@
 
 (defun citre-lang-c-definition-filter (symbol)
   "Filter for finding definitions of SYMBOL in C."
-  (let ((tagsfile (citre-get-property 'tags-file symbol)))
-    (pcase (citre-get-property 'syntax symbol)
-      ('header
-       `(or
-         ;; The header.
-         ,(citre-core-filter-kind "file" tagsfile)
-         ;; The references to the header.
-         ,(citre-core-filter-kind "header" tagsfile)))
-      (_ (citre-definition-default-filter symbol)))))
+  (pcase (citre-get-property 'syntax symbol)
+    ('header
+     `(or
+       ;; The header.
+       ,(citre-core-filter-kind "file")
+       ;; The references to the header.
+       ,(citre-core-filter-kind "header")))
+    (_ (citre-definition-default-filter symbol))))
 
 (defun citre-lang-c-definition-sorter (symbol)
   "Sorter for finding definitions of SYMBOL in C."
-  (let* ((tagsfile (citre-get-property 'tags-file symbol)))
-    `(<or>
-      ;; Put reference below others.
-      ,(citre-core-sorter
-        `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -))
-      ;; Sort on the kinds.
-      ,(pcase (citre-get-property 'syntax symbol)
-         ('header
-          (apply #'citre-core-sorter
-                 `(filter ,(citre-core-filter-kind "header" tagsfile) -)
-                 (and-let* ((path (citre-get-property 'literal-path symbol)))
-                   (list
-                    `(filter ,(citre-core-filter 'input path 'suffix) +)))))
-         ('member
-          (citre-core-sorter
-           `(filter ,(citre-core-filter-kind "member" tagsfile) +)))
-         ('callable-member
-          (citre-core-sorter
-           `(filter ,(citre-core-filter-kind "member" tagsfile) +)
-           ;; If a member is callable, its typeref field may include
-           ;; "(*)" as substring.
-           ;;
-           ;; e.g. f in
-           ;; ---
-           ;; struct s {
-           ;;    int (*f) (void);
-           ;; };
-           ;; ---
-           ;; is tagged like:
-           ;;
-           ;; f	input.c	2;"	...typeref:typename:int (*)(void)
-           ;; +-----------------------------------------^^^
-           ;; `- This is the clue for finding callable members.
-           `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
-         ('function
-          (citre-core-sorter
-           `(filter (or ,(citre-core-filter-kind "function" tagsfile)
-                        ,(citre-core-filter-kind "macro" tagsfile))
-                    +)))
-         ;; Don't sort for other syntax.
-         (_ 0))
-      ,(citre-core-sorter 'input '(length name +) 'name))))
+  `(<or>
+    ;; Put reference below others.
+    ,(citre-core-sorter
+      `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -))
+    ;; Sort on the kinds.
+    ,(pcase (citre-get-property 'syntax symbol)
+       ('header
+        (apply #'citre-core-sorter
+               `(filter ,(citre-core-filter-kind "header") -)
+               (and-let* ((path (citre-get-property 'literal-path symbol)))
+                 (list
+                  `(filter ,(citre-core-filter 'input path 'suffix) +)))))
+       ('member
+        (citre-core-sorter
+         `(filter ,(citre-core-filter-kind "member") +)))
+       ('callable-member
+        (citre-core-sorter
+         `(filter ,(citre-core-filter-kind "member") +)
+         ;; If a member is callable, its typeref field may include
+         ;; "(*)" as substring.
+         ;;
+         ;; e.g. f in
+         ;; ---
+         ;; struct s {
+         ;;    int (*f) (void);
+         ;; };
+         ;; ---
+         ;; is tagged like:
+         ;;
+         ;; f	input.c	2;"	...typeref:typename:int (*)(void)
+         ;; +-----------------------------------------^^^
+         ;; `- This is the clue for finding callable members.
+         `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
+       ('function
+        (citre-core-sorter
+         `(filter (or ,(citre-core-filter-kind "function")
+                      ,(citre-core-filter-kind "macro"))
+                  +)))
+       ;; Don't sort for other syntax.
+       (_ 0))
+    ,(citre-core-sorter 'input '(length name +) 'name)))
 
 ;;;; Auto-completion
 
@@ -170,30 +168,29 @@
   "Filter for auto-completing SYMBOL in C."
   (pcase (citre-get-property 'syntax symbol)
     ('header
-     (citre-core-filter-kind "file" (citre-get-property 'tags-file symbol)))
+     (citre-core-filter-kind "file"))
     (_
      (citre-completion-default-filter symbol))))
 
 (defun citre-lang-c-completion-sorter (symbol)
   "Sorter for auto-completing SYMBOL in C."
-  (let* ((tagsfile (citre-get-property 'tags-file symbol)))
-    `(<or>
-      ,(pcase (citre-get-property 'syntax symbol)
-         ('member
-          (citre-core-sorter
-           `(filter ,(citre-core-filter-kind "member" tagsfile) +)))
-         ('callable-member
-          (citre-core-sorter
-           `(filter ,(citre-core-filter-kind "member" tagsfile) +)
-           ;; See the comment in `citre-lang-c-definition-sorter'.
-           `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
-         ('function
-          (citre-core-sorter
-           `(filter (or ,(citre-core-filter-kind "function" tagsfile)
-                        ,(citre-core-filter-kind "macro" tagsfile))
-                    +)))
-         (_ 0))
-      ,citre-completion-default-sorter)))
+  `(<or>
+    ,(pcase (citre-get-property 'syntax symbol)
+       ('member
+        (citre-core-sorter
+         `(filter ,(citre-core-filter-kind "member") +)))
+       ('callable-member
+        (citre-core-sorter
+         `(filter ,(citre-core-filter-kind "member") +)
+         ;; See the comment in `citre-lang-c-definition-sorter'.
+         `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
+       ('function
+        (citre-core-sorter
+         `(filter (or ,(citre-core-filter-kind "function")
+                      ,(citre-core-filter-kind "macro"))
+                  +)))
+       (_ 0))
+    ,citre-completion-default-sorter))
 
 ;;;; Plugging into the language support framework
 
