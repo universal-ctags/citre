@@ -334,7 +334,7 @@ filters/sorters can make use of them."
        ;; `citre-core-filter-kind' may exclude more tags than it should.
        ;; But we know the "F" (file) kind is preserved by ctags, and "F" is
        ;; not used anywhere else, so we could do this.
-       ,(citre-core-filter-kind "file" tags-file)
+       ,(citre-core-filter-kind "file")
        ;; Exclude tags that have "file" scope, and is not in this file.
        ,(if file-path
             `(and (not ,(citre-core-filter-input file-path tags-file))
@@ -533,7 +533,7 @@ used when it's nil."
     `(not
       (or
        ,(citre-core-filter 'extras '("anonymous" "inputFile") 'csv-contain)
-       ,(citre-core-filter-kind "file" tags-file)
+       ,(citre-core-filter-kind "file")
        ;; Exclude tags that have "file" scope, and is not in this file.
        ,(if file-path
             `(and (not ,(citre-core-filter-input file-path tags-file))
