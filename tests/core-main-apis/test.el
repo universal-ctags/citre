@@ -145,14 +145,6 @@
     (should (cl-every #'not (map-get-field 'kind tags)))
     (should (cl-every #'not (map-get-field 'signature tags)))))
 
-(ert-deftest test-get-tags-lines ()
-  "Test LINES argument in `citre-core-get-tags'."
-  (let ((tags (citre-core-get-tags (expand-test-file) "point" 'substr nil)))
-    (should (equal (length tags) 4)))
-  (let ((tags (citre-core-get-tags (expand-test-file) "point" 'substr nil
-                                   :lines 2)))
-    (should (equal (length tags) 2))))
-
 ;; `citre-core-get-pseudo-tags'
 
 (ert-deftest test-get-pseudo-tags ()

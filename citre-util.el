@@ -140,7 +140,7 @@ Annotations include kind, type, etc."
 (cl-defun citre-get-tags
     (&optional tagsfile name match
                &key filter sorter
-               require optional exclude parse-all-fields lines)
+               require optional exclude parse-all-fields)
   "Get tags in tags file TAGSFILE that match NAME.
 This is like `citre-core-get-tags', except that:
 
@@ -150,8 +150,8 @@ This is like `citre-core-get-tags', except that:
   NAME.
 
 TAGSFILE is the canonical path of the tags file.  For FILTER,
-SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and LINES,
-see `citre-core-get-tags'.
+SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
+`citre-core-get-tags'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
@@ -161,8 +161,7 @@ and some of its fields, which can be utilized by
                        :filter filter :sorter sorter
                        :require require :optional optional
                        :exclude exclude
-                       :parse-all-fields parse-all-fields
-                       :lines lines))
+                       :parse-all-fields parse-all-fields))
 
 ;;;; Helpers
 

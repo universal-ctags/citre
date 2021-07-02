@@ -194,12 +194,11 @@ returned."
 ;;;;; Get lines
 
 (defun citre-core--get-lines
-    (tagsfile &optional name match case-fold filter sorter action lines)
+    (tagsfile &optional name match case-fold filter sorter action)
   "Get lines in TAGSFILE using readtags.
 See `citre-core-get-tags' to know about NAME, MATCH, CASE-FOLD,
-FILTER, SORTER and LINES.  ACTION can be nil, to get regular
-tags, or any valid actions in readtags, e.g., \"-D\", to get
-pseudo tags."
+FILTER, and SORTER.  ACTION can be nil, to get regular tags, or
+any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
   (let* ((match (or match 'exact))
          (extras (concat
                   "-Ene"
@@ -208,25 +207,10 @@ pseudo tags."
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
-         cmd proc cache result exit-msg
-         (proc-filter
-          ;; Collect chunks of readtags output (STR) into RESULT.
-          (lambda (proc str)
-            (when cache
-              (setq str (concat (car cache) str)))
-            ;; A chunk can end in the middle of a line, we need to handle that.
-            (if (string-match "\n$" str)
-                (progn
-                  (setq result (nconc result (split-string str "\n" t)))
-                  (setq cache nil))
-              (let ((output-lines (split-string str "\n" t)))
-                (setq result (nconc result (butlast output-lines)))
-                (setq cache (last output-lines))))
-            ;; Delete the process when we gather enough lines.
-            (when (and lines (>= (length result) lines))
-              (setq result (cl-subseq result 0 lines))
-              (when (process-live-p proc)
-                (interrupt-process proc))))))
+         (output-buf (get-buffer-create " *readtags*"))
+         cmd proc result exit-msg)
+    (with-current-buffer output-buf
+      (erase-buffer))
     ;; Program name
     (push (or citre-readtags-program "readtags") cmd)
     ;; Read from this tags file
@@ -248,29 +232,28 @@ pseudo tags."
           (setq proc
                 (make-process
                  :name "readtags"
-                 :buffer nil
+                 :buffer output-buf
                  :command (nreverse cmd)
                  :connection-type 'pipe
                  ;; NOTE: Using a buffer or pipe for :stderr has caused a lot
                  ;; of troubles on Windows.
                  :stderr nil
-                 :filter proc-filter
-                 :sentinel nil))
+                 ;; The default sentinel function inserts "Process readtags
+                 ;; finished" in the output buffer, which is unwanted.
+                 :sentinel #'ignore))
           ;; Poll for the process to finish.
           (while (accept-process-output proc))
+          (setq result (with-current-buffer output-buf
+                         (buffer-string)))
           (pcase (process-status proc)
-            ;; The signal is sent by us as there are enough LINES in RESULT.
-            ('signal nil)
             ('exit
              (pcase (process-exit-status proc)
-               ;; In case the output doesn't end with a newline.
-               (0 (when cache (setq result (nconc result cache))))
+               (0 nil)
                (s (setq exit-msg (format "readtags exits %s\n" s)))))
             (s (setq exit-msg (format "abnormal status of readtags: %s\n" s))))
           (if exit-msg
-              (error (concat (or exit-msg "")
-                             (string-join result "\n")))
-            result))
+              (error (concat exit-msg result))
+            (split-string result "\n" t)))
       (when (process-live-p proc)
         (interrupt-process proc)))))
 
@@ -588,7 +571,7 @@ If this fails, the single-letter kind is returned directly."
 (cl-defun citre-core--get-tags
     (tagsfile &optional name match case-fold
               &key filter sorter
-              require optional exclude parse-all-fields lines)
+              require optional exclude parse-all-fields)
   "Get tags in TAGSFILE.
 This is like `citre-core-get-tags', which actually calls this
 function internally.  The difference is this is a interface
@@ -605,8 +588,8 @@ Notice when calling `citre-core-get-tags' with NAME being
 `substr' or `regexp', it generates a filter expression to do
 that, and is merged with FILTER by a logical `and'.
 
-For SORTER, REQUIRE, OPTIONAL, EXCLUDE, PARSE-ALL-FIELDS and
-LINES, see `citre-core-get-tags'."
+For SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
+`citre-core-get-tags'."
   (when (and optional exclude)
     (error "OPTIONAL and EXCLUDE can't be used together"))
   (when (cl-intersection require exclude)
@@ -644,7 +627,7 @@ LINES, see `citre-core-get-tags'."
                parse-all-fields))
             (citre-core--get-lines
              tagsfile name match case-fold
-             filter sorter nil lines))))
+             filter sorter nil))))
 
 ;;;; Internals: Extra extension fields
 
@@ -1082,7 +1065,7 @@ tabs in a pseudo tagline."
 (cl-defun citre-core-get-tags
     (tagsfile &optional name match case-fold
               &key filter sorter
-              require optional exclude parse-all-fields lines)
+              require optional exclude parse-all-fields)
   "Get tags in TAGSFILE.
 TAGSFILE is the canonical path of tags file.  The meaning of the
 optional arguments are:
@@ -1176,11 +1159,7 @@ them, Citre offers its own extension fields:
 For more on extension fields, see
 `citre-core--ext-fields-dependency-alist' and
 `citre-core--ext-fields-method-table'.  To use an extension
-field, it must appear in REQUIRE or OPTIONAL.
-
-Other keyword arguments are:
-
-- LINES: When non-nil, get the first LINES of tags at most."
+field, it must appear in REQUIRE or OPTIONAL."
   (let ((nil-or-string-p (lambda (x) (or (null x) (stringp x)))))
     (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
     (citre-core--error-on-arg name nil-or-string-p))
@@ -1196,8 +1175,7 @@ Other keyword arguments are:
                           :filter filter- :sorter sorter
                           :require require :optional optional
                           :exclude exclude
-                          :parse-all-fields parse-all-fields
-                          :lines lines)))
+                          :parse-all-fields parse-all-fields)))
 
 ;;;;; Get fields from tags
 
