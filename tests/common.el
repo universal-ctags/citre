@@ -4,6 +4,7 @@
   "Default tags file under each test case directory.")
 
 (setq citre-readtags-program (getenv "READTAGS"))
+(setq citre-core--dont-prompt-for-cwd t)
 
 (defun expand-test-file (&optional file)
   "Get the absolute path of FILE.

@@ -181,7 +181,11 @@ This uses `project-current' internally."
 (defun citre-tags-file-path ()
   "Return the canonical path of tags file for current buffer.
 This looks up `citre-tags-files' to find the tags file needed,
-and throws an user error if no tags file was found."
+and throws an user error if no tags file was found.
+
+It also sets `citre-core--tags-file-cwd-guess-table', so for tags
+file without the TAG_PROC_CWD pseudo tag, we can better guess its
+root dir."
   (if (and citre--tags-file (file-exists-p citre--tags-file))
       citre--tags-file
     (let ((current-file (or (buffer-file-name) default-directory))
@@ -193,15 +197,18 @@ and throws an user error if no tags file was found."
                     (null project))
            (user-error "Relative path used in `citre-tags-file-alist', \
 but project root can't be decided by `citre-project-root-function'"))
-         (when (file-in-directory-p current-file
-                                    (expand-file-name (car pair) project))
-           (cl-return (setq citre--tags-file
-                            (expand-file-name (cdr pair) project)))))
+         (let ((cwd (expand-file-name (car pair) project))
+               (tagsfile (expand-file-name (cdr pair) project)))
+           (when (file-in-directory-p current-file cwd)
+             (puthash tagsfile cwd citre-core--tags-file-cwd-guess-table)
+             (cl-return (setq citre--tags-file tagsfile)))))
        (cl-dolist (tagsfile citre-tags-files)
          (let ((dir (locate-dominating-file current-file tagsfile)))
            (when dir
-             (cl-return (setq citre--tags-file
-                              (concat (expand-file-name dir) tagsfile))))))))))
+             (let ((tagsfile (expand-file-name tagsfile dir)))
+               (puthash tagsfile (expand-file-name dir)
+                        citre-core--tags-file-cwd-guess-table)
+               (cl-return (setq citre--tags-file tagsfile))))))))))
 
 ;;;;; APIs: Language support framework
 

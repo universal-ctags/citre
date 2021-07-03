@@ -143,13 +143,35 @@ Info fields and their corresponding values are:
   `citre-core--kind-name-single-to-full-table', or nil if the
   TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
-;; TODO: Utilize info from upper components to guess the CWD more accurately.
+(defvar citre-core--tags-file-cwd-guess-table (make-hash-table :test #'equal)
+  "A hash table for guessed cwd for tags files.
+This is used in `citre-core--get-dir'.  See its docstring for
+details.  This is intended for upper components to set since it's
+easier for them to infer the cwd.")
+
+(defvar citre-core--dont-prompt-for-cwd nil
+  "In `citre-core--get-dir', don't ask the user for the cwd.
+When non-nil, it uses the directory of the tags file as the cwd
+instead.  This is for running unit tests only, as tags files in
+them don't have TAG_PROC_CWD ptag.")
+
+;; TODO: Do we need special treatment for TRAMP?
 (defun citre-core--get-dir (ptag-cwd tagsfile)
   "Get the `dir' info of TAGSFILE.
-PTAG-CWD is the value of TAG_PROC_CWD pseudo tag.  If it's nil,
-we simply return the dir containing the tag."
+PTAG-CWD is the value of TAG_PROC_CWD pseudo tag, and is returned
+when non-nil.  If it's nil, we have fallbacks:
+
+- Get the guessed cwd from
+  `citre-core--tags-file-cwd-guess-table'.  This table is
+  intended fo upper components to set because they better
+  understanding of the project structure.
+- Prompt the user to choose a dir."
   (or ptag-cwd
-      (file-name-directory tagsfile)))
+      (gethash tagsfile citre-core--tags-file-cwd-guess-table)
+      (if citre-core--dont-prompt-for-cwd
+          (file-name-directory tagsfile)
+        (read-directory-name
+         (format "Root dir of tags file %s: " tagsfile)))))
 
 (defun citre-core--get-kind-table (kind-descs)
   "Get the `kind-table' info.
