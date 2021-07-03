@@ -208,6 +208,11 @@ these tools.
 
   A: See [this documentation](docs/user-manual/compare-with-other-tools.md).
 
+- Q: How to use Citre over TRAMP?
+
+  A: Make sure you've installed readtags on the remote machine, and everything
+  will just work.
+
 - Q: Why doesn't Citre support automatically update tags file?
 
   A: Citre uses both line number and a search pattern to locate a tag. When the

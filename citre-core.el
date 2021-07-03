@@ -135,9 +135,9 @@ Info fields and their corresponding values are:
 
 - `time': The last update time of the file info, which is, the
   hash table.  It's in the style of (current-time).
+- `remotep': Whether the tags file is a remote file.
 - `dir': The current working directory when generating the tags
-  file.  This can be nil before a tag using relative path
-  requires us to ascertain it.
+  file.  It's a remote dir when tags file is a remote file name.
 - `kind-table': A hash table for getting full-length kinds from
   single-letter kinds, like
   `citre-core--kind-name-single-to-full-table', or nil if the
@@ -166,12 +166,17 @@ when non-nil.  If it's nil, we have fallbacks:
   intended fo upper components to set because they better
   understanding of the project structure.
 - Prompt the user to choose a dir."
-  (or ptag-cwd
-      (gethash tagsfile citre-core--tags-file-cwd-guess-table)
-      (if citre-core--dont-prompt-for-cwd
-          (file-name-directory tagsfile)
-        (read-directory-name
-         (format "Root dir of tags file %s: " tagsfile)))))
+  (let ((dir (or ptag-cwd
+                 (gethash tagsfile citre-core--tags-file-cwd-guess-table)
+                 (if citre-core--dont-prompt-for-cwd
+                     (file-name-directory tagsfile)
+                   (read-directory-name
+                    (format "Root dir of tags file %s: " tagsfile))))))
+    ;; If tagsfile is a remote file, we may have to prefix dir by the remote
+    ;; identifier (e.g., if dir comes from the TAG_PROC_CWD ptag).
+    (if-let ((remote-id (file-remote-p tagsfile)))
+        (concat remote-id (file-local-name dir))
+      dir)))
 
 (defun citre-core--get-kind-table (kind-descs)
   "Get the `kind-table' info.
@@ -202,6 +207,8 @@ returned."
                       "TAG_KIND_DESCRIPTION" tagsfile 'prefix)))
     ;; time
     (puthash 'time recent-mod info)
+    ;; remotep
+    (puthash 'remotep (file-remote-p tagsfile) info)
     ;; dir
     (puthash 'dir (citre-core--get-dir ptag-cwd tagsfile)
              info)
@@ -230,6 +237,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
          (output-buf (get-buffer-create " *readtags*"))
+         inhibit-message
          cmd proc result exit-msg)
     (with-current-buffer output-buf
       (erase-buffer))
@@ -237,7 +245,12 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
     (push (or citre-readtags-program "readtags") cmd)
     ;; Read from this tags file
     (push "-t" cmd)
-    (push tagsfile cmd)
+    (let ((local-name (file-local-name tagsfile)))
+      (if (equal local-name tagsfile)
+          (push tagsfile cmd)
+        ;; Suppress TRAMP message when it starts a remote process.
+        (setq inhibit-message t)
+        (push local-name cmd)))
     ;; Filter expression
     (when filter (push "-Q" cmd) (push (format "%S" filter) cmd))
     (when sorter (push "-S" cmd) (push (format "%S" sorter) cmd))
@@ -262,7 +275,8 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
                  :stderr nil
                  ;; The default sentinel function inserts "Process readtags
                  ;; finished" in the output buffer, which is unwanted.
-                 :sentinel #'ignore))
+                 :sentinel #'ignore
+                 :file-handler t))
           ;; Poll for the process to finish.
           (while (accept-process-output proc))
           (setq result (with-current-buffer output-buf
@@ -557,9 +571,12 @@ TAGSFILE-INFO is the additional info that FIELD depends on."
 This needs the `input' field to be presented in TAG, and if its
 value is a relative path, `path' info in TAGSFILE-INFO is used."
   (let ((input (or (gethash 'input tag)
-                   (error "\"input\" field not found in TAG"))))
+                   (error "\"input\" field not found in TAG")))
+        (remotep (gethash 'remotep tagsfile-info)))
     (if (file-name-absolute-p input)
-        input
+        (if remotep
+            (concat (file-remote-p (gethash 'dir tagsfile-info)) input)
+          input)
       (expand-file-name input (gethash 'dir tagsfile-info)))))
 
 ;;;;;; ext-kind-full
@@ -1166,7 +1183,8 @@ them, Citre offers its own extension fields:
 
 - `ext-abspath': The canonical path of `input'.
 
-  Needs `input' field to be presented in the tags file.
+  Needs `input' field to be presented in the tags file.  When the
+  tags file is a remote file, this is also a remote file name.
 
 - `ext-kind-full': The full name of `kind'. It uses the `kind'
   field if it's not single-letter, or it guesses the full name by
