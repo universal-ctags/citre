@@ -960,6 +960,7 @@ MATCH can be:
          (info (citre-core-tags-file-info tagsfile))
          (cwd (gethash 'dir info))
          relative-filename)
+    (setq filename (file-local-name filename))
     (when (eq system-type 'windows-nt)
       ;; Ctags on windows generates directory symbol in capital letter, while
       ;; `buffer-file-name' returns it in small letter.
