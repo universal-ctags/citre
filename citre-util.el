@@ -41,11 +41,14 @@
 
 (require 'citre-core)
 (require 'cl-lib)
+(require 'rx)
 (require 'subr-x)
 
 ;;;; User options
 
 ;;;;; Options: Finding tags file
+
+;; NOTE: See docs/user-manual/about-tags-file.md to know about these options.
 
 (defcustom citre-tags-files '(".tags" "tags")
   "List of tags files.
@@ -58,6 +61,19 @@ one, then the rest will be ignored)."
   :type '(repeat string)
   :group 'citre)
 
+(defcustom citre-tags-file-cache-dirs '("~/.cache/tags/" "./.tags/")
+  "List of dirs where you can save all your tags files.
+Assume DIR is the directory in which you want to use the tags
+file, then the tags file in a cache dir is named as:
+
+    <last part in DIR>-<md5 of DIR>-<comma separated langs>.tags
+
+If you use relative paths in this list, it's expanded against
+project root detected by `citre-project-root-function'.  In this
+way you can have cache dirs inside your projects."
+  :type 'string
+  :group 'citre)
+
 (defcustom citre-tags-file-alist nil
   "Alist of directory -> tags file.
 If current file in buffer is in one of the directories, the
@@ -66,7 +82,12 @@ corresponding tags file will be used.
 This is a buffer-local variable so you can customize it on a
 per-project basis.  Relative paths in it will be expanded against
 the project root, which is detected by
-`citre-project-root-function'."
+`citre-project-root-function'.
+
+The global (default) value of this still works as a fallback for
+its buffer-local value.  So you can use `setq-default' to
+customize this for directories where it's inconvenient to have
+dir-local variables."
   :type '(alist :key-type string :value-type string)
   :group 'citre)
 
@@ -79,7 +100,8 @@ the project root, which is detected by
 It takes no arguments.  It's used for:
 
 - Displaying the path of a tag relatively.
-- Expanding relative paths in `citre-tags-file-alist'."
+- Expanding relative paths in `citre-tags-file-alist' and
+  `citre-tags-file-cache-dirs'."
   :type 'function
   :group 'citre)
 
@@ -156,7 +178,9 @@ SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-core-get-field'."
-  (citre-core-get-tags (or tagsfile (citre-tags-file-path)) name match
+  (citre-core-get-tags (or tagsfile (citre-tags-file-path)
+                           (user-error "Can't find a tags file"))
+                       name match
                        (not citre-completion-case-sensitive)
                        :filter filter :sorter sorter
                        :require require :optional optional
@@ -171,6 +195,11 @@ This uses `project-current' internally."
   (when-let ((project (project-current nil)))
     (expand-file-name (cdr project))))
 
+(defun citre-file-exists-non-dir-p (file)
+  "Return t if FILE exists and is not a directory."
+  (and (file-exists-p file)
+       (not (file-directory-p file))))
+
 ;;;; APIs
 
 ;;;;; APIs: Find tags file
@@ -178,37 +207,159 @@ This uses `project-current' internally."
 (defvar-local citre--tags-file nil
   "Buffer-local cache for tags file path.")
 
+(defun citre--cache-tags-file-half-name (dir)
+  "Return half of the tags file name of DIR in cache dir.
+DIR is a canonical path.  By \"half\" we mean the
+
+    <last part in DIR>-<md5 of DIR>-
+
+Part.  You need to concat it with:
+
+    <comma separated languages>.tags
+
+to form a whole tags file name."
+  (let ((last-part (file-name-nondirectory (directory-file-name dir))))
+    (format "%s-%s-" last-part (md5 (file-local-name dir)))))
+
+(defun citre--up-directory (file)
+  "Return the directory up from FILE.
+No matter if FILE is a file or dir, return the dir contains
+it.
+
+If there's no directory up, return nil.  Also return nil if FILE
+is a local/remote user home dir."
+  (unless (string-match
+           (rx (or (seq bol (opt (seq alpha ":")) "/" eol)
+                   (seq bol
+                        ;; remote identifier
+                        (opt "/"
+                             ;; method
+                             (+ (or alnum "-")) ":"
+                             ;; user.  NOTE: (not (any ...)) seems to be the
+                             ;; only accepted form for Emacs 26.
+                             (+ (not (any "/" "|" ":" "\t")))
+                             ;; host
+                             (opt "@" (+ (or alnum "_" "." "%" "-"))) ":")
+                        ;; local filename
+                        (or (seq "/home/" (+ (not (any "/"))) "/" eol)
+                            (seq bol "~/" eol)))))
+           file)
+    (let* ((dirname (directory-file-name file))
+           (dir (file-name-directory dirname)))
+      dir)))
+
+;; TODO: convert to remote name when the dir after expansion is remote.
+(defun citre--find-tags-by-tags-file-alist (dir project alist)
+  "Find the tags file of DIR by ALIST.
+ALIST meets the requirements of `citre-tags-file-alist'.  DIR is
+a canonical path.  Relative paths in the alist are expanded
+against PROJECT."
+  (let ((expand-file-name-against-project
+         (lambda (file)
+           (if (file-name-absolute-p file)
+               ;; Convert ~/foo to /home/user/foo
+               (expand-file-name file)
+             (when (null project)
+               (user-error "Relative path used in `citre-tags-file-alist', \
+but project root can't be decided by `citre-project-root-function'"))
+             (expand-file-name file project)))))
+    (cl-dolist (pair alist)
+      (let ((target-dir (funcall expand-file-name-against-project
+                                 (car pair)))
+            (target-tags (funcall expand-file-name-against-project
+                                  (cdr pair))))
+        (when (and (file-equal-p dir target-dir)
+                   (citre-file-exists-non-dir-p target-tags))
+          (cl-return target-tags))))))
+
+(defun citre--find-tags-in-cache-dirs (dir project)
+  "Find the tags file in `citre-tags-file-cache-dirs' of DIR.
+DIR is a canonical path.  Relative paths in
+`citre-tags-file-cache-dirs' are expanded against PROJECT, or
+ignored if PROJECT is nil."
+  (let ((half (citre--cache-tags-file-half-name dir))
+        (dirs (citre-tags-cache-dirs project)))
+    (cl-dolist (d dirs)
+      (when-let* ((dir-exist-p (file-exists-p d))
+                  (default-directory d)
+                  (tags (file-expand-wildcards (concat half "*.tags"))))
+        (if (cdr tags)
+            (while (string-empty-p
+                    (setq tags (completing-read
+                                "Multiple tags files found. Choose one: "
+                                tags nil 'require-match))))
+          (setq tags (car tags)))
+        (cl-return (expand-file-name tags d))))))
+
+(defun citre--find-tags-in-dir (dir)
+  "Find the tags file by `citre-tags-files' in DIR.
+DIR is a canonical path."
+  (cl-dolist (file citre-tags-files)
+    (let ((tags (expand-file-name file dir)))
+      (when (and (citre-file-exists-non-dir-p tags)
+                 (not (file-directory-p tags)))
+        (cl-return tags)))))
+
+(defun citre-tags-cache-dirs (&optional project)
+  "Return the absolute tags file cache dirs.
+This is simply an absolute path version of
+`citre-tags-file-cache-dirs'.  Relative dirs in are expanded
+against PROJECT (when non-nil), or the project root found by
+`citre-project-root-function'.  If no project root could be
+found, relative dirs are ignored."
+  (let ((project (or project (funcall citre-project-root-function)))
+        dirs)
+    (cl-dolist (d citre-tags-file-cache-dirs)
+      (unless (file-name-absolute-p d)
+        (if project
+            (setq d (expand-file-name d project))
+          (setq d nil)))
+      (when d
+        (push d dirs)))
+    (nreverse dirs)))
+
+(defun citre-cache-tags-file-name (dir langs)
+  "Return the tags file name of DIR in cache dir.
+DIR is a canonical path.  LANGS are the languages that are
+scanned by the tags file.  The returned value is in the format
+specified in the docstring of `citre-tags-file-cache-dirs'."
+  (concat (citre--cache-tags-file-half-name dir)
+          (string-join langs ",")
+          ".tags"))
+
 (defun citre-tags-file-path ()
   "Return the canonical path of tags file for current buffer.
-This looks up `citre-tags-files' to find the tags file needed,
-and throws an user error if no tags file was found.
+This finds the tags file up directory hierarchy, and for each
+directory, it tries the following methods in turn:
+
+- Use `citre-tags-file-alist'.
+- Find in `citre-tags-file-cache-dirs'.
+- See if one name in `citre-tags-files' exists in this dir.
 
 It also sets `citre-core--tags-file-cwd-guess-table', so for tags
 file without the TAG_PROC_CWD pseudo tag, we can better guess its
 root dir."
-  (if (and citre--tags-file (file-exists-p citre--tags-file))
+  (if (and citre--tags-file (citre-file-exists-non-dir-p citre--tags-file))
       citre--tags-file
-    (let ((current-file (or (buffer-file-name) default-directory))
-          (project (funcall citre-project-root-function)))
-      (or
-       (cl-dolist (pair citre-tags-file-alist)
-         (when (and (or (not (file-name-absolute-p (car pair)))
-                        (not (file-name-absolute-p (cdr pair))))
-                    (null project))
-           (user-error "Relative path used in `citre-tags-file-alist', \
-but project root can't be decided by `citre-project-root-function'"))
-         (let ((cwd (expand-file-name (car pair) project))
-               (tagsfile (expand-file-name (cdr pair) project)))
-           (when (file-in-directory-p current-file cwd)
-             (puthash tagsfile cwd citre-core--tags-file-cwd-guess-table)
-             (cl-return (setq citre--tags-file tagsfile)))))
-       (cl-dolist (tagsfile citre-tags-files)
-         (let ((dir (locate-dominating-file current-file tagsfile)))
-           (when dir
-             (let ((tagsfile (expand-file-name tagsfile dir)))
-               (puthash tagsfile (expand-file-name dir)
-                        citre-core--tags-file-cwd-guess-table)
-               (cl-return (setq citre--tags-file tagsfile))))))))))
+    (let* ((current-dir (or (file-name-directory (buffer-file-name))
+                            default-directory))
+           (project (funcall citre-project-root-function))
+           (tagsfile nil))
+      (while (and current-dir (null tagsfile))
+        (setq tagsfile
+              (or (and (local-variable-p citre-tags-file-alist)
+                       (citre--find-tags-by-tags-file-alist
+                        current-dir project citre-tags-file-alist))
+                  (and (default-value citre-tags-file-alist)
+                       (citre--find-tags-by-tags-file-alist
+                        current-dir project (default-value
+                                              citre-tags-file-alist)))
+                  (and citre-tags-file-cache-dirs
+                       (citre--find-tags-in-cache-dirs current-dir project))
+                  (and citre-tags-files
+                       (citre--find-tags-in-dir current-dir))))
+        (setq current-dir (citre--up-directory current-dir)))
+      tagsfile)))
 
 ;;;;; APIs: Language support framework
 
@@ -565,9 +716,7 @@ find it automatically.
 The result is a list of tags.  Nil is returned when no definition
 is found."
   (let ((symbol (or symbol (citre-get-symbol)))
-        (tagsfile (or tagsfile
-                      (citre-tags-file-path)
-                      (user-error "Can't find tagsfile"))))
+        (tagsfile (or tagsfile (citre-tags-file-path))))
     (unless symbol
       (user-error "No symbol at point"))
     (citre-get-tags tagsfile symbol 'exact
@@ -639,6 +788,24 @@ is prefixed by \"citre-\".  Propertized STR is returned."
                            val str))
       (cl-incf i)))
   str)
+
+;;;;; APIs: Misc
+
+(defun citre-expand-file-name-maybe-remote (file &optional dir)
+  "Expand FILE against DIR.
+If DIR is nil, `default-directory' is used.  If FILE is local,
+absolute, and DIR is a remote directory, convert FILE to the
+absolute path on that remote machine.
+
+This function always return a canonical path."
+  (let ((dir (or dir default-directory)))
+    (if (file-name-absolute-p file)
+        (if (file-remote-p file)
+            (expand-file-name file)
+          (if-let (id (file-remote-p dir))
+              (concat id (expand-file-name file))
+            (expand-file-name file)))
+      (expand-file-name file))))
 
 (provide 'citre-util)
 

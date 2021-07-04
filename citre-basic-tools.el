@@ -518,6 +518,10 @@ is a list of tags of that kind."
   :lighter " Citre"
   (cond
    (citre-mode
+    ;; Make sure we can find a tags file first.
+    (unless (citre-tags-file-path)
+      (user-error "Can't find a tags file")
+      (setq citre-mode nil))
     (when citre-enable-xref-integration
       (add-hook 'xref-backend-functions #'citre-xref-backend nil t))
     (when citre-enable-capf-integration
