@@ -107,6 +107,15 @@ This is faster than `file-name-extension'."
       (string-match "/\\([^/]+\\)$" file))
   (match-string 1 file))
 
+(defun citre-core--strip-text-property-in-list (object)
+  "Recursively traverse OBJECT and strip properties in strings."
+  (pcase object
+    ((and (pred stringp) val) (substring-no-properties val))
+    ((and (pred consp) val)
+     (cons (citre-core--strip-text-property-in-list (car val))
+           (citre-core--strip-text-property-in-list (cdr val))))
+    (val val)))
+
 (defmacro citre-core--error-on-arg (arg test)
   "Test ARG using TEST, and throw an error if it fails.
 When calling the APIs, some arguments are likely to be calculated
@@ -237,6 +246,10 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
          (output-buf (get-buffer-create " *readtags*"))
+         (tagsfile (substring-no-properties tagsfile))
+         (name (when name (substring-no-properties name)))
+         (filter (citre-core--strip-text-property-in-list filter))
+         (sorter (citre-core--strip-text-property-in-list sorter))
          inhibit-message
          cmd proc result exit-msg)
     (with-current-buffer output-buf
@@ -1206,8 +1219,7 @@ field, it must appear in REQUIRE or OPTIONAL."
   (let* ((name- (when (memq match '(nil exact prefix)) name))
          (match- (when (memq match '(nil exact prefix)) match))
          (filter- (when (and name (memq match '(suffix substr regexp)))
-                    (citre-core-filter 'name (substring-no-properties name)
-                                       match case-fold)))
+                    (citre-core-filter 'name name match case-fold)))
          (filter- (if (and filter- filter)
                       `(and ,filter- ,filter)
                     (or filter- filter))))
