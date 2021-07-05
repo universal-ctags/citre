@@ -341,8 +341,9 @@ file without the TAG_PROC_CWD pseudo tag, we can better guess its
 root dir."
   (if (and citre--tags-file (citre-file-exists-non-dir-p citre--tags-file))
       citre--tags-file
-    (let* ((current-dir (or (file-name-directory (buffer-file-name))
-                            default-directory))
+    ;; TODO: I found here that `default-directory' could be non-canonical in
+    ;; dired buffers.  Need to revisit the whole thing...
+    (let* ((current-dir (expand-file-name default-directory))
            (project (funcall citre-project-root-function))
            (tagsfile nil))
       (while (and current-dir (null tagsfile))
