@@ -79,18 +79,14 @@ $ ctags --list-extras
 You can also tweak the flags to suit the need of your project, but the
 recommended ones should be enough for most projects.
 
-## About the name of the tags file
+## Create a command to run it
 
-You can use `.tags` as the tags file name by `-f .tags`, then if your
-`.gitignore` ignores dot-prefixed file names, you prevent your VCS from
-tracking it.
+Once we use our customized command line to generate tags files, Citre can't
+help you update them. Luckily we could easily create a Emacs command to help us
+do that.
 
-Supported tags file names can be seen and modified in `citre-tags-files`. These
-file names are searchd up directory hierarchy from the current file, and if one
-of them is found, they are used as the tags file for current buffer. This means
-you can put tags file under different directories in the same project, to use
-different tags files in them.
+TBW
 
-Sometimes we don't want to put the tags file inside the project directory (e.g.
-generate tags file for system headers). `citre-tags-file-alist` can be used to
-specify tags file for particular directories, see its docstring for details.
+## How does Citre seek for a tags file for the current buffer?
+
+TBW
