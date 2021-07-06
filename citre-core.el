@@ -90,7 +90,7 @@ backslash is \"\\\\\"."
     (nreverse result)))
 
 (defun citre-core--string-non-empty-p (string)
-  "Test if string STRING is an non-empty string."
+  "Test if STRING is an non-empty string."
   ;; We need to test it first since `string-empty-p' returns nil on nil.
   (and (stringp string)
        (not (string-empty-p string))))
@@ -145,8 +145,14 @@ Info fields and their corresponding values are:
 - `time': The last update time of the file info, which is, the
   hash table.  It's in the style of (current-time).
 - `remotep': Whether the tags file is a remote file.
-- `dir': The current working directory when generating the tags
-  file.  It's a remote dir when tags file is a remote file name.
+- `dir': The canonical current working directory when generating
+  the tags file.  It's a remote dir when tags file is a remote
+  file name.
+- `os': When the local part of `dir' is unix-style path (begins
+  with a slash), this is `unix', or it's `nt'.  We have such a
+  field since `system-type' can't tell us about the remote
+  machine, and the behavior of many file functions depends on the
+  *local* system type.
 - `kind-table': A hash table for getting full-length kinds from
   single-letter kinds, like
   `citre-core--kind-name-single-to-full-table', or nil if the
@@ -156,7 +162,11 @@ Info fields and their corresponding values are:
   "A hash table for guessed cwd for tags files.
 This is used in `citre-core--get-dir'.  See its docstring for
 details.  This is intended for upper components to set since it's
-easier for them to infer the cwd.")
+easier for them to infer the cwd.
+
+Its keys are canonical paths of tags files, values are their
+cwds (absolute path, can be remote or local when the tags file is
+a remote file).")
 
 (defvar citre-core--dont-prompt-for-cwd nil
   "In `citre-core--get-dir', don't ask the user for the cwd.
@@ -164,28 +174,40 @@ When non-nil, it uses the directory of the tags file as the cwd
 instead.  This is for running unit tests only, as tags files in
 them don't have TAG_PROC_CWD ptag.")
 
-;; TODO: Do we need special treatment for TRAMP?
-(defun citre-core--get-dir (ptag-cwd tagsfile)
-  "Get the `dir' info of TAGSFILE.
-PTAG-CWD is the value of TAG_PROC_CWD pseudo tag, and is returned
+(defun citre-core--get-dir-os (ptag-cwd tagsfile)
+  "Get the `dir' and `os' info of TAGSFILE.
+PTAG-CWD is the value of TAG_PROC_CWD pseudo tag, and is used
 when non-nil.  If it's nil, we have fallbacks:
 
 - Get the guessed cwd from
   `citre-core--tags-file-cwd-guess-table'.  This table is
   intended fo upper components to set because they better
   understanding of the project structure.
-- Prompt the user to choose a dir."
-  (let ((dir (or ptag-cwd
-                 (gethash tagsfile citre-core--tags-file-cwd-guess-table)
-                 (if citre-core--dont-prompt-for-cwd
-                     (file-name-directory tagsfile)
-                   (read-directory-name
-                    (format "Root dir of tags file %s: " tagsfile))))))
-    ;; If tagsfile is a remote file, we may have to prefix dir by the remote
-    ;; identifier (e.g., if dir comes from the TAG_PROC_CWD ptag).
-    (if-let ((remote-id (file-remote-p tagsfile)))
-        (concat remote-id (file-local-name dir))
-      dir)))
+- Prompt the user to choose a dir.
+
+This returns a cons pair like (dir . os)."
+  (let* ((dir (or ptag-cwd
+                  (gethash tagsfile citre-core--tags-file-cwd-guess-table)
+                  (if citre-core--dont-prompt-for-cwd
+                      (file-name-directory tagsfile)
+                    (read-directory-name
+                     (format "Root dir of tags file %s: " tagsfile)))))
+         (dir (expand-file-name dir))
+         (dir-local (file-local-name dir)))
+    ;; Ctags on windows generates disk symbol in capital letter, while if DIR
+    ;; is given by Emacs, it may be a small letter.  We don't use `system-type'
+    ;; to detect since we may work on a remote Unix machine on Windows.
+    (unless (eq (aref dir-local 0) ?/)
+      (setf (aref dir-local 0) (upcase (aref dir-local 0))))
+    (cons
+     ;; If tagsfile is a remote file, we may have to prefix dir by the remote
+     ;; identifier (e.g., if dir comes from the TAG_PROC_CWD ptag).
+     (if-let ((remote-id (file-remote-p tagsfile)))
+         (concat remote-id dir-local)
+       dir-local)
+     (pcase (aref dir-local 0)
+       (?/ 'unix)
+       (_ 'nt)))))
 
 (defun citre-core--get-kind-table (kind-descs)
   "Get the `kind-table' info.
@@ -219,8 +241,9 @@ returned."
     ;; remotep
     (puthash 'remotep (file-remote-p tagsfile) info)
     ;; dir
-    (puthash 'dir (citre-core--get-dir ptag-cwd tagsfile)
-             info)
+    (pcase-let ((`(,dir . ,os) (citre-core--get-dir-os ptag-cwd tagsfile)))
+      (puthash 'dir dir info)
+      (puthash 'os os info))
     ;; kind-table
     (puthash 'kind-table
              (citre-core--get-kind-table kind-descs)
@@ -317,10 +340,10 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
       ('nil (set-process-sentinel proc #'ignore)
             (if (eq system-type 'windows-nt)
                 ;; Based on my experiment on a large tags file,
-                ;; `interrupt-process' doesn't work reliably on Windows,
-                ;; while sighup seems does.  If we still get bug reports
-                ;; about readtags process accumulating, we may need to use
-                ;; `delete-process'.
+                ;; `interrupt-process' doesn't work reliably on Windows, while
+                ;; sighup seems does.  When using a remote Unix machine on
+                ;; Windows, this may send a SIGHUP to the remote process, but
+                ;; shouldn't be a problem since SIGHUP is not a harsh signal.
                 (signal-process proc 'sighup)
               (interrupt-process proc))
             nil)
@@ -610,13 +633,21 @@ TAGSFILE-INFO is the additional info that FIELD depends on."
 ;;;;;; ext-abspath
 
 (defun citre-core--get-ext-abspath (tag tagsfile-info)
-  "Return the absolute path of the input file.
+  "Return the canonical path of the input file.
 This needs the `input' field to be presented in TAG, and if its
-value is a relative path, `path' info in TAGSFILE-INFO is used."
-  (let ((input (or (gethash 'input tag)
-                   (error "\"input\" field not found in TAG")))
-        (remotep (gethash 'remotep tagsfile-info)))
-    (if (file-name-absolute-p input)
+value is a relative path, `dir' info in TAGSFILE-INFO is used.
+
+This returns a remote path when the tagsfile is remote."
+  (let* ((input (or (gethash 'input tag)
+                    (error "\"input\" field not found in TAG")))
+         (remotep (gethash 'remotep tagsfile-info))
+         (os (gethash 'os tagsfile-info))
+         (input-absolute-p (pcase os
+                             ('unix (eq (aref input 0) ?/))
+                             ;; tags file uses capital letter on Windows.
+                             ('nt (and (<= ?A (aref input 0) ?Z)
+                                       (eq (aref input 1) ?:))))))
+    (if input-absolute-p
         (if remotep
             (concat (file-remote-p (gethash 'dir tagsfile-info)) input)
           input)
@@ -783,14 +814,16 @@ It tries these in turn:
 
 (defun citre-core-tags-file-info (tagsfile)
   "Return the additional info of tags file TAGSFILE.
-TAGSFILE is the canonical path of the tags file.  The return
+TAGSFILE is the absolute path of the tags file.  The return
 value is a valid value in `citre-core--tags-file-info-alist'.
 
 This function caches the info, and uses the cache when possible."
   (citre-core--error-on-arg tagsfile #'stringp)
-  (unless (file-exists-p tagsfile)
+  (unless (and (file-exists-p tagsfile)
+               (not (file-directory-p tagsfile)))
     (error "%s doesn't exist" tagsfile))
-  (let ((recent-mod (file-attribute-modification-time
+  (let ((tagsfile (expand-file-name tagsfile))
+        (recent-mod (file-attribute-modification-time
                      (file-attributes tagsfile)))
         (info (alist-get tagsfile
                          citre-core--tags-file-info-alist
@@ -974,30 +1007,35 @@ tags that don't have `kind' field."
 
 (defun citre-core-filter-input (filename tagsfile &optional match)
   "Return a filter expression that matches the input field by FILENAME.
-FILENAME should be a canonical path.  The generated filter can
-work no matter the tag uses relative or absolute path.
-
-TAGSFILE is the canonical path of the tags file.
+TAGSFILE is the absolute path of the tags file.  FILENAME should
+be absolute.  The generated filter can work no matter the tag
+uses relative or absolute path.
 
 MATCH can be:
 
 - nil or `eq': Match input fields that is FILENAME.
 - `in-dir': Match input fields that is in directory FILENAME."
-  (let* ((filter (list 'or))
+  (let* ((tagsfile (expand-file-name tagsfile))
+         ;; We use this to match the input field in the tags file, so we need
+         ;; the local path.
+         (filename (file-local-name (expand-file-name filename)))
+         (filter (list 'or))
          (match (pcase match
                   ((or 'nil 'eq) 'eq)
                   ('in-dir 'prefix)))
          (info (citre-core-tags-file-info tagsfile))
-         (cwd (gethash 'dir info))
+         (cwd (file-local-name (gethash 'dir info)))
+         (os (gethash 'os info))
          relative-filename)
-    (setq filename (file-local-name filename))
-    (when (eq system-type 'windows-nt)
-      ;; Ctags on windows generates directory symbol in capital letter, while
-      ;; `buffer-file-name' returns it in small letter.
-      (setf (aref filename 0) (upcase (aref filename 0)))
-      ;; `cwd' may not come from the ptag, but guessed by Citre, so we need to
-      ;; do the same thing.
-      (setf (aref cwd 0) (upcase (aref cwd 0))))
+    ;; Ctags on windows generates directory symbol in capital letter, while
+    ;; `buffer-file-name' returns it in small letter.  We don't use
+    ;; `system-type' to detect since we may work on a remote Unix machine on
+    ;; Windows.  We don't need the same treatment for cwd as it uses capital
+    ;; disk symbols on Windows, see `citre-core--get-dir'.
+    (when (eq os 'nt)
+      (setf (aref filename 0) (upcase (aref filename 0))))
+    ;; We don't use `file-relative-name' due to the same reason.  Its behavior
+    ;; depends on the platform.
     (setq relative-filename (when (and (string-prefix-p cwd filename)
                                        (not (equal cwd filename)))
                               (substring filename (length cwd))))
@@ -1125,7 +1163,8 @@ order) if they are in the same file."
 
 (defun citre-core-get-pseudo-tags (name tagsfile &optional prefix)
   "Read pseudo tags matching NAME in tags file TAGSFILE.
-When PREFIX is non-nil, match NAME by prefix.
+TAGSFILE is the absolute path of the tags file.  When PREFIX is
+non-nil, match NAME by prefix.
 
 NAME should not start with \"!_\".  Run
 
@@ -1136,7 +1175,8 @@ element of it is another list consists of the fields separated by
 tabs in a pseudo tagline."
   (citre-core--error-on-arg name #'citre-core--string-non-empty-p)
   (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
-  (let* ((name (concat "!_" name))
+  (let* ((tagsfile (expand-file-name tagsfile))
+         (name (concat "!_" name))
          (result (citre-core--get-lines
                   tagsfile nil nil nil
                   (citre-core-filter 'name name (if prefix 'prefix 'eq))
@@ -1150,7 +1190,7 @@ tabs in a pseudo tagline."
               &key filter sorter
               require optional exclude parse-all-fields)
   "Get tags in TAGSFILE.
-TAGSFILE is the canonical path of tags file.  The meaning of the
+TAGSFILE is the absolute path of tags file.  The meaning of the
 optional arguments are:
 
 - NAME: Should be a string or nil.  If this is a non-empty
@@ -1247,7 +1287,8 @@ field, it must appear in REQUIRE or OPTIONAL."
   (let ((nil-or-string-p (lambda (x) (or (null x) (stringp x)))))
     (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
     (citre-core--error-on-arg name nil-or-string-p))
-  (let* ((name- (when (memq match '(nil exact prefix)) name))
+  (let* ((tagsfile (expand-file-name tagsfile))
+         (name- (when (memq match '(nil exact prefix)) name))
          (match- (when (memq match '(nil exact prefix)) match))
          (filter- (when (and name (memq match '(suffix substr regexp)))
                     (citre-core-filter 'name name match case-fold)))

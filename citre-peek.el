@@ -776,7 +776,7 @@ This makes it work in non-file buffers where
 
 (defun citre-peek--find-file-buffer (path)
   "Return the buffer visiting file PATH.
-PATH is a canonical path.  This is like `find-buffer-visiting',
+PATH is an absolute path.  This is like `find-buffer-visiting',
 but it also searches `citre-peek--temp-buffer-alist', so it can
 handle temporary buffers created during peeking.
 
@@ -784,8 +784,8 @@ When the file is not opened, this creates a temporary buffer for
 it.  These buffers will be killed afterwards by `citre-abort'.
 
 When PATH doesn't exist, this returns nil."
-  (if (not (file-exists-p path))
-      nil
+  (when (citre-non-dir-file-exists-p path)
+    (setq path (expand-file-name path))
     (or (alist-get path citre-peek--temp-buffer-alist
                    nil nil #'equal)
         (find-buffer-visiting path)
