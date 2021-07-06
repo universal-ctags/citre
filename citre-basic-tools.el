@@ -155,7 +155,6 @@ This requires the ctags program provided by Universal Ctags."
                      (gethash 'dir (citre-core-tags-file-info tagsfile))
                      (error "TAG_PROC_CWD ptag doesn't found in %s"
                             tagsfile)))
-            (cwd (citre-expand-file-name-maybe-remote cwd))
             (cwd-local (file-local-name cwd))
             (name (file-name-nondirectory tagsfile))
             (is-cache-tagsfile-p
@@ -195,7 +194,6 @@ This requires the ctags program provided by Universal Ctags."
                 (0 (message "tags file update finished"))
                 (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
              (s (user-error "Abnormal status of ctags: %s" s))))
-         ;; TODO: Set default-directory properly
          :file-handler t))
     (when (y-or-n-p "Can't find tags file in cache dir.  Create one? ")
       (citre-create-tags-file)
@@ -230,7 +228,9 @@ This requires the ctags program provided by Universal Ctags."
                       (completing-read "Select a dir to save tags file: "
                                        cache-dir nil t))))
       (setq cache-dir (car cache-dir)))
-    (unless (file-exists-p cache-dir)
+    (unless (citre-dir-exists-p cache-dir)
+      ;; This throws an error if we have a file with the name of `cache-dir',
+      ;; but it's good since we need a directory.
       (make-directory cache-dir))
     (setq cache-dir (file-local-name cache-dir))
     ;; Assemble the tags file name
@@ -273,7 +273,7 @@ number if they know the file is renamed/moved to which file."
   (let* ((path (citre-core-get-field 'ext-abspath tag))
          (buf-opened (find-buffer-visiting path))
          buf linum)
-    (if (not (file-exists-p path))
+    (if (not (citre-non-dir-file-exists-p path))
         (or (citre-core-get-field 'extra-line tag) 0)
       (if buf-opened
           (setq buf buf-opened)
@@ -290,7 +290,8 @@ number if they know the file is renamed/moved to which file."
   "Make xref object of TAG."
   (let* ((path (citre-core-get-field 'ext-abspath tag))
          (file-existance
-          (if (file-exists-p path) "" citre-definition-missing-file-mark))
+          (if (citre-non-dir-file-exists-p path) ""
+            citre-definition-missing-file-mark))
          (line (citre-xref--get-linum tag)))
     (xref-make
      (citre-make-tag-str tag nil

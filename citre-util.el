@@ -171,7 +171,7 @@ This is like `citre-core-get-tags', except that:
   otherwise it's decided by `citre-completion-case-sensitive' and
   NAME.
 
-TAGSFILE is the canonical path of the tags file.  For FILTER,
+TAGSFILE is the absolute path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
 `citre-core-get-tags'.
 
@@ -187,7 +187,9 @@ and some of its fields, which can be utilized by
                        :exclude exclude
                        :parse-all-fields parse-all-fields))
 
-;;;; Helpers
+;;;; APIs
+
+;;;;; APIs: Files
 
 (defun citre-project-root ()
   "Caninical path of project root of current buffer.
@@ -195,31 +197,29 @@ This uses `project-current' internally."
   (when-let ((project (project-current nil)))
     (expand-file-name (cdr project))))
 
-(defun citre-file-exists-non-dir-p (file)
+(defun citre-current-dir ()
+  "Canonical current directory of the buffer.
+This means the directory of the buffer file, or canonicalized
+`default-directory' if it's not a file buffer."
+  (expand-file-name
+   (if-let (file (buffer-file-name))
+       (file-name-directory file)
+     default-directory)))
+
+(defun citre-non-dir-file-exists-p (file)
   "Return t if FILE exists and is not a directory."
   (and (file-exists-p file)
        (not (file-directory-p file))))
 
-;;;; APIs
+(defun citre-dir-exists-p (dir)
+  "Return t if DIR exists and is a directory."
+  (and (file-exists-p dir)
+       (file-directory-p dir)))
 
 ;;;;; APIs: Find tags file
 
 (defvar-local citre--tags-file nil
   "Buffer-local cache for tags file path.")
-
-(defun citre--cache-tags-file-half-name (dir)
-  "Return half of the tags file name of DIR in cache dir.
-DIR is a canonical path.  By \"half\" we mean the
-
-    <last part in DIR>-<md5 of DIR>-
-
-Part.  You need to concat it with:
-
-    <comma separated languages>.tags
-
-to form a whole tags file name."
-  (let ((last-part (file-name-nondirectory (directory-file-name dir))))
-    (format "%s-%s-" last-part (md5 (file-local-name dir)))))
 
 (defun citre--up-directory (file)
   "Return the directory up from FILE.
@@ -248,29 +248,46 @@ is a local/remote user home dir."
            (dir (file-name-directory dirname)))
       dir)))
 
-;; TODO: convert to remote name when the dir after expansion is remote.
+;;;;;; By `citre-tags-file-alist'
+
 (defun citre--find-tags-by-tags-file-alist (dir project alist)
   "Find the tags file of DIR by ALIST.
 ALIST meets the requirements of `citre-tags-file-alist'.  DIR is
-a canonical path.  Relative paths in the alist are expanded
-against PROJECT."
-  (let ((expand-file-name-against-project
-         (lambda (file)
-           (if (file-name-absolute-p file)
-               ;; Convert ~/foo to /home/user/foo
-               (expand-file-name file)
-             (when (null project)
-               (user-error "Relative path used in `citre-tags-file-alist', \
+an absolute path.  Relative paths in the alist are expanded
+against PROJECT, an absolute path."
+  (let* ((dir (expand-file-name dir))
+         (project (expand-file-name project))
+         (expand-file-name-against-project
+          (lambda (file)
+            (if (file-name-absolute-p file)
+                ;; Convert ~/foo to /home/user/foo
+                (expand-file-name file)
+              (when (null project)
+                (user-error "Relative path used in `citre-tags-file-alist', \
 but project root can't be decided by `citre-project-root-function'"))
-             (expand-file-name file project)))))
+              (expand-file-name file project)))))
     (cl-dolist (pair alist)
       (let ((target-dir (funcall expand-file-name-against-project
                                  (car pair)))
             (target-tags (funcall expand-file-name-against-project
                                   (cdr pair))))
         (when (and (file-equal-p dir target-dir)
-                   (citre-file-exists-non-dir-p target-tags))
+                   (citre-non-dir-file-exists-p target-tags))
           (cl-return target-tags))))))
+
+(defun citre--cache-tags-file-half-name (dir)
+  "Return half of the tags file name of DIR in cache dir.
+DIR is a canonical path.  By \"half\" we mean the
+
+    <last part in DIR>-<md5 of DIR>-
+
+Part.  You need to concat it with:
+
+    <comma separated languages>.tags
+
+to form a whole tags file name."
+  (let ((last-part (file-name-nondirectory (directory-file-name dir))))
+    (format "%s-%s-" last-part (md5 (file-local-name dir)))))
 
 (defun citre--find-tags-in-cache-dirs (dir project)
   "Find the tags file in `citre-tags-file-cache-dirs' of DIR.
@@ -280,7 +297,7 @@ ignored if PROJECT is nil."
   (let ((half (citre--cache-tags-file-half-name dir))
         (dirs (citre-tags-cache-dirs project)))
     (cl-dolist (d dirs)
-      (when-let* ((dir-exist-p (file-exists-p d))
+      (when-let* ((dir-exist-p (citre-dir-exists-p d))
                   (default-directory d)
                   (tags (file-expand-wildcards (concat half "*.tags"))))
         (if (cdr tags)
@@ -296,7 +313,7 @@ ignored if PROJECT is nil."
 DIR is a canonical path."
   (cl-dolist (file citre-tags-files)
     (let ((tags (expand-file-name file dir)))
-      (when (and (citre-file-exists-non-dir-p tags)
+      (when (and (citre-non-dir-file-exists-p tags)
                  (not (file-directory-p tags)))
         (cl-return tags)))))
 
@@ -339,11 +356,9 @@ directory, it tries the following methods in turn:
 It also sets `citre-core--tags-file-cwd-guess-table', so for tags
 file without the TAG_PROC_CWD pseudo tag, we can better guess its
 root dir."
-  (if (and citre--tags-file (citre-file-exists-non-dir-p citre--tags-file))
+  (if (and citre--tags-file (citre-non-dir-file-exists-p citre--tags-file))
       citre--tags-file
-    ;; TODO: I found here that `default-directory' could be non-canonical in
-    ;; dired buffers.  Need to revisit the whole thing...
-    (let* ((current-dir (expand-file-name default-directory))
+    (let* ((current-dir (citre-current-dir))
            (project (funcall citre-project-root-function))
            (tagsfile nil))
       (while (and current-dir (null tagsfile))
@@ -510,7 +525,7 @@ order of their name.")
 
 (defun citre-get-completions (&optional symbol tagsfile substr-completion)
   "Get completions from TAGSFILE of symbol at point.
-TAGSFILE is the canonical path of the tags file.  If SYMBOL is
+TAGSFILE is the absolute path of the tags file.  If SYMBOL is
 non-nil, use that symbol instead.  If TAGSFILE is not specified,
 fint it automatically.  If SUBSTR-COMPLETION is non-nil, get tags
 that contains SYMBOL, or get tags that starts with SYMBOL.  The
@@ -603,7 +618,7 @@ PROP controls the format.  See `citre-make-tag-str' for details."
        ;; path
        (if abspath
            (concat
-            (if (file-exists-p abspath) ""
+            (if (citre-non-dir-file-exists-p abspath) ""
               citre-definition-missing-file-mark)
             (propertize (citre--relative-path abspath (plist-get prop :root))
                         'face 'citre-definition-path-face))
@@ -710,7 +725,7 @@ length and alphabetical order of the tag names.")
 
 (defun citre-get-definitions (&optional symbol tagsfile)
   "Get definitions from tags file TAGSFILE of symbol at point.
-TAGSFILE is the canonical path of the tags file.  If SYMBOL is
+TAGSFILE is the absolute path of the tags file.  If SYMBOL is
 non-nil, use that symbol instead.  If TAGSFILE is not specified,
 find it automatically.
 
@@ -740,7 +755,7 @@ WINDOW can be:
   (let ((path (citre-core-get-field 'ext-abspath tag)))
     (unless path
       (error "TAG doesn't have the ext-abspath field"))
-    (unless (file-exists-p path)
+    (unless (citre-non-dir-file-exists-p path)
       (user-error "File %s doesn't exist" path))
     (let* ((buf (find-file-noselect path))
            (current-buf (current-buffer))
@@ -789,24 +804,6 @@ is prefixed by \"citre-\".  Propertized STR is returned."
                            val str))
       (cl-incf i)))
   str)
-
-;;;;; APIs: Misc
-
-(defun citre-expand-file-name-maybe-remote (file &optional dir)
-  "Expand FILE against DIR.
-If DIR is nil, `default-directory' is used.  If FILE is local,
-absolute, and DIR is a remote directory, convert FILE to the
-absolute path on that remote machine.
-
-This function always return a canonical path."
-  (let ((dir (or dir default-directory)))
-    (if (file-name-absolute-p file)
-        (if (file-remote-p file)
-            (expand-file-name file)
-          (if-let (id (file-remote-p dir))
-              (concat id (expand-file-name file))
-            (expand-file-name file)))
-      (expand-file-name file))))
 
 (provide 'citre-util)
 
