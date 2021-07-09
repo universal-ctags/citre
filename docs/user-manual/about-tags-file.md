@@ -145,14 +145,74 @@ $ ctags --list-extras
 You can also tweak the flags to suit the need of your project, but the
 recommended ones should be enough for most projects.
 
-## Create a command to run it
+## Extend a parser
 
-Once we use our customized command line to generate tags files, Citre can't
-help you update them. Luckily we could easily create a Emacs command to help us
-do that.
+One of the unique strengths of Ctags is it's hackable, meaning you could extend
+a parser using regular expressions to tag the symbols you want Ctags to tag.
 
-TBW
+A Citre user once asked me this question: in PHP, sometimes a function is
+defined in an array:
 
-## How does Citre seek for a tags file for the current buffer?
+`test.php`:
 
-TBW
+```php
+return array(
+  "test_func"=>function(string $str="test_func"){
+    return $str;
+  }
+);
+```
+
+It can be called from other files:
+
+```php
+$test=require("./test.php");
+echo $test["test_func"]("hello");
+```
+
+How to tag the function `test_func`?
+
+The answer:
+
+```console
+$ cat options.ctags
+--langdef=PHPext{base=PHP}
+--kinddef-PHPext=a,arrayfunc,functions defined in arrays
+--regex-PHPext=/"(.*)"=>function/\1/a/
+
+$ ctags --options=./options.ctags --fields='*' -f - test.php
+test_func	test.php	/^  "test_func"=>function(string $str="test_func"){$/;"	\
+kind:arrayfunc  line:2  language:PHPext      roles:def       extras:subparser
+```
+
+Let's see how it works.
+
+- `--langdef=PHPext{base=PHP}`
+
+  We define a new language called PHPext, and use it as a subparser of PHP.
+
+  When extending a parser, it's always encouraged to define a new language, so
+  the kind you defined for it won't conflict with the base language.
+
+- `--kinddef-PHPext=a,arrayfunc,functions defined in arrays`
+
+  Define a kind for PHPext, with abbreviated name `a`, full name `arrayfunc`,
+  which means "functions defined in arrays".
+
+- `--regex-PHPext=/"(.*)"=>function/\1/a/`
+
+  The grammar of this is `--regex-<LANG>=<PATTERN>/<NAME>/[<KIND>/]LONGFLAGS`.
+  Let's see the fields in it:
+
+  - `"(.*)"=>function`: The pattern to match arrayfunc. The function name is
+    captured by a group.
+
+  - `\1`: The tag name is the function name captured by the group.
+
+  - `a`: The kind of the tag is `a`/`arrayfunc`.
+
+In DSL-heavy projects, Ctags plus some regular expressions could beat
+intelligent tools like language servers.
+
+See [Extending ctags with Regex parser
+*(optlib)*](https://docs.ctags.io/en/latest/optlib.html) to learn more.
