@@ -61,6 +61,10 @@
 ;;
 ;; Then you probably don't need these in your config.
 
+(autoload 'citre-update-tags-file "citre")
+(autoload 'citre-update-this-tags-file "citre")
+(autoload 'citre-edit-tags-file-recipe "citre")
+(autoload 'citre-create-tags-file "citre")
 (autoload 'citre-jump "citre")
 (autoload 'citre-mode "citre")
 (autoload 'citre-peek "citre")
