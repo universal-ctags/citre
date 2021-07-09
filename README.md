@@ -54,6 +54,8 @@ Citre is still fast, because readtags performes binary search on the tags file.
 
 #### readtags
 
+Citre uses readtags program to read from tags files.
+
 Citre requires readtags program provided by [Universal
 Ctags](https://github.com/universal-ctags/ctags). The minimal version is:
 
@@ -61,8 +63,7 @@ Ctags](https://github.com/universal-ctags/ctags). The minimal version is:
 - weekly release p5.9.20200124.0
 
 It's recommended to get the latest version, as Citre actively takes advantage
-of its latest features. Also, the ctags program provided by Universal Ctags is
-recommended for creating your tags file.
+of its latest features.
 
 - For GNU/Linux users: If you install ctags from your software repository, run
   `$ ctags --version` to see if you are using Universal Ctags. The version is a
@@ -87,11 +88,16 @@ If you don't have readtags executable in your PATH, customize
 
 #### ctags
 
-If you use Citre's command to create tags file, you need the ctags program
-provided by Universal Ctags. If you don't have it in your PATH, customize
-`citre-ctags-program` to the path of it.
+If you use Citre's built-in tools to create tags file, you need a ctags
+program.
 
-This is not necessary for all other functionalities of Citre.
+The ctags program provided by Universal Ctags is still recommended. If you
+don't have it in your PATH, customize `citre-ctags-program` to the path of it.
+
+You can also use other program that outputs a tags file, like
+[hasktags](https://hackage.haskell.org/package/hasktags) or
+[gotags](https://github.com/jstemmer/gotags). You don't need to customize
+`citre-ctags-program` when using these tools.
 
 ### Installation
 
@@ -122,45 +128,59 @@ to manually install Citre.
 
 ### Create tags file
 
-#### Using Citre
+Open a file in your project, type `M-x citre-update-this-tags-file`. If it
+can't find a tags file for the current file, it'll guide you to generate one.
+I'll take you through the simplest situation here. To know more, read [this
+user manual](docs/user-manual/about-tags-file.md).
 
-Open a file in your project, type `M-x citre-update-tags-file`. If it can't
-find a tags file in the cache directory, it'll guide you to generate one.
+You are asked to:
 
-Once you've created such a file, run `M-x citre-update-tags-file` again to
-update it, or run `M-x citre-create-tags-file` to recreate one.
+1. Pick a place to save the tags file, type `1`.
+2. Pick a directory in which to use the tags file. Let's genearte a tags file
+   for the whole project and use it in the whole project, so choose
+   `/path/to/project/`.
+3. Pick a tags file name. It'll be saved inside `/path/to/project/`. Pick one
+   you like.
+4. Pick a root dir to run ctags. Pick the project root.
+5. You are taken to a command editing buffer, and a help message is shown in
+   the buffer. Read it.
 
-You could choose a cache dir from `citre-tags-file-cache-dirs`. The default
-values are:
+If you use Universal Ctags, you may write a command like:
 
-- `~/.cache/tags/`
-- `./.tags/`, relative path means it's expanded against your project root. The
-  project root itself is detected by `citre-project-root-function`.
-
-They are chosen to not pollute your project directory or VCS.
-
-#### Using command line
-
-If you want finer control over the tags file output, or you use other programs
-that can generate tags file like `hasktags` or `gotags`, you need to use the
-command line.
-
-We'll still talk about Universal Ctags here. It can generate very informative
-tags files, and Citre makes use of it to provide better results. To generate an
-informative tags file, run this in your project root:
-
-```console
-$ ctags --languages=c,c++,... --kinds-all='*' --fields='*' --extras='*' -R
+```
+ctags
+-o
+%TAGSFILE%
+--languages=C,C++
+--kinds-all=*
+--fields=*
+--extras=*
+-R
+./
+/external/lib/used/in/the/project/
 ```
 
-This creates a `tags` file. When Citre seeks for a tags file, if it can't find
-one in the cache dir, it searches from the current file, up directory
-hierarchy, for a filename in `citre-tags-files`. `tags` is a filename in it's
-default value, so it can be found.
+You can also use other ctags program, for example, gotags:
+
+```
+~/go/bin/gotags
+-R=true
+-f=%TAGSFILE%
+./
+/external/lib/used/in/the/project/
+```
+
+You get the idea.
+
+Once you've created such a file, run `M-x citre-update-this-tags-file` again to
+update it. The recipe for updating a tags file is stored in the tags file
+itself, so no more configuration file or buffer-local variables are needed!
+
+You can edit the updating recipe later by `citre-edit-tags-file-recipe`.
 
 See [this user manual](docs/user-manual/about-tags-file.md) to know more about
-tags file format, how to tweak the info included in a tags file, how to specify
-which dir uses which tags file, etc.
+tags file format, how to tweak the command line, how to specify which dir uses
+which tags file, etc.
 
 *Note:* Emacs users are more familiar with the TAGS format. TAGS format is
 generated by `etags` or `$ ctags -e`, and Citre doesn't support it.
@@ -173,20 +193,16 @@ manual](docs/user-manual/compare-with-other-tools.md) for details.
 *Note for Windows and macOS users:* Windows and macOS uses case-insensitive
 file system by default, so this may happen:
 
-- Ctags creates a tags file named `tags`, by default.
-- Some plugins like `projectile` tries find and load a `TAGS` file, which is
-  the default file used by Emacs etags.
+- You create a tags file named `tags`.
+- Some plugins like `projectile` and `company` (when using the `company-etags`
+  backend) tries find and load a `TAGS` file, which is the default file used by
+  Emacs etags.
 - Since `tags` and `TAGS` are the same to the file system, they tries to load
   the `tags` file, which can't be recognised by `etags.el`.
 - You'll see a "TAGS is not valid tags table" error.
 
-To avoid this problem, you could create a tags file named `.tags`:
-
-```console
-$ ctags -o .tags --languages=c,c++,... ...
-```
-
-Or just use `citre-update-tags-file`.
+To avoid this problem, you could configure those plugins to not use a tags
+file, or simply avoid creating a tags file named `tags` on Windows and macOS.
 
 ### Use Citre
 
@@ -220,6 +236,7 @@ and tweak it to your own need.
   (global-set-key (kbd "C-x c j") 'citre-jump)
   (global-set-key (kbd "C-x c J") 'citre-jump-back)
   (global-set-key (kbd "C-x c p") 'citre-ace-peek)
+  (global-set-key (kbd "C-x c u") 'citre-update-this-tags-file)
   :config
   (setq
    ;; Set this if readtags is not in your path.
@@ -252,7 +269,8 @@ these tools.
 - Q: How to use Citre over TRAMP?
 
   A: Make sure you've installed readtags on the remote machine, and everything
-  will just work.
+  will just work. Tags file generating/updating also works if you have ctags
+  program on the remote machine.
 
 - Q: Why doesn't Citre support automatically update tags file?
 
@@ -267,7 +285,7 @@ these tools.
   You may ask "what if I add new definitions, or modify/delete existing ones?"
   The truth is, if your codebase is reasonably large that you have to index
   them by Ctags, then small edits won't cause much trouble. You can just
-  regenerate the tags file when needed.
+  update the tags file when needed.
 
 - Q: How many languages does Citre support?
 
