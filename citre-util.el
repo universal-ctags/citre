@@ -61,16 +61,24 @@ one, then the rest will be ignored)."
   :type '(repeat string)
   :group 'citre)
 
-(defcustom citre-tags-file-cache-dirs '("~/.cache/tags/" "./.tags/")
-  "List of dirs where you can save all your tags files.
-Assume DIR is the directory in which you want to use the tags
-file, then the tags file in a cache dir is named as:
+(defcustom citre-tags-file-global-cache-dir "~/.cache/tags/"
+  "An absolute directory where you can save all your tags files.
+Tags files in it are named using the path to the directory in
+which you want to use the tags file.
 
-    <last part in DIR>-<md5 of DIR>-<comma separated langs>.tags
+If you work on a remote machine, this points to directory on the
+remote machine."
+  :type 'string
+  :group 'citre)
 
-If you use relative paths in this list, it's expanded against
-project root detected by `citre-project-root-function'.  In this
-way you can have cache dirs inside your projects."
+(defcustom citre-tags-file-per-project-cache-dir "./.tags/"
+  "A relative directory where you can save all your tags files in the projct.
+This directory is expanded to the project root detected by
+`citre-project-root-function', and when you are visiting files in
+the project, this directory is searched for a tags file.
+
+Tags files in it are named using the relative path to the
+directory in which you want to use the tags file."
   :type 'string
   :group 'citre)
 
@@ -256,93 +264,115 @@ ALIST meets the requirements of `citre-tags-file-alist'.  DIR is
 an absolute path.  Relative paths in the alist are expanded
 against PROJECT, an absolute path."
   (let* ((dir (expand-file-name dir))
-         (project (expand-file-name project))
          (expand-file-name-against-project
           (lambda (file)
             (if (file-name-absolute-p file)
                 ;; Convert ~/foo to /home/user/foo
                 (expand-file-name file)
-              (when (null project)
-                (user-error "Relative path used in `citre-tags-file-alist', \
-but project root can't be decided by `citre-project-root-function'"))
-              (expand-file-name file project)))))
+              (when project
+                (expand-file-name file project))))))
     (cl-dolist (pair alist)
-      (let ((target-dir (funcall expand-file-name-against-project
-                                 (car pair)))
-            (target-tags (funcall expand-file-name-against-project
-                                  (cdr pair))))
+      (when-let ((target-dir (funcall expand-file-name-against-project
+                                      (car pair)))
+                 (target-tags (funcall expand-file-name-against-project
+                                       (cdr pair))))
         (when (and (file-equal-p dir target-dir)
                    (citre-non-dir-file-exists-p target-tags))
           (cl-return target-tags))))))
 
-(defun citre--cache-tags-file-half-name (dir)
-  "Return half of the tags file name of DIR in cache dir.
-DIR is a canonical path.  By \"half\" we mean the
+;;;;;; By `citre-tags-file-global/per-project-cache-dir'
 
-    <last part in DIR>-<md5 of DIR>-
+(defun citre--path-to-cache-tags-file-name (path)
+  "Convert PATH to the non-directory part a tagsfile name.
+PATH is absolute or relative to the project root.  It's where you
+want to use the tags file.  The returned name can be used in
+`citre-tags-file-global-cache-dir' or
+`citre-tags-file-per-project-cache-dir' as tags file names."
+  (when (file-name-absolute-p path)
+    (setq path (expand-file-name path)))
+  ;; Escape backslashes
+  (setq path (replace-regexp-in-string "\\\\" "\\\\\\&" path))
+  ;; Escape exclamation marks
+  (setq path (replace-regexp-in-string "!" "\\\\\\&" path))
+  (concat (replace-regexp-in-string "/" "!" path) ".tags"))
 
-Part.  You need to concat it with:
+(defun citre--cache-tags-file-name-to-path (tagsfile)
+  "Convert TAGSFILE, the non-directory part of a tags file to a dir.
+TAGSFILE is a tags file from `citre-tags-file-global-cache-dir'
+or `citre-tags-file-per-project-cache-dir'.  The returned
+dir (can be absolute or relative) is where the tags file is
+intended to be used."
+  (let (dir)
+    ;; Translate unescaped "!" to "/"
+    (setq dir (replace-regexp-in-string
+               ;; Don't know why this doesn't work on Emacs 26
 
-    <comma separated languages>.tags
+               ;; (rx (group (or line-start (not "\\")) (* "\\\\")) "!")
+               "\\(\\(?:^\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\)!"
+               "\\1/" tagsfile))
+    ;; Translate escape sequences
+    (setq dir (replace-regexp-in-string
+               (rx (group (* "\\\\")) "\\" "!")
+               "\\1!" dir))
+    (setq dir (replace-regexp-in-string
+               (rx (group (* "\\\\")) "\\\\")
+               "\\1\\\\" dir))
+    dir))
 
-to form a whole tags file name."
-  (let ((last-part (file-name-nondirectory (directory-file-name dir))))
-    (format "%s-%s-" last-part (md5 (file-local-name dir)))))
+(defun citre-tags-file-in-global-cache (dir)
+  "Return the tags file name of DIR in global cache dir.
+DIR is absolute.  The canonical path of the tags file is
+returned."
+  (concat
+   (or (file-remote-p default-directory) "")
+   (expand-file-name
+    (citre--path-to-cache-tags-file-name (file-local-name dir))
+    citre-tags-file-global-cache-dir)))
 
-(defun citre--find-tags-in-cache-dirs (dir project)
-  "Find the tags file in `citre-tags-file-cache-dirs' of DIR.
-DIR is a canonical path.  Relative paths in
-`citre-tags-file-cache-dirs' are expanded against PROJECT, or
-ignored if PROJECT is nil."
-  (let ((half (citre--cache-tags-file-half-name dir))
-        (dirs (citre-tags-cache-dirs project)))
-    (cl-dolist (d dirs)
-      (when-let* ((dir-exist-p (citre-dir-exists-p d))
-                  (default-directory d)
-                  (tags (file-expand-wildcards (concat half "*.tags"))))
-        (if (cdr tags)
-            (while (string-empty-p
-                    (setq tags (completing-read
-                                "Multiple tags files found. Choose one: "
-                                tags nil 'require-match))))
-          (setq tags (car tags)))
-        (cl-return (expand-file-name tags d))))))
+(defun citre-tags-file-in-per-project-cache (dir &optional project)
+  "Return the tags file name of DIR in per-project cache dir.
+DIR is canonical.  PROJECT is the project root.  If it's nil, it's
+detected by `citre-project-root-function'.  The canonical path of
+the tags file is returned."
+  (let* ((project (or project (funcall citre-project-root-function))))
+    (if project
+        (expand-file-name
+         (citre--path-to-cache-tags-file-name (file-relative-name dir project))
+         (expand-file-name citre-tags-file-per-project-cache-dir project))
+      (error "Can't detect project root"))))
+
+(defun citre--find-tags-in-cache-dirs (dir &optional project)
+  "Find the tags file of DIR in cache dirs.
+DIR is absolute.  PROJECT is the project root.  If it's nil, it's
+detected by `citre-project-root-function'.
+
+The canonical path of the tags file is returned."
+  (let* ((dir (expand-file-name dir))
+         (project (or project (funcall citre-project-root-function))))
+    (cl-block nil
+      ;; First search in per project cache dir.
+      (when (and project citre-tags-file-per-project-cache-dir)
+        (let ((tagsfile (citre-tags-file-in-per-project-cache dir project)))
+          (when (citre-non-dir-file-exists-p tagsfile)
+            (cl-return tagsfile))))
+      ;; Then search in global cache dir.
+      (when citre-tags-file-global-cache-dir
+        (let ((tagsfile (citre-tags-file-in-global-cache dir)))
+          (when (citre-non-dir-file-exists-p tagsfile)
+            (cl-return tagsfile)))))))
+
+;;;;;; By `citre-tags-files'
 
 (defun citre--find-tags-in-dir (dir)
-  "Find the tags file by `citre-tags-files' in DIR.
-DIR is a canonical path."
+  "Find the tags file of DIR by `citre-tags-files' in DIR.
+DIR is an absolute path."
   (cl-dolist (file citre-tags-files)
     (let ((tags (expand-file-name file dir)))
       (when (and (citre-non-dir-file-exists-p tags)
                  (not (file-directory-p tags)))
         (cl-return tags)))))
 
-(defun citre-tags-cache-dirs (&optional project)
-  "Return the absolute tags file cache dirs.
-This is simply an absolute path version of
-`citre-tags-file-cache-dirs'.  Relative dirs in are expanded
-against PROJECT (when non-nil), or the project root found by
-`citre-project-root-function'.  If no project root could be
-found, relative dirs are ignored."
-  (let ((project (or project (funcall citre-project-root-function)))
-        dirs)
-    (cl-dolist (d citre-tags-file-cache-dirs)
-      (unless (file-name-absolute-p d)
-        (if project
-            (setq d (expand-file-name d project))
-          (setq d nil)))
-      (when d
-        (push d dirs)))
-    (nreverse dirs)))
-
-(defun citre-cache-tags-file-name (dir langs)
-  "Return the tags file name of DIR in cache dir.
-DIR is a canonical path.  LANGS are the languages that are
-scanned by the tags file.  The returned value is in the format
-specified in the docstring of `citre-tags-file-cache-dirs'."
-  (concat (citre--cache-tags-file-half-name dir)
-          (string-join langs ",")
-          ".tags"))
+;;;;;; APIs
 
 (defun citre-tags-file-path ()
   "Return the canonical path of tags file for current buffer.
@@ -363,19 +393,27 @@ root dir."
            (tagsfile nil))
       (while (and current-dir (null tagsfile))
         (setq tagsfile
-              (or (and (local-variable-p citre-tags-file-alist)
+              (or (and (local-variable-p 'citre-tags-file-alist)
                        (citre--find-tags-by-tags-file-alist
                         current-dir project citre-tags-file-alist))
-                  (and (default-value citre-tags-file-alist)
+                  (and (default-value 'citre-tags-file-alist)
                        (citre--find-tags-by-tags-file-alist
-                        current-dir project (default-value
-                                              citre-tags-file-alist)))
-                  (and citre-tags-file-cache-dirs
+                        current-dir nil (default-value
+                                          'citre-tags-file-alist)))
+                  (and (or citre-tags-file-global-cache-dir
+                           citre-tags-file-per-project-cache-dir)
                        (citre--find-tags-in-cache-dirs current-dir project))
                   (and citre-tags-files
                        (citre--find-tags-in-dir current-dir))))
         (setq current-dir (citre--up-directory current-dir)))
       tagsfile)))
+
+(defun citre-clear-tags-file-cache ()
+  "Clear the cache of buffer -> tagsfile.
+Use this when a new tags file is created."
+  (dolist (b (buffer-list))
+    (with-current-buffer b
+      (kill-local-variable citre--tags-file))))
 
 ;;;;; APIs: Language support framework
 
