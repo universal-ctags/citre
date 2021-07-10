@@ -63,6 +63,18 @@ You can also pass the name of a tagsfile as an argument to
 `citre-update-tags-file`, and it will update it. Based on this, you could write
 scripts to update tags files created using Citre.
 
+## User options
+
+These are some more options for tags file creating/updating:
+
+- `citre-edit-cmd-buf-default-cmd`: Default command shown in the command
+  editing buffer. You can customize this to use a command you prefer for most
+  projects.
+- `citre-edit-cmd-buf-map`: Keymap used in the command editing buffer.
+- `citre-default-create-tags-file-location`: If you want to always save the
+  tags file to global cache dir, or in the directory that uses it, etc., use
+  this option.
+
 ## Tags file concepts
 
 The command line can be tweaked to create tags file that suits your project
