@@ -1047,8 +1047,8 @@ is a list of tags of that kind."
    (citre-mode
     ;; Make sure we can find a tags file first.
     (unless (citre-tags-file-path)
-      (user-error "Can't find a tags file")
-      (setq citre-mode nil))
+      (setq citre-mode nil)
+      (user-error "Can't find a tags file"))
     (when citre-enable-xref-integration
       (add-hook 'xref-backend-functions #'citre-xref-backend nil t))
     (when citre-enable-capf-integration
