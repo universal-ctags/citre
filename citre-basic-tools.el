@@ -345,7 +345,9 @@ generated command should work for most projects"
 ;;;;; Edit tags file generation recipe
 
 (defvar citre-edit-cmd-buf-help-msg
-  ";; Syntax:
+  ";; Edit the command line for creating the tags file
+;;
+;; Syntax:
 ;;
 ;; - One command line argument in one line
 ;; - Lines start with ;; are ignored
@@ -358,6 +360,7 @@ generated command should work for most projects"
 ;; - \\[citre-edit-cmd-buf-add-dir-or-file]: Insert a dir or file
 ;; - \\[citre-edit-cmd-buf-commit]: Commit
 ;; - \\[citre-edit-cmd-buf-cancel]: Cancel
+
 "
   "Help message in the command line editing buffer.")
 
