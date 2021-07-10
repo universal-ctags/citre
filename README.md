@@ -365,10 +365,34 @@ these tools.
 
 ## Current status
 
-Citre is in its alpha stage. The authors are still exploring the designing and
-usage of the tools provided by Citre, so we may introduce some breaking
-changes.
+Below are the status of tools provided by Citre:
 
-That said, I've put much effort polishing the tools, and have been using it
-daily for a long time. Citre is useable, and offers great tools, so just try
-it!
+| Tool              | Description                          | Status | Note |
+|-------------------|--------------------------------------|--------|------|
+| Ctags             | Create/update tags files             | alpha  | [^1] |
+| capf, xref, imenu | Integration with built-in mechanisms | stable |      |
+| `citre-jump`      | Jump to the definition               | stable |      |
+| `citre-peek`      | Deep code reading in a peek window   | beta   | [^2] |
+
+[^1]: Universal Ctags is exploring concepts like [incremental
+      updating](https://github.com/universal-ctags/ctags/issues/2697),
+      [multi-pass parsing](https://github.com/universal-ctags/ctags/pull/2741),
+      and more. Citre may follow the changes happen in Universal Ctags.
+
+[^2]: I plan to implement a feature that lets you further filter the
+      definitions in a peek window.
+
+"alpha" means the tool is likely to go through breaking changes. "beta" means
+new features and improvements may happen. "stable" means the tool is basically
+finished.
+
+Below are new tools I have in mind, and may come in the future:
+
+- `citre-diagnostics`: Check if you have the right version of readtags, ctags;
+  show the project root, the tags file being used, and things like that.
+
+- A tool that lets you interactively filter a tags file (find a tag whose name
+  contains "foo", the path contains "bar", with the kind "function", etc). Then
+  you can use the results as completion (insert in current bufffer), visit
+  their definition, or convert them into a `citre-peek` or xref session. I
+  consider this to be the "ultimate weapon" of Citre.
