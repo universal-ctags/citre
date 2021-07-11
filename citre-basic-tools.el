@@ -376,6 +376,21 @@ generated command should work for most projects"
 (defvar-local citre--edit-cmd-buf-prev-buf nil
   "Previous buffer before switching to edit cmd buffer.")
 
+(defun citre--read-cwd (&optional tagsfile)
+  "Prompt the user to choose cwd for Ctags command.
+When TAGSFILE is non-nil and TAG_PROC_CWD ptag is found in it,
+use it as the default directory.
+
+The full path is returned."
+  (let (cwd)
+    (when (and tagsfile (citre-non-dir-file-exists-p tagsfile))
+      (when (setq cwd (nth 1 (car (citre-core-get-pseudo-tags
+                                   "TAG_PROC_CWD" tagsfile))))
+        (when-let (remote-id (file-remote-p tagsfile))
+          (setq cwd (concat remote-id cwd)))))
+    (expand-file-name
+     (read-directory-name "Root dir to run ctags: " cwd))))
+
 (defun citre--read-cwd-and-cmd (callback &optional tagsfile cwd)
   "Read the root dir (cwd) and command to generate a tags file.
 If TAGSFILE is non-nil and there's a CITRE_CMD ptag in it,
@@ -391,6 +406,8 @@ buffer.  It's called with 3 args:
 - The cwd.
 - The CITRE_CMD ptag to be written into the tags file."
   (let (cmd)
+    (unless cwd
+      (setq cwd (citre--read-cwd)))
     (unless cwd
       (when (and tagsfile (citre-non-dir-file-exists-p tagsfile))
         (when (setq cwd (nth 1 (car (citre-core-get-pseudo-tags
@@ -561,14 +578,7 @@ the tags file now (update it directly instead)."
         (funcall
          callback tagsfile
          (or (and cwd (expand-file-name cwd))
-             (progn
-               (when-let ((cwd-ptag (nth 1 (car (citre-core-get-pseudo-tags
-                                                 "TAG_PROC_CWD" tagsfile)))))
-                 (if-let (remote-id (file-remote-p tagsfile))
-                     (setq cwd (concat remote-id cwd-ptag))
-                   (setq cwd cwd-ptag)))
-               (expand-file-name
-                (read-directory-name "Root dir to run ctags: " cwd))))
+             (citre--read-cwd))
          cmd-ptag)
       (citre--read-cwd-and-cmd callback tagsfile cwd))))
 
