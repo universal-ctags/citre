@@ -571,7 +571,17 @@ the tags file now (update it directly instead)."
                     (citre-core-write-pseudo-tag
                      tagsfile "TAG_PROC_CWD" (file-local-name cwd)
                      "dir in which ctags runs")
-                    (when (or noconfirm
+                    ;; WORKAROUND: When `noconfirm' is non-nil, what we do here
+                    ;; is `citre-core-write-pseudo-tag' to a tagsfile, then
+                    ;; `citre-update-tags-file' it.  It seems there's some race
+                    ;; conditions happening.  If you eval a `progn' form to do
+                    ;; these two things, the readtags process may freeze.
+                    ;; Strangely this only happens to some tags files, and
+                    ;; seems to have something to do with its path depth.  Here
+                    ;; we `sit-for' a while in between these 2 actions.  If
+                    ;; this doesn't solve the problem, we may remove the
+                    ;; `noconfirm' argument.
+                    (when (or (and noconfirm (progn (sit-for 0.05) t))
                               (y-or-n-p (format "Update %s now? " tagsfile)))
                       (citre-update-tags-file tagsfile)))))
     (if cmd-ptag
