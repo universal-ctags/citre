@@ -405,8 +405,13 @@ root dir."
                        (citre--find-tags-in-cache-dirs current-dir project))
                   (and citre-tags-files
                        (citre--find-tags-in-dir current-dir))))
-        (setq current-dir (citre--up-directory current-dir)))
-      tagsfile)))
+        (unless tagsfile
+          (setq current-dir (citre--up-directory current-dir))))
+      (when tagsfile
+        (setq tagsfile (file-truename tagsfile))
+        (puthash tagsfile current-dir
+                 citre-core--tags-file-cwd-guess-table)
+        tagsfile))))
 
 (defun citre-clear-tags-file-cache ()
   "Clear the cache of buffer -> tagsfile.
