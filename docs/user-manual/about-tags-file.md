@@ -49,8 +49,8 @@ to a method above:
 After you've decided where to save the tags file, Citre asks you to specify a
 root dir. It has 2 uses:
 
-- Ctags command runs in it, i.e., it's the current working directory when
-  running ctags.
+- It's the working directory when running ctags. You can think Citre `cd` to
+  this directory, then run Ctags.
 - In the command editing buffer, The path of added dir/files relative to the
   root dir are used, if they are inside the root dir.
 

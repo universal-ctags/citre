@@ -149,7 +149,8 @@ You are asked to:
 3. Pick a tags file name. It'll be saved inside `/path/to/project/`. Pick one
    you like.
 
-4. Pick a root dir to run ctags. Let's pick the project root.
+4. Pick a root dir to run ctags. This is the working directory when running
+   Ctags. Let's pick the project root.
 
 5. You are taken to a command editing buffer, and a help message is shown in
    the buffer. Read it.
