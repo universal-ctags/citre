@@ -1557,6 +1557,7 @@ value, and COMMENT is its comment info.
 
 When there's already a pseudo tag with the same name, COMMENT
 will not overwrite the original comment."
+  (setq comment (concat "/" comment "/;\""))
   (with-temp-file tagsfile
     (insert-file-contents tagsfile)
     ;; Jump over all pseudo tags.
@@ -1569,14 +1570,13 @@ will not overwrite the original comment."
           (progn
             (dotimes (_ 2)
               (search-forward "\t"))
-            (forward-char)
             (setq comment (buffer-substring (point) (line-end-position)))
             (delete-region (line-beginning-position) (line-end-position))
             (unless (eobp)
               ;; Delete the newline character.
               (delete-char 1)))
         (goto-char 0))
-      (insert "!_" name "\t" value "\t/" comment "/;\"" "\n"))))
+      (insert "!_" name "\t" value "\t" comment "\n"))))
 
 (provide 'citre-core)
 
