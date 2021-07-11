@@ -785,7 +785,7 @@ it.  These buffers will be killed afterwards by `citre-abort'.
 
 When PATH doesn't exist, this returns nil."
   (when (citre-non-dir-file-exists-p path)
-    (setq path (expand-file-name path))
+    (setq path (file-truename path))
     (or (alist-get path citre-peek--temp-buffer-alist
                    nil nil #'equal)
         (find-buffer-visiting path)

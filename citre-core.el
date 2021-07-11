@@ -145,9 +145,9 @@ Info fields and their corresponding values are:
 - `time': The last update time of the file info, which is, the
   hash table.  It's in the style of (current-time).
 - `remotep': Whether the tags file is a remote file.
-- `dir': The canonical current working directory when generating
-  the tags file.  It's a remote dir when tags file is a remote
-  file name.
+- `dir': The full current working directory when generating the
+  tags file.  It's a remote dir when tags file is a remote file
+  name.
 - `os': When the local part of `dir' is unix-style path (begins
   with a slash), this is `unix', or it's `nt'.  We have such a
   field since `system-type' can't tell us about the remote
@@ -633,7 +633,7 @@ TAGSFILE-INFO is the additional info that FIELD depends on."
 ;;;;;; ext-abspath
 
 (defun citre-core--get-ext-abspath (tag tagsfile-info)
-  "Return the canonical path of the input file.
+  "Return the full path of the input file.
 This needs the `input' field to be presented in TAG, and if its
 value is a relative path, `dir' info in TAGSFILE-INFO is used.
 
@@ -822,7 +822,7 @@ This function caches the info, and uses the cache when possible."
   (unless (and (file-exists-p tagsfile)
                (not (file-directory-p tagsfile)))
     (error "%s doesn't exist" tagsfile))
-  (let ((tagsfile (expand-file-name tagsfile))
+  (let ((tagsfile (file-truename tagsfile))
         (recent-mod (file-attribute-modification-time
                      (file-attributes tagsfile)))
         (info (alist-get tagsfile
@@ -1017,7 +1017,9 @@ MATCH can be:
 - `in-dir': Match input fields that is in directory FILENAME."
   (let* ((tagsfile (expand-file-name tagsfile))
          ;; We use this to match the input field in the tags file, so we need
-         ;; the local path.
+         ;; the local path.  We have a subtle problem here: filename and the
+         ;; path of some tags may look different, but actually point to the
+         ;; same location through symlink.
          (filename (file-local-name (expand-file-name filename)))
          (filter (list 'or))
          (match (pcase match
@@ -1265,7 +1267,7 @@ used as the field name.
 Certain fields may offer ambiguous information.  To ascertain
 them, Citre offers its own extension fields:
 
-- `ext-abspath': The canonical path of `input'.
+- `ext-abspath': The full path of `input'.
 
   Needs `input' field to be presented in the tags file.  When the
   tags file is a remote file, this is also a remote file name.

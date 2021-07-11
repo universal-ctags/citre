@@ -60,8 +60,9 @@ much effort clear it up.
 
 Let's start with basic concepts:
 
-- absolute/canonical path: Canonical path is like absolute path, but the `~` is
-  expanded, symbolic links are resolved, etc.
+- absolute/full/canonical path: Full path is like absolute path, but things
+  like `~`, `~USER` is expanded. Canonical path further resolves the symbolic
+  links, so there's only one unique canonical path for one file.
 
 - local/remote path: We all know local paths. In Emacs, a filename can point to
   a remote file, like:
@@ -75,7 +76,7 @@ These terms are orthogonal, e.g., you can have "remote canonical path" or
 
 Here are some guidelines when working with filenames.
 
-### When to use canonical/absolute path
+### When to use canonical/full/absolute path
 
 When the filename is associated with additional info, it's better to use
 canonical path to store them.
@@ -85,9 +86,17 @@ directory, etc. These are stored in a hash table, where the keys are canonical
 paths of the tags files, and values are the additiona info.
 
 That said, when exposing APIs to upper components, it's often be better to ask
-for absolute path, and canonicalize it by `expand-file-name`, so upper
-components can path canonical or non-canonical paths. Ideally, all APIs in
-`citre-core.el` and `citre-util.el` should be designed like this.
+for absolute path, and canonicalize it by `file-truename`, so upper components
+can path canonical or non-canonical paths. Ideally, all APIs in `citre-core.el`
+and `citre-util.el` should be designed like this.
+
+When generating a tags file, if you feed a full path that contains symlink to
+Ctags, the tags file will record it as it is. Then, when filtering the `input`
+field with a canonical path, it's a problem how to get that full path with that
+symlink. We really can't do anything here, luckily this should only be a corner
+case. Currently when filtering the input field using `buffer-file-name`, Citre
+uses the full path, and not canonicalize it, hoping the user are visiting the
+file through the same symlink.
 
 ### When to use local/remote path
 
@@ -104,9 +113,13 @@ Troubles happens in 2 situations:
   file itself is on a remote machine, we need to convert them to remote path so
   we can visit them. Currently, the `dir` additional info field of tags files,
   the `ext-abspath` extension field, and `citre-core-filter-input` takes care
-  of these problems.
+  of these problems, so you don't need to worry much.
 
 ### Others
+
+`expand-file-name` says it will canonicalize the file name. From what I've
+seen, it doesn't resolve the symlinks. Maybe Emacs defines "canonical path"
+differently with us. When you need to resolve symlinks, use `file-truename`.
 
 Some functions, like `file-name-absolute-p`, works differently on different
 platforms. Trouble happens when you visit a Unix remote machine on Windows, and

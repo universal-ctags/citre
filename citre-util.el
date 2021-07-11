@@ -206,8 +206,8 @@ This uses `project-current' internally."
     (expand-file-name (cdr project))))
 
 (defun citre-current-dir ()
-  "Canonical current directory of the buffer.
-This means the directory of the buffer file, or canonicalized
+  "Full current directory of the buffer.
+This means the directory of the buffer file, or expanded
 `default-directory' if it's not a file buffer."
   (expand-file-name
    (if-let (file (buffer-file-name))
@@ -321,8 +321,7 @@ intended to be used."
 
 (defun citre-tags-file-in-global-cache (dir)
   "Return the tags file name of DIR in global cache dir.
-DIR is absolute.  The canonical path of the tags file is
-returned."
+DIR is absolute.  The full path of the tags file is returned."
   (concat
    (or (file-remote-p default-directory) "")
    (expand-file-name
@@ -331,8 +330,8 @@ returned."
 
 (defun citre-tags-file-in-per-project-cache (dir &optional project)
   "Return the tags file name of DIR in per-project cache dir.
-DIR is canonical.  PROJECT is the project root.  If it's nil, it's
-detected by `citre-project-root-function'.  The canonical path of
+DIR is canonical.  PROJECT is the project root.  If it's nil,
+it's detected by `citre-project-root-function'.  The full path of
 the tags file is returned."
   (let* ((project (or project (funcall citre-project-root-function))))
     (if project
@@ -346,8 +345,8 @@ the tags file is returned."
 DIR is absolute.  PROJECT is the project root.  If it's nil, it's
 detected by `citre-project-root-function'.
 
-The canonical path of the tags file is returned."
-  (let* ((dir (expand-file-name dir))
+The full path of the tags file is returned."
+  (let* ((dir (file-truename dir))
          (project (or project (funcall citre-project-root-function))))
     (cl-block nil
       ;; First search in per project cache dir.
@@ -441,9 +440,9 @@ A value of it is a plist.  Its props and values are:
   You can use other properties to record the information you need
   for filtering/sorting the tags, see the props below.  Citre
   automatically attach 2 more props to the returned value:
-  `citre-file-path' for the canonical path of current file (when
-  in a file buffer), and `citre-tags-file' for the canonical path
-  of tags file, so filters/sorters can make use of them.
+  `citre-file-path' for the full path of current file (when in a
+  file buffer), and `citre-tags-file' for the canonical path of
+  tags file, so filters/sorters can make use of them.
 
   If you don't specify this prop, `citre-get-symbol-default' is
   used as fallback.  You can also use it internally, and add more
