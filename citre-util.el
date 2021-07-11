@@ -417,7 +417,7 @@ root dir."
 Use this when a new tags file is created."
   (dolist (b (buffer-list))
     (with-current-buffer b
-      (kill-local-variable citre--tags-file))))
+      (kill-local-variable 'citre--tags-file))))
 
 ;;;;; APIs: Language support framework
 
