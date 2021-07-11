@@ -969,6 +969,27 @@ If SESSION is nil, use the currently active session."
   (citre-peek--current-entry-in-def-list
    (citre-peek--current-def-list)))
 
+(defun citre-peek--current-tagsfile ()
+  "Return the tagsfile for currently peeked file."
+  (with-current-buffer
+      (car (citre-peek--get-buf-and-pos
+            (citre-peek--current-def-entry)))
+    (citre-peek--hack-buffer-file-name
+      (citre-tags-file-path))))
+
+(defun citre-peek--set-current-tagsfile (tagsfile &optional maybe)
+  "Set the tagsfile for currently peeked file to TAGSFILE.
+When MAYBE is non-nil, don't do anything if the tags file of
+currently peeked file can be detected.  Otherwise, always set
+it."
+  (with-current-buffer
+      (car (citre-peek--get-buf-and-pos
+            (citre-peek--current-def-entry)))
+    (when (or (not maybe)
+              (null (citre-peek--hack-buffer-file-name
+                      (citre-tags-file-path))))
+      (setq citre--tags-file tagsfile))))
+
 ;;;;; Create def lists & sessions
 
 (defun citre-peek--make-def-list-of-current-location (name)
@@ -1004,10 +1025,12 @@ push its def list into the branches of current def entry."
   (with-current-buffer buf
     (save-excursion
       (goto-char point)
-      (let* ((branch (citre-peek--get-def-list)))
+      (let* ((branch (citre-peek--get-def-list))
+             (tagsfile (citre-peek--current-tagsfile)))
         (citre-peek--push-branch-in-current-entry-in-def-list
          (citre-peek--current-def-list) branch)
         (citre-peek--session-depth-add 1)
+        (citre-peek--set-current-tagsfile tagsfile 'maybe)
         (citre-peek--setup-displayed-defs-interval branch)))))
 
 (defun citre-peek--make-session (buf point)
@@ -1227,9 +1250,12 @@ point."
   (interactive)
   (when citre-peek--mode
     (citre-peek-abort))
-  (let ((buf (or buf (current-buffer)))
-        (point (or point (point))))
-    (citre-peek--setup-session (citre-peek--make-session buf point)))
+  (let* ((buf (or buf (current-buffer)))
+         (point (or point (point)))
+         (tagsfile (with-current-buffer buf
+                     (citre-tags-file-path))))
+    (citre-peek--setup-session (citre-peek--make-session buf point))
+    (citre-peek--set-current-tagsfile tagsfile 'maybe))
   (citre-peek--mode))
 
 ;;;###autoload
@@ -1513,10 +1539,13 @@ A Saved session can be loaded by `citre-peek-load-session'."
   "Jump to the definition that is currently peeked."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (citre-peek-abort)
-  (citre-goto-tag
-   (citre-peek--def-entry-tag
-    (citre-peek--current-def-entry)))
+  (let ((tagsfile (citre-peek--current-tagsfile)))
+    (citre-peek-abort)
+    (citre-goto-tag
+     (citre-peek--def-entry-tag
+      (citre-peek--current-def-entry)))
+    (unless (citre-tags-file-path)
+      (setq citre--tags-file tagsfile)))
   (when citre-peek-auto-restore-after-jump
     (citre-peek-restore)
     (when citre-peek-backward-in-chain-after-jump

@@ -845,8 +845,12 @@ When there's multiple definitions, it lets you pick one using the
       (citre-goto-tag (alist-get
                        (funcall citre-jump-select-definition-function
                                 locations symbol)
-                       loc-alist nil nil #'equal)))
-    (ring-insert citre-jump--marker-ring marker)))
+                       loc-alist nil nil #'equal))
+      (unless (citre-tags-file-path)
+        (setq citre--tags-file
+              (with-current-buffer (marker-buffer marker)
+                (citre-tags-file-path))))
+      (ring-insert citre-jump--marker-ring marker))))
 
 (defun citre-jump-back ()
   "Go back to the position before last `citre-jump'."
