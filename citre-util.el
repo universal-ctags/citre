@@ -284,44 +284,30 @@ against PROJECT, an absolute path."
 
 (defun citre--path-to-cache-tags-file-name (path)
   "Convert PATH to the non-directory part a tagsfile name.
-PATH is absolute or relative to the project root.  It's where you
-want to use the tags file.  The returned name can be used in
+PATH is canonical or relative to the project root.  It's where
+you want to use the tags file.  The returned name can be used in
 `citre-tags-file-global-cache-dir' or
 `citre-tags-file-per-project-cache-dir' as tags file names."
   (when (file-name-absolute-p path)
-    (setq path (expand-file-name path)))
+    (setq path (expand-file-name path))
+    ;; Check if it's a Windows path.  We don't use `system-type' as the user
+    ;; may work on a remote Windows machine (people really do this?)
+    (when (string-match "^[[:alpha:]]:" (file-local-name path))
+      ;; We remote the colon after the disk symbol, or Emacs will think
+      ;; "d:!project!path" is absolute and refuse to expand it against the
+      ;; cache dir.
+      (setq path (concat (or (file-remote-p path) "")
+                         (char-to-string (aref path 0))
+                         (substring path 2)))))
   ;; Escape backslashes
   (setq path (replace-regexp-in-string "\\\\" "\\\\\\&" path))
   ;; Escape exclamation marks
   (setq path (replace-regexp-in-string "!" "\\\\\\&" path))
   (concat (replace-regexp-in-string "/" "!" path) ".tags"))
 
-(defun citre--cache-tags-file-name-to-path (tagsfile)
-  "Convert TAGSFILE, the non-directory part of a tags file to a dir.
-TAGSFILE is a tags file from `citre-tags-file-global-cache-dir'
-or `citre-tags-file-per-project-cache-dir'.  The returned
-dir (can be absolute or relative) is where the tags file is
-intended to be used."
-  (let (dir)
-    ;; Translate unescaped "!" to "/"
-    (setq dir (replace-regexp-in-string
-               ;; Don't know why this doesn't work on Emacs 26
-
-               ;; (rx (group (or line-start (not "\\")) (* "\\\\")) "!")
-               "\\(\\(?:^\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\)!"
-               "\\1/" tagsfile))
-    ;; Translate escape sequences
-    (setq dir (replace-regexp-in-string
-               (rx (group (* "\\\\")) "\\" "!")
-               "\\1!" dir))
-    (setq dir (replace-regexp-in-string
-               (rx (group (* "\\\\")) "\\\\")
-               "\\1\\\\" dir))
-    dir))
-
 (defun citre-tags-file-in-global-cache (dir)
   "Return the tags file name of DIR in global cache dir.
-DIR is absolute.  The full path of the tags file is returned."
+DIR is canonical.  The full path of the tags file is returned."
   (concat
    (or (file-remote-p default-directory) "")
    (expand-file-name
