@@ -667,7 +667,7 @@ Delete it first? "
                    (progn (delete-directory tagsfile 'recursive)
                           t)))
       (unless (file-exists-p (file-name-directory tagsfile))
-        (make-directory (file-name-directory tagsfile)))
+        (make-directory (file-name-directory tagsfile) 'parents))
       (citre-edit-tags-file-recipe
        tagsfile
        (when citre-prompt-language-for-ctags-command
