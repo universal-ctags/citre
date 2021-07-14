@@ -282,7 +282,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
          (filter (citre-core--strip-text-property-in-list filter))
          (sorter (citre-core--strip-text-property-in-list sorter))
          inhibit-message
-         cmd proc result exit-msg)
+         cmd proc exit-msg)
     (with-current-buffer output-buf
       (erase-buffer))
     ;; Program name
@@ -306,58 +306,72 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
           (push "-l" cmd)
         (push "-" cmd)
         (push name cmd)))
-    ;; Credit: This technique is developed from
-    ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=32986.
-    (pcase
-        ;; Make sure the keyboard quit is captured in this level so we can
-        ;; replace the process sentinel after it.
-        (with-local-quit
-          (catch 'done
-            (setq proc
-                  (make-process
-                   :name "readtags"
-                   :buffer output-buf
-                   :command (nreverse cmd)
-                   :connection-type 'pipe
-                   ;; NOTE: Using a buffer or pipe for :stderr has caused a lot
-                   ;; of troubles on Windows.
-                   :stderr nil
-                   :sentinel (lambda (_proc _msg)
-                               ;; While we use `sleep-for' for pending,
-                               ;; throw/catch can stop the pending.
-                               (throw 'done t))
-                   :file-handler t))
-            ;; Poll for the process to finish.  Once it's finished, the
-            ;; sentinel function throws a tag which breaks the sleeping.
-            (if citre-core-stop-process-on-input
-                ;; `sit-for' wakes up when input is avaliable.
-                (while (sit-for 30))
-              ;; `sleep-for' doesn't bother with input.
-              (while (sleep-for 30)))))
-      ;; Since we throw t, this can only receive nil when user input arrives.
-      ;; When this happens, we immediately replace the sentinel function, or it
-      ;; will throw to the wild and cause a "No catch for tag: done" error.
-      ('nil (set-process-sentinel proc #'ignore)
-            (if (eq system-type 'windows-nt)
-                ;; Based on my experiment on a large tags file,
-                ;; `interrupt-process' doesn't work reliably on Windows, while
-                ;; sighup seems does.  When using a remote Unix machine on
-                ;; Windows, this may send a SIGHUP to the remote process, but
-                ;; shouldn't be a problem since SIGHUP is not a harsh signal.
-                (signal-process proc 'sighup)
-              (interrupt-process proc))
-            nil)
-      (_ (setq result (with-current-buffer output-buf
-                        (buffer-string)))
-         (pcase (process-status proc)
-           ('exit
-            (pcase (process-exit-status proc)
-              (0 nil)
-              (s (setq exit-msg (format "readtags exits %s\n" s)))))
-           (s (setq exit-msg (format "abnormal status of readtags: %s\n" s))))
-         (if exit-msg
-             (error (concat exit-msg result))
-           (split-string result "\n" t))))))
+    ;; We allow keyboard quit when waiting for the process to finish, by
+    ;; `with-local-quit'.  This line is to make sure the following cleanup
+    ;; can't be breaked by user input, especially quickly swapping the sentinel
+    ;; function, see comments later.
+    (let ((inhibit-quit t))
+      ;; Credit: This technique is developed from
+      ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=32986.
+      (pcase
+          ;; Allow keyboard quit when waiting the process.
+          (with-local-quit
+            (catch 'citre-done
+              (setq proc
+                    (make-process
+                     :name "readtags"
+                     :buffer output-buf
+                     :command (nreverse cmd)
+                     :connection-type 'pipe
+                     ;; NOTE: Using a buffer or pipe for :stderr has caused a
+                     ;; lot of troubles on Windows.
+                     :stderr nil
+                     :sentinel (lambda (_proc _msg)
+                                 ;; While we use `sleep-for' for pending,
+                                 ;; throw/catch can stop the pending.
+                                 (throw 'citre-done t))
+                     :file-handler t))
+              ;; Poll for the process to finish.  Once it's finished, the
+              ;; sentinel function throws a tag which breaks the sleeping.
+              (if citre-core-stop-process-on-input
+                  ;; `sit-for' wakes up when input is avaliable.
+                  (while (sit-for 30))
+                ;; `sleep-for' doesn't bother with input (except `C-g').
+                (while (sleep-for 30)))))
+        ;; Since we throw t, this can only receive nil when user input arrives.
+        ;; When this happens, we immediately replace the sentinel function, or
+        ;; it will throw to the wild and cause a "No catch for tag: citre-done"
+        ;; error.
+        ('nil (set-process-sentinel proc #'ignore)
+              (if (eq system-type 'windows-nt)
+                  ;; Based on my experiment on a large tags file,
+                  ;; `interrupt-process' doesn't work reliably on Windows,
+                  ;; while sighup seems does.  When using a remote Unix machine
+                  ;; on Windows, this may send a SIGHUP to the remote process,
+                  ;; but shouldn't be a problem since SIGHUP is not a harsh
+                  ;; signal.
+                  (signal-process proc 'sighup)
+                (interrupt-process proc))
+              nil)
+        (_ (pcase (process-status proc)
+             ('exit
+              (pcase (process-exit-status proc)
+                (0 nil)
+                (s (setq exit-msg (format "readtags exits %s\n" s)))))
+             (s (setq exit-msg
+                      (format "abnormal status of readtags: %s\n" s))))
+           (cl-symbol-macrolet
+               ((output (with-current-buffer output-buf (buffer-string)))
+                (output-list (split-string output "\n" t))
+                (output-list-while-no-input
+                 (pcase (while-no-input output-list) ('t nil) (val val))))
+             (if exit-msg
+                 (error (concat exit-msg output))
+               ;; Allow user input to stop the post-processing part as it can
+               ;; also take some time.
+               (if citre-core-stop-process-on-input
+                   output-list-while-no-input
+                 output-list))))))))
 
 ;;;;; Parse tagline
 
