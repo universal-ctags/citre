@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="logo">
+  <img src="./img/logo.svg" alt="logo">
 </p>
 
 <p align="center"><i>Ctags IDE on the True Editor!</i></p>
@@ -20,7 +20,7 @@ Let's see them in action!
   [company](https://company-mode.github.io/) and
   [Selectrum](https://github.com/raxod502/selectrum):
 
-  ![capf](capf.jpg)
+  ![capf](./img/capf.jpg)
 
   Notice the rich annotations. Candidates are annotated by `(kind/type)`, so
   you know "it's a struct member with `pid_t` type", etc. This is because Ctags
@@ -33,11 +33,11 @@ Let's see them in action!
 - `citre-jump`, with `completing-read` UI provided by
   [Selectrum](https://github.com/raxod502/selectrum):
 
-  ![citre-jump](citre-jump.jpg)
+  ![citre-jump](./img/citre-jump.jpg)
 
 - `citre-peek`. It opens a "peek window" to show the definition of a symbol:
 
-  ![citre-peek](citre-peek.jpg)
+  ![citre-peek](./img/citre-peek.jpg)
 
   And there's more. Notice the code reading history at the bottom of the peek
   window. Do you hate having to switch between a lot of buffers while reading
@@ -397,3 +397,18 @@ Below are new tools I have in mind, and may come in the future:
   you can use the results as completion (insert in current bufffer), visit
   their definition, or convert them into a `citre-peek` or xref session. I
   consider this to be the "ultimate weapon" of Citre.
+
+## Donation
+
+If Citre makes you happy, please consider buying me (@AmaiKinono) a beer to
+make me happy ;)
+
+- by Alipay
+
+  <img src="./img/alipay.jpg" alt="Alipay" width="180" />
+
+- by Wechat Pay
+
+  <img src="./img/wechat-pay.png" alt="Wechat Pay" width="180" />
+
+- by [Buy me a coffee](https://www.buymeacoffee.com/amaikinono)
