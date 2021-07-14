@@ -6,6 +6,9 @@
 
 ## What is it?
 
+(If you are already familiar with Citre, see [changelog](CHANGELOG.md) for the
+news.)
+
 Citre is an advanced Ctags (or actually, readtags) frontend for Emacs. It
 offers:
 
@@ -306,7 +309,7 @@ and tweak it to your own need.
 See [this documentation](docs/user-manual/toc.md) to know more customizable
 options.
 
-## Manuals
+## Documentations
 
 - [User Manual](docs/user-manual/toc.md)
 - [Developer Manual](docs/developer-manual/toc.md)
