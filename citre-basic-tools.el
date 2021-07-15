@@ -332,7 +332,8 @@ PTAG is the value of the CITRE_CMD ptag in TAGSFILE"
 This requires ctags program provided by Universal Ctags.  The
 generated command should work for most projects"
   (let* ((langs (with-temp-buffer
-                  (call-process "ctags" nil (current-buffer) nil
+                  (call-process (or citre-ctags-program "ctags")
+                                nil (current-buffer) nil
                                 "--list-languages")
                   (split-string (buffer-string) "\n" t)))
          (langs (completing-read-multiple
@@ -341,6 +342,22 @@ generated command should work for most projects"
     (concat "ctags|-o|%TAGSFILE%|"
             (if langs (concat "--languages=" (string-join langs ",") "|") "")
             "--kinds-all=*|--fields=*|--extras=*|-R")))
+
+(defun citre--write-recipe (tagsfile cmd-ptag cwd)
+  "Write recipe to TAGSFILE.
+CMD-PTAG is the value of CITRE_CMD ptag, CWD is the working
+directory of Ctags.  It's expanded and convert to a local path."
+  (citre-core-write-pseudo-tag
+   tagsfile "CITRE_CMD" cmd-ptag
+   "command line to generate this tags file")
+  (setq cwd (file-local-name (expand-file-name cwd)))
+  ;; Ctags on windows generates disk symbol in capital letter.
+  (when (<= ?a (aref cwd 0) ?z)
+    (setf (aref cwd 0)
+          (upcase (aref cwd 0))))
+  (citre-core-write-pseudo-tag
+   tagsfile "TAG_PROC_CWD" (file-local-name cwd)
+   "dir in which ctags runs"))
 
 ;;;;; Edit tags file generation recipe
 
@@ -408,14 +425,6 @@ buffer.  It's called with 3 args:
   (let (cmd)
     (unless cwd
       (setq cwd (citre--read-cwd)))
-    (unless cwd
-      (when (and tagsfile (citre-non-dir-file-exists-p tagsfile))
-        (when (setq cwd (nth 1 (car (citre-core-get-pseudo-tags
-                                     "TAG_PROC_CWD" tagsfile))))
-          (when-let (remote-id (file-remote-p tagsfile))
-            (setq cwd (concat remote-id cwd)))))
-      (setq cwd (read-directory-name "Root dir to run ctags: " cwd)))
-    (setq cwd (expand-file-name cwd))
     (when (and tagsfile (citre-non-dir-file-exists-p tagsfile))
       (when (setq cmd (nth 1 (car (citre-core-get-pseudo-tags
                                    "CITRE_CMD" tagsfile))))
@@ -451,7 +460,8 @@ This command requires the ctags program from Universal Ctags."
   (when-let* ((ctags (or citre-ctags-program "ctags"))
               (langs (with-temp-buffer
                        (ignore-errors
-                         (call-process "ctags" nil (current-buffer) nil
+                         (call-process (or citre-ctags-program "ctags")
+                                       nil (current-buffer) nil
                                        "--list-languages")
                          (split-string (buffer-string) "\n" t))))
               (lang (completing-read "Select a language: " langs)))
@@ -514,9 +524,7 @@ user to edit one and save it to TAGSFILE."
               (pcase (process-exit-status proc)
                 (0 (citre-clear-tags-file-cache)
                    (message "Finished updating %s" tagsfile)
-                   (citre-core-write-pseudo-tag
-                    tagsfile "CITRE_CMD" cmd-ptag
-                    "command line to generate this tags file"))
+                   (citre--write-recipe tagsfile cmd-ptag cwd-ptag))
                 (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
              (s (user-error "Abnormal status of ctags: %s.  \
 See *ctags* buffer" s))))
@@ -559,18 +567,7 @@ the tags file now (update it directly instead)."
                       (unless (file-exists-p (file-name-directory tagsfile))
                         (mkdir (file-name-directory tagsfile)))
                       (write-region "" nil tagsfile))
-                    (citre-core-write-pseudo-tag
-                     tagsfile "CITRE_CMD" ptag
-                     "command line to generate this tags file")
-                    (setq cwd (file-local-name cwd))
-                    ;; Ctags on windows generates disk symbol in capital
-                    ;; letter.
-                    (when (<= ?a (aref cwd 0) ?z)
-                      (setf (aref cwd 0)
-                            (upcase (aref cwd 0))))
-                    (citre-core-write-pseudo-tag
-                     tagsfile "TAG_PROC_CWD" (file-local-name cwd)
-                     "dir in which ctags runs")
+                    (citre--write-recipe tagsfile ptag cwd)
                     (when (or noconfirm
                               (y-or-n-p (format "Update %s now? " tagsfile)))
                       ;; WORKAROUND: When `noconfirm' is non-nil, what we do
