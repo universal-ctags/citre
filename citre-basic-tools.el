@@ -528,7 +528,8 @@ user to edit one and save it to TAGSFILE."
                 (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
              (s (user-error "Abnormal status of ctags: %s.  \
 See *ctags* buffer" s))))
-         :file-handler t))
+         :file-handler t)
+        (message "Updating %s..." tagsfile))
     (when (y-or-n-p (format "%s doesn't contain recipe for updating.  \
 Edit its recipe? " tagsfile))
       (citre-edit-tags-file-recipe tagsfile))))
