@@ -94,6 +94,14 @@ By default, `citre-jump` uses the `completing-read` UI. You can customize
 `citre-jump-select-definition-function` to use your own UI that picks a
 definition out of a list of them. See its docstring.
 
+### imenu
+
+When a tags file is large, running `imenu` could be slow. In this situation,
+Citre let Ctags scan the current file, and create a temporary tags file for it,
+which should be faster. By default, we consider a tags file larger than 50 MiB
+to be "large". You could customize `citre-imenu-create-tags-file-threshold` to
+change this behavior, see its docstring for details.
+
 ## Misc
 
 The `completion-at-point`, xref and imenu integration can be enabled/disabled

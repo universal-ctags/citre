@@ -199,6 +199,25 @@ key by mistake, but that doesn't happen very often."
   :type 'boolean
   :group 'citre)
 
+;;;;; Options: imenu related
+
+(defcustom citre-imenu-create-tags-file-threshold (* 50 1024 1024)
+  "The threshold (in bytes) to create a tags file for imenu.
+When the tags file used is bigger than this threshold, searching
+for tags in current file in it could be slow.  So, Citre let
+Ctags scan the current file, and create a temporary tags file (in
+variable `temporary-file-directory'), which is faster.
+
+When the tags file in use contains a recipe, the command line in
+it is used, just the dir/files to scan are substituted by the
+current file.  If not, a command for Universal Ctags is used.
+
+When this is nil, always use the existing tags file and never
+create one for imenu.  When this is 0, always create a new tags
+file for imenu."
+  :type '(set integer (const nil))
+  :group 'citre)
+
 ;;;; Tool: Generate/update tags file
 
 ;;;;; Internals
@@ -1019,6 +1038,9 @@ STR is a candidate in a capf session.  See the implementation of
 
 ;;;; Tool: Imenu integration
 
+(declare-function tramp-get-remote-tmpdir "tramp" (vec))
+(declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
+
 (defvar-local citre-imenu--create-index-function-orig nil
   "Original value of `imenu-create-index-function' in buffer.")
 
@@ -1040,6 +1062,15 @@ is a list of tags of that kind."
                       (compare-strings str1 nil nil str2 nil nil))
              :key #'car)))
 
+(defun citre-imenu--temp-tags-file-path ()
+  "Return the temporary tags file path for imenu.
+This also works on a remote machine."
+  (if (file-remote-p default-directory)
+      (expand-file-name "citre-imenu.tags"
+                        (tramp-get-remote-tmpdir
+                         (tramp-dissect-file-name default-directory)))
+    (expand-file-name "citre-imenu.tags" temporary-file-directory)))
+
 (defun citre-imenu--make-index (tag)
   "Create Imenu index for TAG."
   (cons (citre-make-tag-str tag nil
@@ -1048,23 +1079,94 @@ is a list of tags of that kind."
                             '(location :no-path t))
         (citre-core-locate-tag tag)))
 
+(defun citre-imenu--ctags-command-cwd ()
+  "Return ctags command and its cwd for tags file for imenu."
+  (if-let* ((tagsfile (citre-tags-file-path))
+            (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile))
+            (cmd (citre--cmd-ptag-to-exec cmd-ptag nil))
+            (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
+            (cwd (if-let ((remote-id (file-remote-p tagsfile)))
+                     (concat remote-id cwd-ptag) cwd-ptag)))
+      (let ((temp-tags-file (citre-imenu--temp-tags-file-path))
+            i)
+        ;; Let's start from the end of cmd
+        (setq cmd (nreverse cmd))
+        (cl-dotimes (n (length cmd))
+          ;; when the argument is an option
+          (when (or (eq (aref (nth n cmd) 0) ?-)
+                    ;; or contains "%TAGSFILE"
+                    (string-match
+                     ;; (rx (group (or line-start (not (any "\\"))) (* "\\\\"))
+                     ;;     "%TAGSFILE%")
+                     "\\(\\(?:^\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\)%TAGSFILE%"
+                     (nth n cmd)))
+            ;; We stop count.  The idea is the files/dirs to scan should appear
+            ;; at the end of the command.
+            (setq i n)
+            (cl-return)))
+        ;; We make current file the file to scan.
+        (setq cmd (nconc (list (file-local-name (buffer-file-name)))
+                         (nthcdr i cmd)))
+        (setq cmd (mapcar (lambda (arg)
+                            (citre--replace-tagsfile-variable
+                             arg (file-local-name temp-tags-file)))
+                          (nreverse cmd)))
+        (cons cmd cwd))
+    (cons `(,(or citre-ctags-program "ctags") "-o"
+            ,(citre-imenu--temp-tags-file-path)
+            "--kinds-all=*" "--fields=*" "--extras=*"
+            ,(file-local-name (buffer-file-name)))
+          default-directory)))
+
+(defun citre-imenu--tags-from-tags-file ()
+  "Get tags for imenu from the tags file being used."
+  (citre-get-tags
+   nil nil nil
+   :filter
+   `(and ,(citre-core-filter-input (buffer-file-name) (citre-tags-file-path))
+         (not (or ,(citre-core-filter
+                    'extras
+                    '("anonymous" "reference" "inputFile")
+                    'csv-contain)
+                  ,(citre-core-filter-kind "file"))))
+   :sorter (citre-core-sorter 'line)
+   :require '(name pattern)
+   :optional '(ext-kind-full line typeref scope extras)))
+
+(defun citre-imenu--tags-from-temp-tags-file ()
+  "Get tags for imenu from a new temporary tags file."
+  (pcase-let ((`(,cmd . ,cwd) (citre-imenu--ctags-command-cwd)))
+    (make-directory (file-name-directory (citre-imenu--temp-tags-file-path))
+                    'parents)
+    (let ((default-directory cwd))
+      (apply #'process-file (car cmd)
+             nil (get-buffer-create "*ctags*") nil
+             (cdr cmd))))
+  ;; WORKAROUND: If we don't sit for a while, the readtags process will freeze.
+  (sit-for 0.001)
+  (citre-get-tags
+   (citre-imenu--temp-tags-file-path) nil nil
+   :filter
+   `(not (or ,(citre-core-filter
+               'extras
+               '("anonymous" "reference" "inputFile")
+               'csv-contain)
+             ,(citre-core-filter-kind "file")))
+   :sorter (citre-core-sorter 'line)
+   :require '(name pattern)
+   :optional '(ext-kind-full line typeref scope extras)))
+
 (defun citre-imenu-create-index-function ()
   "Create imenu index."
-  (let* ((file (buffer-file-name))
-         (tags-file (citre-tags-file-path))
-         (tags (citre-get-tags
-                nil nil nil
-                :filter
-                `(and ,(citre-core-filter-input file tags-file)
-                      (not ,(citre-core-filter
-                             'extras
-                             '("anonymous" "reference" "inputFile")
-                             'csv-contain)
-                           ,(citre-core-filter-kind "file")))
-                :sorter (citre-core-sorter 'line)
-                :require '(name pattern)
-                :optional '(ext-kind-full line typeref scope extras)))
-         (tags (citre-imenu--classify-tags tags)))
+  (let* ((tagsfile (citre-tags-file-path))
+         tags)
+    (if (and tagsfile
+             (or (null citre-imenu-create-tags-file-threshold)
+                 (< (file-attribute-size (file-attributes tagsfile))
+                    citre-imenu-create-tags-file-threshold)))
+        (setq tags (citre-imenu--tags-from-tags-file))
+      (setq tags (citre-imenu--tags-from-temp-tags-file)))
+    (setq tags (citre-imenu--classify-tags tags))
     (dotimes (i (length tags))
       (setf (cdr (nth i tags))
             (mapcar #'citre-imenu--make-index (cdr (nth i tags)))))

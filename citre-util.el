@@ -706,11 +706,12 @@ Avaliable ones are:
 
   relevant fields: `name', `ext-kind-full'.
 
-- annotation: Looks like \"kind/type<R>\".  \"<R>\" is a mark for
-  reference tags, customizable by
+- annotation: Looks like \"kind/type@scope<R>\".  \"<R>\" is a
+  mark for reference tags, customizable by
   `citre-definition-reference-mark'.  `:no-kind', `:no-type',
-  `:no-reference' controls the presence of each part,
-  `:reference-first' puts the reference mark before other parts.
+  `:no-scope', `:no-reference' controls the presence of each
+  part, `:reference-first' puts the reference mark before other
+  parts.
 
   relevant fields: `ext-kind-full', `typeref', `extras'.
 
