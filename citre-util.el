@@ -201,6 +201,15 @@ and some of its fields, which can be utilized by
                        :exclude exclude
                        :parse-all-fields parse-all-fields))
 
+(defun citre-get-pseudo-tag-value (name &optional tagsfile)
+  "Get the value field of pseudo tag NAME in TAGSFILE.
+NAME should not start with \"!_\".
+
+When TAGSFILE is nil, find it automatically."
+  (when-let ((tagsfile (or tagsfile (citre-tags-file-path)))
+             (ptag (citre-core-get-pseudo-tags name tagsfile)))
+    (nth 1 (car ptag))))
+
 ;;;; APIs
 
 ;;;;; APIs: Files

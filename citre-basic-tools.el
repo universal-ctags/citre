@@ -254,9 +254,23 @@ command editing buffer."
              "\\1\\2" cmd))
   cmd)
 
+(defun citre--replace-tagsfile-variable (arg tagsfile)
+  "Replace \"%TAGSFILE%\" in ARG by local path of TAGSFILE.
+This won't do anything if one of the \"%\"s is escaped."
+  (replace-regexp-in-string
+   ;; (rx (group (or line-start (not (any "\\"))) (* "\\\\"))
+   ;;     "%TAGSFILE%")
+   "\\(\\(?:^\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\)%TAGSFILE%"
+   (concat "\\1" (citre--escape-cmd-exec-to-file
+                  ;; Seems `make-process' doesn't know "~" in the commannd.
+                  (expand-file-name (file-local-name tagsfile))))
+   arg 'fixedcase))
+
 (defun citre--cmd-ptag-to-exec (ptag tagsfile)
   "Convert PTAG into an executable command CMD (a list).
-PTAG is the value of the CITRE_CMD ptag in TAGSFILE,"
+PTAG is the value of the CITRE_CMD ptag in TAGSFILE.  When
+TAGSFILE is nil, this won't translate the \"%TAGSFILE%\" part in
+PTAG."
   (let ((pos 0)
         last cmd)
     ;; Find unescaped "|"
@@ -273,15 +287,8 @@ PTAG is the value of the CITRE_CMD ptag in TAGSFILE,"
       (setq pos (string-match "|" ptag pos))
       (let ((c (substring ptag last pos)))
         ;; Translate %TAGSFILE%
-        (setq c (replace-regexp-in-string
-                 ;; (rx (group (or line-start (not (any "\\"))) (* "\\\\"))
-                 ;;     "%TAGSFILE%")
-                 "\\(\\(?:^\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\)%TAGSFILE%"
-                 (concat "\\1" (citre--escape-cmd-exec-to-file
-                                ;; Seems `make-process' doesn't know "~" in the
-                                ;; commannd.
-                                (expand-file-name (file-local-name tagsfile))))
-                 c 'fixedcase))
+        (when tagsfile
+          (setq c (citre--replace-tagsfile-variable c tagsfile)))
         (setq c (citre--unescape-cmd-file-to-exec c))
         (push c cmd))
       ;; Move over the "!"
@@ -328,11 +335,11 @@ PTAG is the value of the CITRE_CMD ptag in TAGSFILE"
     (string-join (nreverse cmd) "|")))
 
 (defun citre--cmd-ptag-from-languages ()
-  "Reads languages, returns a CITRE_CMD ptag.
+  "Read languages, return a CITRE_CMD ptag.
 This requires ctags program provided by Universal Ctags.  The
 generated command should work for most projects"
   (let* ((langs (with-temp-buffer
-                  (call-process (or citre-ctags-program "ctags")
+                  (process-file (or citre-ctags-program "ctags")
                                 nil (current-buffer) nil
                                 "--list-languages")
                   (split-string (buffer-string) "\n" t)))
@@ -400,11 +407,11 @@ use it as the default directory.
 
 The full path is returned."
   (let (cwd)
-    (when (and tagsfile (citre-non-dir-file-exists-p tagsfile))
-      (when (setq cwd (nth 1 (car (citre-core-get-pseudo-tags
-                                   "TAG_PROC_CWD" tagsfile))))
-        (when-let (remote-id (file-remote-p tagsfile))
-          (setq cwd (concat remote-id cwd)))))
+    (when (and tagsfile
+               (citre-non-dir-file-exists-p tagsfile)
+               (setq cwd (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile)))
+      (when-let (remote-id (file-remote-p tagsfile))
+        (setq cwd (concat remote-id cwd))))
     (expand-file-name
      (read-directory-name "Root dir to run ctags: " cwd))))
 
@@ -425,10 +432,10 @@ buffer.  It's called with 3 args:
   (let (cmd)
     (unless cwd
       (setq cwd (citre--read-cwd)))
-    (when (and tagsfile (citre-non-dir-file-exists-p tagsfile))
-      (when (setq cmd (nth 1 (car (citre-core-get-pseudo-tags
-                                   "CITRE_CMD" tagsfile))))
-        (setq cmd (citre--cmd-ptag-to-buf cmd))))
+    (when (and tagsfile
+               (citre-non-dir-file-exists-p tagsfile)
+               (setq cmd (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile)))
+      (setq cmd (citre--cmd-ptag-to-buf cmd)))
     (let ((buf (current-buffer)))
       (pop-to-buffer (generate-new-buffer "*ctags-command-line*")
                      '(display-buffer-same-window))
@@ -460,7 +467,7 @@ This command requires the ctags program from Universal Ctags."
   (when-let* ((ctags (or citre-ctags-program "ctags"))
               (langs (with-temp-buffer
                        (ignore-errors
-                         (call-process (or citre-ctags-program "ctags")
+                         (process-file (or citre-ctags-program "ctags")
                                        nil (current-buffer) nil
                                        "--list-languages")
                          (split-string (buffer-string) "\n" t))))
@@ -498,13 +505,9 @@ user to edit one and save it to TAGSFILE."
   (interactive)
   (if-let* ((tagsfile (or tagsfile (read-file-name "Tags file: "
                                                    (citre-tags-file-path))))
-            (cmd-ptag (when-let ((ptag (citre-core-get-pseudo-tags
-                                        "CITRE_CMD" tagsfile)))
-                        (nth 1 (car ptag))))
+            (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD"))
             (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
-            (cwd-ptag (when-let ((ptag (citre-core-get-pseudo-tags
-                                        "TAG_PROC_CWD" tagsfile)))
-                        (nth 1 (car ptag))))
+            (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD"))
             (cwd (if-let ((remote-id (file-remote-p tagsfile)))
                      (concat remote-id cwd-ptag) cwd-ptag)))
       ;; Workaround: If we put this let into the above `if-let*' spec, even
