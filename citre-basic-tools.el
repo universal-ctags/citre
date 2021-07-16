@@ -607,14 +607,13 @@ An updating recipe is written to it so later it can be updated by
          (read-scheme
           (lambda ()
             (setq scheme
-                  (pcase (read-char-choice "Choose a place to save tags file:
-[1] In the directory to use it
-[2] In the global cache dir
-[3] In the project cache dir
-[4] I'll select a file myself
-NOTE: If you choose 4, you need to modify `citre-tags-file-alist' \
-for it to to be used in a dir
-"
+                  (pcase (read-char-choice "Save tags file to ...
+[1] the directory where I want to use it.
+[2] global cache directory.
+[3] project cache directory.
+[4] I'll choose a file myself (modify `citre-tags-file-alist' \
+is then required to use it).
+==> Please type a number (1-4) to choose: "
                                            '(?1 ?2 ?3 ?4))
                     (?1 'in-dir)
                     (?2 'global-cache)
