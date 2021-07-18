@@ -25,3 +25,8 @@ test-tags:
 .PHONY: clean
 clean:
 	rm -f ./*.elc
+	make -C docs clean
+
+.PHONY: info
+info:
+	make -C docs info
