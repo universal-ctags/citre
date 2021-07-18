@@ -744,7 +744,7 @@ simple tag name matching.  This function is for it."
                   :filter citre-xref--filter
                   :sorter citre-definition-default-sorter
                   :require '(name ext-abspath pattern)
-                  :optional '(ext-kind-full line typeref extras)))
+                  :optional '(ext-kind-full line typeref scope extras)))
 
 (defun citre-xref--find-definition (symbol)
   "Return the xref object of the definition information of SYMBOL."
@@ -889,6 +889,7 @@ STR is a candidate in a capf session.  See the implementation of
 `citre-completion-at-point'."
   (let* ((kind (citre-get-property 'kind str))
          (type (citre-get-property 'type str))
+         (scope (citre-get-property 'scope str))
          (face 'citre-definition-annotation-face))
     (when (or kind type)
       (concat
@@ -896,6 +897,8 @@ STR is a candidate in a capf session.  See the implementation of
        (propertize (or kind "") 'face face)
        (if (and kind type) citre-definition-annotation-separator "")
        (propertize (or type "") 'face face)
+       (propertize (if scope "@" "") 'face face)
+       (propertize (or scope "") 'face face)
        (propertize ")" 'face face)))))
 
 (defun citre-capf--make-collection (tags)
@@ -909,8 +912,10 @@ STR is a candidate in a capf session.  See the implementation of
               (citre-core-get-field 'ext-kind-full tag)
               'type
               (citre-core-get-field 'typeref tag 'after-colon)
+              'scope
+              (citre-core-get-field 'scope tag)
               'signature
-              (citre-core-get-field 'signature tag 'after-colon)))
+              (citre-core-get-field 'signature tag)))
            tags))
          ;; `equal-including-properties' doesn't work. I don't know why, maybe
          ;; it uses `eq' to compare the properties.
@@ -922,7 +927,7 @@ STR is a candidate in a capf session.  See the implementation of
                         (mapcar (lambda (prop)
                                   (equal (citre-get-property prop str1)
                                          (citre-get-property prop str2)))
-                                '(kind type signature))))))))
+                                '(kind type scope signature))))))))
     (cl-remove-duplicates
      collection :test str-equal)))
 
@@ -1055,7 +1060,7 @@ is a list of tags of that kind."
                            ,(citre-core-filter-kind "file")))
                 :sorter (citre-core-sorter 'line)
                 :require '(name pattern)
-                :optional '(ext-kind-full line typeref extras)))
+                :optional '(ext-kind-full line typeref scope extras)))
          (tags (citre-imenu--classify-tags tags)))
     (dotimes (i (length tags))
       (setf (cdr (nth i tags))

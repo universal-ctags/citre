@@ -148,6 +148,12 @@ Annotations include kind, type, etc."
   :type 'string
   :group 'citre)
 
+(defcustom citre-definition-annotation-separator-for-scope
+  (propertize "@" 'face 'citre-definition-annotation-face)
+  "The separator between kind/type and scope in annotation."
+  :type 'string
+  :group 'citre)
+
 (defcustom citre-definition-reference-mark
   (propertize "<R>" 'face 'citre-definition-annotation-face)
   "Mark added for references in definitions."
@@ -573,7 +579,7 @@ completion can't be done."
                                  :completion-sorter symbol)
                                 citre-completion-default-sorter)
                     :require '(name)
-                    :optional '(ext-kind-full signature typeref))))
+                    :optional '(ext-kind-full signature scope typeref))))
 
 ;;;;; APIs: Display tags
 
@@ -615,6 +621,8 @@ PROP controls the format.  See `citre-make-tag-str' for details."
                  (citre-core-get-field 'ext-kind-full tag)))
          (type (unless (plist-get prop :no-type)
                  (citre-core-get-field 'typeref tag 'after-colon)))
+         (scope (unless (plist-get prop :no-scope)
+                  (citre-core-get-field 'scope tag)))
          (extras (citre-core-get-field 'extras tag))
          (reference
           (unless (plist-get prop :no-reference)
@@ -623,13 +631,17 @@ PROP controls the format.  See `citre-make-tag-str' for details."
          (reference (when reference citre-definition-reference-mark))
          (ref-first (plist-get prop :reference-first))
          (face 'citre-definition-annotation-face))
-    (when (or kind type reference)
+    (when (or kind type scope reference)
       (concat
        (propertize (or (plist-get prop :prefix) "") 'face face)
        (if ref-first (or reference ""))
        (concat (propertize (or kind "") 'face face)
                (if (and kind type) citre-definition-annotation-separator "")
                (propertize (or type "") 'face face))
+       (concat
+        (if scope
+            citre-definition-annotation-separator-for-scope "")
+        (propertize (or scope "") 'face face))
        (if (not ref-first) (or reference ""))
        (propertize (or (plist-get prop :suffix) "") 'face face)))))
 
@@ -771,7 +783,7 @@ is found."
                                  :definition-sorter symbol)
                                 citre-definition-default-sorter)
                     :require '(name ext-abspath pattern)
-                    :optional '(ext-kind-full line typeref extras))))
+                    :optional '(ext-kind-full line typeref scope extras))))
 
 (defun citre-goto-tag (tag &optional window)
   "Jump to the location of TAG.
