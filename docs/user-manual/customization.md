@@ -71,16 +71,18 @@ In `citre-peek` and `citre-jump`, the definition is shown as a string in the
 following format:
 
 ```
-kind/type<R> /path/to/source/file(line): line content
+kind/type@scope<R> /path/to/source/file(line): line content
 ```
 
 This is self explanatory. The mark `<R>` means the definition comes from a
 reference tag. Some parts of it may be missing if it's not recorded in the tags
-file (maybe ctags doesn't support it for the particular language).
+file (maybe ctags doesn't support it for the particular language, or some tags
+just don't have a scope).
 
 To tweak the display format, see these options:
 
 - `citre-definition-annotation-separator`
+- `citre-definition-annotation-separator-for-scope`
 - `citre-definition-reference-mark`
 - `citre-definition-missing-file-mark`
 
