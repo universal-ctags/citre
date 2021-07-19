@@ -752,7 +752,10 @@ number if they know the file is renamed/moved to which file."
          (line (citre-xref--get-linum tag)))
     (xref-make
      (citre-make-tag-str tag nil
-                         '(annotation :prefix "(" :suffix ")")
+                         '(annotation :prefix "(" :suffix ")"
+                                      ;; In xref buffer, we may want to jump to
+                                      ;; the tags with these anonymous names.
+                                      :full-anonymous-name t)
                          '(content))
      (xref-make-file-location (concat file-existance path) line 0))))
 

@@ -604,6 +604,22 @@ nil, use project in current buffer (by
         (file-relative-name path root)
       path)))
 
+(defun citre--reduce-anonymous-value (value)
+  "Reduce \"__anon*\" parts in VALUE to \"__anon\".
+When Ctags generates anonymous tags, they can be used in typeref
+or scope fields.  For example, a symbol defined in an anonymous
+union scope could be:
+
+  C_lastcookie ... scope:union:cnode::__anon1146df5f01a
+
+Applying this to the scope field value makes it looks tidier."
+  ;; Notice there can be continuous "__anon*"s, meaning nested anonymous
+  ;; scopes.
+  (replace-regexp-in-string (rx (group (or line-start ":"))
+                                (group "__anon" (+ (not (any ":"))))
+                                (group (or line-end ":")))
+                            "\\1__anon\\3" value))
+
 (defun citre--make-tag-name-str (tag prop)
   "Generate a string to display the name of TAG.
 PROP controls the format.  See `citre-make-tag-str' for details."
@@ -640,6 +656,9 @@ PROP controls the format.  See `citre-make-tag-str' for details."
          (reference (when reference citre-definition-reference-mark))
          (ref-first (plist-get prop :reference-first))
          (face 'citre-definition-annotation-face))
+    (unless (plist-get prop :full-anonymous-name)
+      (when type (setq type (citre--reduce-anonymous-value type)))
+      (when scope (setq scope (citre--reduce-anonymous-value scope))))
     (when (or kind type scope reference)
       (concat
        (propertize (or (plist-get prop :prefix) "") 'face face)
@@ -711,7 +730,9 @@ Avaliable ones are:
   `citre-definition-reference-mark'.  `:no-kind', `:no-type',
   `:no-scope', `:no-reference' controls the presence of each
   part, `:reference-first' puts the reference mark before other
-  parts.
+  parts, `:full-anonymous-name' means don't reduce \"__anon\"
+  parts in the type and scope parts, see
+  `citre--reduce-anonymous-value'.
 
   relevant fields: `ext-kind-full', `typeref', `extras'.
 
@@ -755,7 +776,10 @@ used when it's nil."
         (file-path (citre-get-property 'file-path symbol)))
     `(not
       (or
-       ,(citre-core-filter 'extras '("anonymous" "inputFile") 'csv-contain)
+       ;; Don't excluded "anonymous" here as such symbols can appear in typeref
+       ;; or scope fields of other tags, which may be shown in an xref buffer,
+       ;; so we should be able to find their definitions.
+       ,(citre-core-filter 'extras '("inputFile") 'csv-contain)
        ,(citre-core-filter-kind "file")
        ;; Exclude tags that have "file" scope, and is not in this file.
        ,(if file-path

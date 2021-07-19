@@ -163,10 +163,17 @@ its definition. But the truth is:
 - User-defined kinds typically involve user-defined sub-language (which is
   encouraged as it never conflicts with the kind names of the base language).
 
-For finding definitions, it's basically safe to filter out the same set of tags
-except reference tags. In Citre, we sort the tags to put definition tags above
-reference tags, so when the user needs a reference tag, they could browse the
-list from the end.
+For finding definitions, it's safe to filter out:
+
+- file tags
+- tags that have "file" scope, and is not in this file
+
+Anonymous tags shouldn't be throw away, since they can appear in the `typeref`
+or `scope` fields of other tags, and they can be shown to the user by Citre, so
+the user may get the name of an anonymous tag.
+
+In Citre, we sort the tags to put definition tags above reference tags, so when
+the user needs a reference tag, they could browse the list from the end.
 
 Sometimes we want to make "very likely to be true" assumptions. For example,
 when the cursor is after a dot in C code, the user may very likely needs a
