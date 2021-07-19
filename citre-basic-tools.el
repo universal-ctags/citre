@@ -909,19 +909,7 @@ Its props are:
   "Generate annotation for STR.
 STR is a candidate in a capf session.  See the implementation of
 `citre-completion-at-point'."
-  (let* ((kind (citre-get-property 'kind str))
-         (type (citre-get-property 'type str))
-         (scope (citre-get-property 'scope str))
-         (face 'citre-definition-annotation-face))
-    (when (or kind type)
-      (concat
-       (propertize " (" 'face face)
-       (propertize (or kind "") 'face face)
-       (if (and kind type) citre-definition-annotation-separator "")
-       (propertize (or type "") 'face face)
-       (propertize (if scope "@" "") 'face face)
-       (propertize (or scope "") 'face face)
-       (propertize ")" 'face face)))))
+  (citre-get-property 'annotation str))
 
 (defun citre-capf--make-collection (tags)
   "Make auto-completion string collection from TAGS."
@@ -930,26 +918,17 @@ STR is a candidate in a capf session.  See the implementation of
            (lambda (tag)
              (citre-put-property
               (citre-make-tag-str tag nil '(name))
-              'kind
-              (citre-core-get-field 'ext-kind-full tag)
-              'type
-              (citre-core-get-field 'typeref tag 'after-colon)
-              'scope
-              (citre-core-get-field 'scope tag)
-              'signature
-              (citre-core-get-field 'signature tag)))
+              'annotation
+              (citre-make-tag-str tag nil '(annotation :prefix " ("
+                                                       :suffix ")"))))
            tags))
          ;; `equal-including-properties' doesn't work. I don't know why, maybe
          ;; it uses `eq' to compare the properties.
          (str-equal
           (lambda (str1 str2)
             (and (equal str1 str2)
-                 (null (cl-position
-                        nil
-                        (mapcar (lambda (prop)
-                                  (equal (citre-get-property prop str1)
-                                         (citre-get-property prop str2)))
-                                '(kind type scope signature))))))))
+                 (equal (citre-get-property 'annotation str1)
+                        (citre-get-property 'annotation str2))))))
     (cl-remove-duplicates
      collection :test str-equal)))
 
