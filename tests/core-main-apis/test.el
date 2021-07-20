@@ -12,9 +12,18 @@
     (should (equal (map-get-field 'kind tags)
                    '("member" "member")))
     (should (equal (map-get-field 'line tags)
-                   '(18 9)))))
+                   '(18 9)))
+    (should (equal (map-get-field 'non-exist-field tags)
+                   '(nil nil)))))
 
 ;; `citre-core-get-tags'
+
+(ert-deftest test-get-tags-no-match ()
+  "Test `citre-core-get-tags' when no matching tags."
+  (should (equal (citre-core-get-tags
+                  (expand-test-file)
+                  "non-exist-name" nil nil)
+                 nil)))
 
 (ert-deftest test-get-tags-match ()
   "Test MATCH argument in `citre-core-get-tags'."
@@ -75,7 +84,13 @@
                :filter (citre-core-filter 'kind "struct" 'eq)
                :require '(name))))
     (should (equal (map-get-field 'name tags)
-                   '("fpoint2d" "fpoint3d" "ipoint2d" "ipoint3d")))))
+                   '("fpoint2d" "fpoint3d" "ipoint2d" "ipoint3d"))))
+  (should (equal (citre-core-get-tags
+                  (expand-test-file)
+                  nil nil nil
+                  :filter (citre-core-filter 'kind "non-exist-kind" 'eq)
+                  :require '(name))
+                 nil)))
 
 (ert-deftest test-get-tags-sorter ()
   "Test SORTER argument in `citre-core-get-tags'."
