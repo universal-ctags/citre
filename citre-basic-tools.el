@@ -864,7 +864,9 @@ When there's multiple definitions, it lets you pick one using the
                   definitions))
          (locations (mapcar #'car loc-alist)))
     (if (null locations)
-        (user-error "Can't find definition for %s" symbol)
+        (when (y-or-n-p (format "Can't find definition for %s.  Update the\
+tags file? " symbol))
+          (citre-update-this-tags-file))
       (citre-goto-tag (alist-get
                        (funcall citre-jump-select-definition-function
                                 locations symbol)
@@ -1125,6 +1127,7 @@ This also works on a remote machine."
              nil (get-buffer-create "*ctags*") nil
              (cdr cmd))))
   ;; WORKAROUND: If we don't sit for a while, the readtags process will freeze.
+  ;; TOOD: Fix this when uctags offers "edittags" command.
   (sit-for 0.001)
   (citre-get-tags
    (citre-imenu--temp-tags-file-path) nil nil
