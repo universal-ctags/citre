@@ -1563,6 +1563,13 @@ the position of a tag."
 ;; Universal Ctags in the future.  After that, we should reimplement this as an
 ;; edittags abstraction layer.
 
+;; NOTE: I suspect `write-region' will return befure it finishes the writing.
+;; If you pack `citre-core-write-pseudo-tag' and any operation that calls
+;; readtags (like `citre-core-get-tags') into a `progn' form, there are chances
+;; that readtags process freezes.  For now upper components uses `sit-for'
+;; between them to workaround this bug.  I think it can be solved after we
+;; switch to edittags.
+
 (defun citre-core-write-pseudo-tag (tagsfile name value comment)
   "Write a pseudo tag to TAGSFILE.
 TAGSFILE is the absolute path of the tags file.  NAME is the name

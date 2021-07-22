@@ -515,12 +515,15 @@ This command requires the ctags program from Universal Ctags."
 
 ;;;;; Command
 
-(defun citre-update-tags-file (&optional tagsfile)
+(defun citre-update-tags-file (&optional tagsfile sync)
   "Update TAGSFILE.
 When called interactively, ask the user to pick a tags file.
 
 If Citre can't find an updating recipe in the tagsfile, ask the
-user to edit one and save it to TAGSFILE."
+user to edit one and save it to TAGSFILE.
+
+When SYNC is non-nil, update TAGSFILE synchronously if it
+contains a recipe."
   (interactive)
   (if-let* ((tagsfile (or tagsfile (read-file-name "Tags file: "
                                                    (citre-tags-file-path))))
@@ -528,44 +531,53 @@ user to edit one and save it to TAGSFILE."
             (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
             (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD"))
             (cwd (if-let ((remote-id (file-remote-p tagsfile)))
-                     (concat remote-id cwd-ptag) cwd-ptag)))
+                     (concat remote-id cwd-ptag) cwd-ptag))
+            (after-process (lambda ()
+                             (citre-clear-tags-file-cache)
+                             (citre--write-recipe
+                              tagsfile cmd-ptag cwd-ptag))))
       ;; Workaround: If we put this let into the above `if-let*' spec, even
       ;; if it stops before let-binding `default-directory', later there'll
       ;; be some timer errors.
       (let ((default-directory cwd))
-        (make-process
-         :name "ctags"
-         :buffer (get-buffer-create "*ctags*")
-         :command cmd
-         :connection-type 'pipe
-         :stderr nil
-         :sentinel
-         (lambda (proc _msg)
-           (pcase (process-status proc)
-             ('exit
-              (pcase (process-exit-status proc)
-                (0 (citre-clear-tags-file-cache)
-                   (message "Finished updating %s" tagsfile)
-                   (citre--write-recipe tagsfile cmd-ptag cwd-ptag))
-                (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
-             (s (user-error "Abnormal status of ctags: %s.  \
+        (if sync
+            (progn (apply #'process-file (car cmd) nil
+                          (get-buffer-create "*ctags*") nil (cdr cmd))
+                   (funcall after-process))
+          (make-process
+           :name "ctags"
+           :buffer (get-buffer-create "*ctags*")
+           :command cmd
+           :connection-type 'pipe
+           :stderr nil
+           :sentinel
+           (lambda (proc _msg)
+             (pcase (process-status proc)
+               ('exit
+                (pcase (process-exit-status proc)
+                  (0 (funcall after-process)
+                     (message "Finished updating %s" tagsfile))
+                  (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
+               (s (user-error "Abnormal status of ctags: %s.  \
 See *ctags* buffer" s))))
-         :file-handler t)
-        (message "Updating %s..." tagsfile))
+           :file-handler t)
+          (message "Updating %s..." tagsfile)))
     (when (y-or-n-p (format "%s doesn't contain recipe for updating.  \
 Edit its recipe? " tagsfile))
       (citre-edit-tags-file-recipe tagsfile))))
 
-(defun citre-update-this-tags-file ()
+(defun citre-update-this-tags-file (&optional sync)
   "Update the currently used tags file.
 When no such tags file is found, ask the user to create one.
 
 When a tags file is found, but Citre can't find an updating
 recipe in the tagsfile, ask the user to edit one and save it to
-the tags file."
+the tags file.
+
+When SYNC is non-nil, update the tags file synchronously."
   (interactive)
   (if-let ((tagsfile (citre-tags-file-path)))
-      (citre-update-tags-file tagsfile)
+      (citre-update-tags-file tagsfile sync)
     (when (y-or-n-p "Can't find tags file for this buffer.  Create one? ")
       (citre-create-tags-file))))
 
