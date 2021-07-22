@@ -808,7 +808,14 @@ simple tag name matching.  This function is for it."
   "Return the xref object of the definition information of SYMBOL."
   (mapcar #'citre-xref--make-object
           (if (citre-get-property 'xref-get-at-point symbol)
-              (citre-get-definitions symbol)
+              (or (citre-get-definitions symbol)
+                  (when (and (citre-tags-file-updatable-p)
+                             (y-or-n-p "Can't find definition.  \
+Update the tags file and search again? "))
+                    (citre-update-this-tags-file 'sync)
+                    ;; WORKAROUND
+                    (sit-for 0.01)
+                    (citre-get-definitions symbol)))
             (citre-xref--get-definition-for-completed-symbol symbol))))
 
 (defun citre-xref-backend ()
