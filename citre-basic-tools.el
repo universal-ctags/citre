@@ -513,6 +513,63 @@ This command requires the ctags program from Universal Ctags."
                    '(display-buffer-same-window))
     (kill-buffer buf)))
 
+;;;;; APIs
+
+(defun citre-tags-file-updatable-p (&optional tagsfile)
+  "Return t if TAGSFILE contains recipe for updating itself.
+If TAGSFILE is nil, use the tags file for current buffer."
+  (and (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile)
+       (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile)
+       t))
+
+(defun citre-update-updatable-tags-file (&optional tagsfile sync)
+  "Update TAGSFILE that contains recipe for updating itself.
+If the recipe can't be found, throw an error.
+
+When SYNC is non-nil, update TAGSFILE synchronously.
+
+Return t if the ctags process starts successfully (when updating
+asynchronously), or the updating is finished (when updating
+synchronously).  Otherwise return nil."
+  (when-let* ((tagsfile (or tagsfile (read-file-name "Tags file: "
+                                                     (citre-tags-file-path))))
+              (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD"))
+              (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
+              (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD"))
+              (cwd (if-let ((remote-id (file-remote-p tagsfile)))
+                       (concat remote-id cwd-ptag) cwd-ptag))
+              (after-process (lambda ()
+                               (citre-clear-tags-file-cache)
+                               (citre--write-recipe
+                                tagsfile cmd-ptag cwd-ptag))))
+    ;; Workaround: If we put this let into the above `if-let*' spec, even
+    ;; if it stops before let-binding `default-directory', later there'll
+    ;; be some timer errors.
+    (let ((default-directory cwd))
+      (if sync
+          (progn (apply #'process-file (car cmd) nil
+                        (get-buffer-create "*ctags*") nil (cdr cmd))
+                 (funcall after-process))
+        (make-process
+         :name "ctags"
+         :buffer (get-buffer-create "*ctags*")
+         :command cmd
+         :connection-type 'pipe
+         :stderr nil
+         :sentinel
+         (lambda (proc _msg)
+           (pcase (process-status proc)
+             ('exit
+              (pcase (process-exit-status proc)
+                (0 (funcall after-process)
+                   (message "Finished updating %s" tagsfile))
+                (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
+             (s (user-error "Abnormal status of ctags: %s.  \
+See *ctags* buffer" s))))
+         :file-handler t)
+        (message "Updating %s..." tagsfile))
+      t)))
+
 ;;;;; Command
 
 (defun citre-update-tags-file (&optional tagsfile sync)
@@ -525,46 +582,10 @@ user to edit one and save it to TAGSFILE.
 When SYNC is non-nil, update TAGSFILE synchronously if it
 contains a recipe."
   (interactive)
-  (if-let* ((tagsfile (or tagsfile (read-file-name "Tags file: "
-                                                   (citre-tags-file-path))))
-            (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD"))
-            (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
-            (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD"))
-            (cwd (if-let ((remote-id (file-remote-p tagsfile)))
-                     (concat remote-id cwd-ptag) cwd-ptag))
-            (after-process (lambda ()
-                             (citre-clear-tags-file-cache)
-                             (citre--write-recipe
-                              tagsfile cmd-ptag cwd-ptag))))
-      ;; Workaround: If we put this let into the above `if-let*' spec, even
-      ;; if it stops before let-binding `default-directory', later there'll
-      ;; be some timer errors.
-      (let ((default-directory cwd))
-        (if sync
-            (progn (apply #'process-file (car cmd) nil
-                          (get-buffer-create "*ctags*") nil (cdr cmd))
-                   (funcall after-process))
-          (make-process
-           :name "ctags"
-           :buffer (get-buffer-create "*ctags*")
-           :command cmd
-           :connection-type 'pipe
-           :stderr nil
-           :sentinel
-           (lambda (proc _msg)
-             (pcase (process-status proc)
-               ('exit
-                (pcase (process-exit-status proc)
-                  (0 (funcall after-process)
-                     (message "Finished updating %s" tagsfile))
-                  (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
-               (s (user-error "Abnormal status of ctags: %s.  \
-See *ctags* buffer" s))))
-           :file-handler t)
-          (message "Updating %s..." tagsfile)))
-    (when (y-or-n-p (format "%s doesn't contain recipe for updating.  \
+  (or (citre-update-updatable-tags-file tagsfile sync)
+      (when (y-or-n-p (format "%s doesn't contain recipe for updating.  \
 Edit its recipe? " tagsfile))
-      (citre-edit-tags-file-recipe tagsfile))))
+        (citre-edit-tags-file-recipe tagsfile))))
 
 (defun citre-update-this-tags-file (&optional sync)
   "Update the currently used tags file.
@@ -862,7 +883,15 @@ When there's multiple definitions, it lets you pick one using the
   (interactive)
   (let* ((marker (point-marker))
          (symbol (citre-get-symbol))
-         (definitions (citre-get-definitions))
+         (definitions
+           (or (citre-get-definitions)
+               (when (and (citre-tags-file-updatable-p)
+                          (y-or-n-p "Can't find definition.  \
+Update the tags file and search again? "))
+                 (citre-update-this-tags-file 'sync)
+                 ;; WORKAROUND
+                 (sit-for 0.01)
+                 (citre-get-definitions))))
          (root (funcall citre-project-root-function))
          (loc-alist
           (mapcar (lambda (def)
@@ -875,19 +904,17 @@ When there's multiple definitions, it lets you pick one using the
                      def))
                   definitions))
          (locations (mapcar #'car loc-alist)))
-    (if (null locations)
-        (when (y-or-n-p (format "Can't find definition for %s.  Update the\
-tags file? " symbol))
-          (citre-update-this-tags-file))
-      (citre-goto-tag (alist-get
-                       (funcall citre-jump-select-definition-function
-                                locations symbol)
-                       loc-alist nil nil #'equal))
-      (unless (citre-tags-file-path)
-        (setq citre--tags-file
-              (with-current-buffer (marker-buffer marker)
-                (citre-tags-file-path))))
-      (ring-insert citre-jump--marker-ring marker))))
+    (when (null locations)
+      (user-error "Can't find definition for %s.  " symbol))
+    (citre-goto-tag (alist-get
+                     (funcall citre-jump-select-definition-function
+                              locations symbol)
+                     loc-alist nil nil #'equal))
+    (unless (citre-tags-file-path)
+      (setq citre--tags-file
+            (with-current-buffer (marker-buffer marker)
+              (citre-tags-file-path))))
+    (ring-insert citre-jump--marker-ring marker)))
 
 (defun citre-jump-back ()
   "Go back to the position before last `citre-jump'."

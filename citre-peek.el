@@ -1004,15 +1004,30 @@ peek session."
          (deflist (citre-peek--def-list-create (list tag) nil)))
     deflist))
 
+;; TODO: extract some of the ctags tool to "citre-util.el"?
+(declare-function citre-tags-file-updatable-p "citre-basic-tools"
+                  (&optional tagsfile))
+(declare-function citre-update-this-tags-file "citre-basic-tools"
+                  (&optional sync))
+
 (defun citre-peek--get-def-list ()
   "Return the def list of symbol under point."
   (citre-peek--hack-buffer-file-name
     (let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
                        citre-peek-root-symbol-str
                      (substring-no-properties (citre-get-symbol))))
-           (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
-                            (list (citre--make-tag-of-current-xref-item))
-                          (citre-get-definitions)))
+           (get-definitions (lambda ()
+                              (if (derived-mode-p 'xref--xref-buffer-mode)
+                                  (list (citre--make-tag-of-current-xref-item))
+                                (citre-get-definitions))))
+           (definitions (or (funcall get-definitions)
+                            (when (and (citre-tags-file-updatable-p)
+                                       (y-or-n-p "Can't find definition.  \
+Update the tags file and search again? "))
+                              (citre-update-this-tags-file 'sync)
+                              ;; WORKAROUND
+                              (sit-for 0.01)
+                              (funcall get-definitions))))
            (deflist (citre-peek--def-list-create definitions symbol)))
       (when (null definitions)
         (user-error "Can't find definition for %s" symbol))
