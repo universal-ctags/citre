@@ -806,7 +806,8 @@ find it automatically.
 The result is a list of tags.  Nil is returned when no definition
 is found."
   (let ((symbol (or symbol (citre-get-symbol)))
-        (tagsfile (or tagsfile (citre-tags-file-path))))
+        (tagsfile (or tagsfile (citre-tags-file-path)
+                      (user-error "Can't find tags file for current buffer"))))
     (unless symbol
       (user-error "No symbol at point"))
     (citre-get-tags tagsfile symbol 'exact
