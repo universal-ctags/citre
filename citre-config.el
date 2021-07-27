@@ -41,6 +41,7 @@
 
 (with-eval-after-load 'cc-mode (require 'citre-lang-c))
 (with-eval-after-load 'dired (require 'citre-lang-fileref))
+(with-eval-after-load 'verilog-mode (require 'citre-lang-verilog))
 
 ;;;; Autoload
 
