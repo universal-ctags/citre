@@ -332,6 +332,12 @@ these tools.
   will just work. Tags file generating/updating also works if you have ctags
   program on the remote machine.
 
+- Q: What to do if Citre didn't grab the right symbol for me, e.g., I want to
+  find the definition of `foo.bar`, but can only get `foo` or `bar`?
+
+  A: You can select `foo.bar` first (by an active region), then find its
+  definitions.
+
 - Q: Why doesn't Citre support automatically update tags file?
 
   A: Citre uses both line number and a search pattern to locate a tag. When the
