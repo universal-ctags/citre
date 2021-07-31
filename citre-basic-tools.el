@@ -534,9 +534,9 @@ asynchronously), or the updating is finished (when updating
 synchronously).  Otherwise return nil."
   (when-let* ((tagsfile (or tagsfile (read-file-name "Tags file: "
                                                      (citre-tags-file-path))))
-              (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD"))
+              (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile))
               (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
-              (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD"))
+              (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
               (cwd (if-let ((remote-id (file-remote-p tagsfile)))
                        (concat remote-id cwd-ptag) cwd-ptag))
               (after-process (lambda ()
