@@ -583,6 +583,8 @@ user to edit one and save it to TAGSFILE.
 When SYNC is non-nil, update TAGSFILE synchronously if it
 contains a recipe."
   (interactive)
+  (setq tagsfile (or tagsfile (read-file-name "Tags file: "
+                                              (citre-tags-file-path))))
   (or (citre-update-updatable-tags-file tagsfile sync)
       (when (y-or-n-p (format "%s doesn't contain recipe for updating.  \
 Edit its recipe? " tagsfile))
