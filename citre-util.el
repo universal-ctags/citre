@@ -278,7 +278,7 @@ is a local/remote user home dir."
 ALIST meets the requirements of `citre-tags-file-alist'.  DIR is
 an absolute path.  Relative paths in the alist are expanded
 against PROJECT, an absolute path."
-  (let* ((dir (expand-file-name dir))
+  (let* ((dir (file-truename dir))
          (expand-file-name-against-project
           (lambda (file)
             (if (file-name-absolute-p file)
@@ -322,23 +322,27 @@ you want to use the tags file.  The returned name can be used in
 
 (defun citre-tags-file-in-global-cache (dir)
   "Return the tags file name of DIR in global cache dir.
-DIR is canonical.  The full path of the tags file is returned."
+DIR is absolute.  The full path of the tags file is returned."
   (concat
    (or (file-remote-p default-directory) "")
    (expand-file-name
-    (citre--path-to-cache-tags-file-name (file-local-name dir))
+    (citre--path-to-cache-tags-file-name (file-local-name (file-truename dir)))
     citre-tags-file-global-cache-dir)))
 
 (defun citre-tags-file-in-per-project-cache (dir &optional project)
   "Return the tags file name of DIR in per-project cache dir.
-DIR is canonical.  PROJECT is the project root.  If it's nil,
-it's detected by `citre-project-root-function'.  The full path of
-the tags file is returned."
-  (let* ((project (or project (funcall citre-project-root-function))))
+DIR is absolute.  PROJECT is the absolute project root.  If it's
+nil, it's detected by `citre-project-root-function'.  The full
+path of the tags file is returned."
+  (let ((project (or project (funcall citre-project-root-function)))
+        (dir (file-truename dir)))
     (if project
-        (expand-file-name
-         (citre--path-to-cache-tags-file-name (file-relative-name dir project))
-         (expand-file-name citre-tags-file-per-project-cache-dir project))
+        (progn
+          (setq project (file-truename project))
+          (expand-file-name
+           (citre--path-to-cache-tags-file-name
+            (file-relative-name dir project))
+           (expand-file-name citre-tags-file-per-project-cache-dir project)))
       (error "Can't detect project root"))))
 
 (defun citre--find-tags-in-cache-dirs (dir &optional project)
@@ -347,8 +351,7 @@ DIR is absolute.  PROJECT is the project root.  If it's nil, it's
 detected by `citre-project-root-function'.
 
 The full path of the tags file is returned."
-  (let* ((dir (file-truename dir))
-         (project (or project (funcall citre-project-root-function))))
+  (let ((project (or project (funcall citre-project-root-function))))
     (cl-block nil
       ;; First search in per project cache dir.
       (when (and project citre-tags-file-per-project-cache-dir)
@@ -388,7 +391,7 @@ file without the TAG_PROC_CWD pseudo tag, we can better guess its
 root dir."
   (if (and citre--tags-file (citre-non-dir-file-exists-p citre--tags-file))
       citre--tags-file
-    (let* ((current-dir (citre-current-dir))
+    (let* ((current-dir (file-truename (citre-current-dir)))
            (project (funcall citre-project-root-function))
            (tagsfile nil))
       (while (and current-dir (null tagsfile))
