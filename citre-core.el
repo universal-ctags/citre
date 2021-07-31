@@ -1031,33 +1031,44 @@ MATCH can be:
 - `in-dir': Match input fields that is in directory FILENAME."
   (let* ((tagsfile (expand-file-name tagsfile))
          ;; We use this to match the input field in the tags file, so we need
-         ;; the local path.  We have a subtle problem here: filename and the
-         ;; path of some tags may look different, but actually point to the
-         ;; same location through symlink.
-         (filename (file-local-name (expand-file-name filename)))
+         ;; the local path.
+         (local-name (file-local-name (expand-file-name filename)))
+         ;; local-name and the path in a tag may look different, but actually
+         ;; point to the same location, through symlink.  If the tag records
+         ;; the symlink path, and FILENAME is the truepath, we can't solve it.
+         ;; But if the opposite is true, we can convert FILENAME to its
+         ;; truepath and match by it.
+
+         ;; TODO: Test this.  For now I don't know if git + symlink has any
+         ;; problem on Windows.
+         (truename (file-local-name (file-truename filename)))
+         ;; Don't bother with truename if it's the same as local-name.
+         (truename (unless (equal local-name truename) truename))
          (filter (list 'or))
          (match (pcase match
                   ((or 'nil 'eq) 'eq)
                   ('in-dir 'prefix)))
          (info (citre-core-tags-file-info tagsfile))
          (cwd (file-local-name (gethash 'dir info)))
-         (os (gethash 'os info))
-         relative-filename)
+         (os (gethash 'os info)))
     ;; Ctags on windows generates directory symbol in capital letter, while
     ;; `buffer-file-name' returns it in small letter.  We don't use
     ;; `system-type' to detect since we may work on a remote Unix machine on
     ;; Windows.  We don't need the same treatment for cwd as it uses capital
     ;; disk symbols on Windows, see `citre-core--get-dir'.
     (when (eq os 'nt)
-      (setf (aref filename 0) (upcase (aref filename 0))))
-    ;; We don't use `file-relative-name' due to the same reason.  Its behavior
-    ;; depends on the platform.
-    (setq relative-filename (when (and (string-prefix-p cwd filename)
-                                       (not (equal cwd filename)))
-                              (substring filename (length cwd))))
-    (push (citre-core-filter 'input filename match) filter)
-    (when relative-filename
-      (push (citre-core-filter 'input relative-filename match) filter))
+      (setf (aref local-name 0) (upcase (aref local-name 0)))
+      (when truename
+        (setf (aref truename 0) (upcase (aref truename 0)))))
+    (dolist (f (list local-name truename))
+      (when f
+        (push (citre-core-filter 'input f match) filter)
+        (when (and (string-prefix-p cwd f)
+                   (not (equal cwd f)))
+          ;; We don't use `file-relative-name' due to the same reason.  Its
+          ;; behavior depends on the platform.
+          (push (citre-core-filter 'input (substring f (length cwd)) match)
+                filter))))
     (nreverse filter)))
 
 ;;;;; Build sorter expressions
