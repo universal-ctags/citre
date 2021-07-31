@@ -431,6 +431,7 @@ The full path is returned."
                (setq cwd (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile)))
       (when-let (remote-id (file-remote-p tagsfile))
         (setq cwd (concat remote-id cwd))))
+    (unless cwd (setq cwd (funcall citre-project-root-function)))
     (expand-file-name
      (read-directory-name "Root dir to run ctags: " cwd))))
 
