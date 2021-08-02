@@ -314,6 +314,7 @@ options.
 
 - [User Manual](docs/user-manual/toc.md)
 - [Developer Manual](docs/developer-manual/toc.md)
+- [Wiki](https://github.com/universal-ctags/citre/wiki)
 
 [This chapter](docs/developer-manual/design-principle.md) in the developer
 manual talks about the strengths/weaknesses of ctags, and the design principle
