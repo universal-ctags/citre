@@ -21,13 +21,14 @@ Let's see them in action!
 
 - `completion-at-point`, with the UI of
   [company](https://company-mode.github.io/) and
-  [Selectrum](https://github.com/raxod502/selectrum):
+  [Vertico](https://github.com/minad/vertico):
 
   ![capf](./img/capf.jpg)
 
-  Notice the rich annotations. Candidates are annotated by `(kind/type)`, so
-  you know "it's a struct member with `pid_t` type", etc. This is because Ctags
-  "tags" format records much more abundant info than the etags "TAGS" format.
+  Notice the rich annotations. Candidates are annotated by `(kind/type@scope)`,
+  so you know "it's a member of struct `thread`, with `pid_t` type", etc. This
+  is because Ctags "tags" format records much more abundant info than the etags
+  "TAGS" format.
 
   Also, notice that candidates with the "member" kind are put above the others
   because we are in a C source file, and the current symbol is after a dot.
