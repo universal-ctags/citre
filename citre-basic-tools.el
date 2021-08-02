@@ -571,6 +571,25 @@ See *ctags* buffer" s))))
         (message "Updating %s..." tagsfile))
       t)))
 
+(defun citre-get-definitions-maybe-update-tags-file (&optional symbol tagsfile)
+  "Get definitions of SYMBOL from TAGSFILE.
+When the definitions are not found, update TAGSFILE if it
+contains recipe for updating, and try again.  If still no
+definitions found, return nil.
+
+See `citre-get-definitions' to know the behavior of \"getting
+definitions\"."
+  (let ((tagsfile (or tagsfile (citre-tags-file-path))))
+    (or (citre-get-definitions symbol tagsfile)
+        (when (and (citre-tags-file-updatable-p tagsfile)
+                   (y-or-n-p "Can't find definition.  \
+Update the tags file and search again? "))
+          (citre-update-tags-file tagsfile 'sync)
+          ;; WORKAROUND: If we don't sit for a while, the readtags process will
+          ;; freeze.  See the comment above `citre-core-write-pseudo-tag'.
+          (sit-for 0.01)
+          (citre-get-definitions symbol tagsfile)))))
+
 ;;;;; Command
 
 (defun citre-update-tags-file (&optional tagsfile sync)
@@ -811,14 +830,7 @@ simple tag name matching.  This function is for it."
   "Return the xref object of the definition information of SYMBOL."
   (mapcar #'citre-xref--make-object
           (if (citre-get-property 'xref-get-at-point symbol)
-              (or (citre-get-definitions symbol)
-                  (when (and (citre-tags-file-updatable-p)
-                             (y-or-n-p "Can't find definition.  \
-Update the tags file and search again? "))
-                    (citre-update-this-tags-file 'sync)
-                    ;; WORKAROUND
-                    (sit-for 0.01)
-                    (citre-get-definitions symbol)))
+              (citre-get-definitions-maybe-update-tags-file symbol)
             (citre-xref--get-definition-for-completed-symbol symbol))))
 
 (defun citre-xref-backend ()
@@ -894,14 +906,7 @@ When there's multiple definitions, it lets you pick one using the
   (let* ((marker (point-marker))
          (symbol (citre-get-symbol))
          (definitions
-           (or (citre-get-definitions)
-               (when (and (citre-tags-file-updatable-p)
-                          (y-or-n-p "Can't find definition.  \
-Update the tags file and search again? "))
-                 (citre-update-this-tags-file 'sync)
-                 ;; WORKAROUND
-                 (sit-for 0.01)
-                 (citre-get-definitions))))
+           (citre-get-definitions-maybe-update-tags-file))
          (root (funcall citre-project-root-function))
          (loc-alist
           (mapcar (lambda (def)

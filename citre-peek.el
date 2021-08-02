@@ -64,6 +64,9 @@
 (declare-function clue-copy-location "clue" (file line &optional project))
 (declare-function clue-paste-location "clue" (file line &optional project))
 
+(declare-function citre-get-definitions-maybe-update-tags-file
+                  "citre-basic-tools" (&optional symbol tagsfile))
+
 ;;;; User options
 
 ;;;;; Behavior
@@ -1016,18 +1019,11 @@ peek session."
     (let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
                        citre-peek-root-symbol-str
                      (substring-no-properties (citre-get-symbol))))
-           (get-definitions (lambda ()
-                              (if (derived-mode-p 'xref--xref-buffer-mode)
-                                  (list (citre--make-tag-of-current-xref-item))
-                                (citre-get-definitions))))
-           (definitions (or (funcall get-definitions)
-                            (when (and (citre-tags-file-updatable-p)
-                                       (y-or-n-p "Can't find definition.  \
-Update the tags file and search again? "))
-                              (citre-update-this-tags-file 'sync)
-                              ;; WORKAROUND
-                              (sit-for 0.01)
-                              (funcall get-definitions))))
+           (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
+                            (list (citre--make-tag-of-current-xref-item))
+                          (if (featurep 'citre-basic-tools)
+                              (citre-get-definitions-maybe-update-tags-file)
+                            (citre-get-definitions))))
            (deflist (citre-peek--def-list-create definitions symbol)))
       (when (null definitions)
         (user-error "Can't find definition for %s" symbol))
