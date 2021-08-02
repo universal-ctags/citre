@@ -218,6 +218,20 @@ file for imenu."
   :type '(set integer (const nil))
   :group 'citre)
 
+;;;;; Options: Misc
+
+(defcustom citre-auto-enable-citre-mode-modes 'all
+  "The major modes where `citre-auto-enable-citre-mode' works.
+If you requires `citre-config' in your configuration, then these
+are the major modes where `citre-mode' is automatically enabled
+if a tags file can be found.
+
+This should be a list of major modes, or `all' for it to work in
+all major modes."
+  :type '(choice (repeat symbol)
+                 (const :tag "All major modes" all))
+  :group 'citre)
+
 ;;;; Tool: Generate/update tags file
 
 ;;;;; Internals
@@ -1245,7 +1259,11 @@ This also works on a remote machine."
   "Enable `citre-mode' when a tags file can be found.
 Put this in `find-file-hook' to automatically enable `citre-mode'
 when opening a file."
-  (when (citre-tags-file-path) (citre-mode)))
+  (when (and (or (eq citre-auto-enable-citre-mode-modes 'all)
+                 (cl-some (lambda (mode) (derived-mode-p mode))
+                          citre-auto-enable-citre-mode-modes))
+             (citre-tags-file-path))
+    (citre-mode)))
 
 (provide 'citre-basic-tools)
 

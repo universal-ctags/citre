@@ -264,9 +264,9 @@ file, or simply avoid creating a tags file named `tags` on Windows and macOS.
 Use `citre-mode` to enable `completion-at-point`, xref and imenu integration.
 If you also use `company`, make sure `company-capf` is in `company-backends`.
 
-By default, `citre-mode` is automatically enabled when you open a file, and a
-tags file can be found for it. If you don't use `citre-config`, you can put
-this in your configuration:
+By default, when you open a file, and a tags file can be found for it,
+`citre-mode` is automatically enabled. If you don't use `citre-config`, you can
+put this in your configuration:
 
 ``` elisp
 (add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
@@ -304,7 +304,11 @@ and tweak it to your own need.
    citre-default-create-tags-file-location 'global-cache
    ;; See the "Create tags file" section above to know these options
    citre-use-project-root-when-creating-tags t
-   citre-prompt-language-for-ctags-command t))
+   citre-prompt-language-for-ctags-command t
+   ;; By default, when you open any file, and a tags file can be found for it,
+   ;; `citre-mode' is automatically enabled.  If you only want this to work for
+   ;; certain modes (like `prog-mode'), set it like this.
+   citre-auto-enable-citre-mode-modes '(prog-mode)))
 ```
 
 See [this documentation](docs/user-manual/toc.md) to know more customizable

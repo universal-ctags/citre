@@ -1,5 +1,11 @@
 ## 0.1.x
 
+### Unreleased
+
+- Improvements
+
+  - New user option: `citre-auto-enable-citre-mode-modes`.
+
 ### 0.1.1 (released 2021-08-02)
 
 - Improvements
