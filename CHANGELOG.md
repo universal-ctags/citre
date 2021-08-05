@@ -5,6 +5,8 @@
 - Improvements
 
   - New user option: `citre-auto-enable-citre-mode-modes`.
+  - Imenu: Qualified tags (tags like `class.method` or `struct::member`)and
+    reference tags are in their own categories now.
 
 ### 0.1.1 (released 2021-08-02)
 

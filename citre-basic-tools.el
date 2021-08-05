@@ -1102,11 +1102,23 @@ This creates an alist, its key is `kind' field value, and value
 is a list of tags of that kind."
   (let ((result nil))
     (dolist (tag tags)
-      (cl-symbol-macrolet ((place (alist-get kind result nil nil #'equal)))
-        (let ((kind (citre-core-get-field 'ext-kind-full tag)))
-          (unless place
-            (setf place nil))
-          (push tag place))))
+      (cl-symbol-macrolet ((place (alist-get class
+                                             result nil nil #'equal)))
+        (let* ((kind (citre-core-get-field 'ext-kind-full tag))
+               (extras (when-let ((extras (citre-core-get-field 'extras tag)))
+                         (split-string extras ","
+                                       t (rx (+ " ")))))
+               (classes (or (mapcar
+                             (lambda (extra) (concat "<" extra ">"))
+                             (cl-remove-if-not
+                              (lambda (s)
+                                (member s '("reference" "qualified")))
+                              extras))
+                            (list kind))))
+          (dolist (class classes)
+            (unless place
+              (setf place nil))
+            (push tag place)))))
     (dotimes (i (length result))
       (setf (cdr (nth i result))
             (nreverse (cdr (nth i result)))))
@@ -1125,10 +1137,13 @@ This also works on a remote machine."
 
 (defun citre-imenu--make-index (tag)
   "Create Imenu index for TAG."
-  (cons (citre-make-tag-str tag nil
-                            '(name)
-                            '(annotation :no-kind t :prefix "(" :suffix ")")
-                            '(location :no-path t))
+  (cons (citre-make-tag-str
+         tag nil
+         '(name)
+         `(annotation :no-kind ,(not (member (citre-core-get-field 'extras tag)
+                                             '("reference" "qualified")))
+                      :prefix "(" :suffix ")")
+         '(location :no-path t))
         (citre-core-locate-tag tag)))
 
 (defun citre-imenu--ctags-command-cwd ()
@@ -1178,7 +1193,7 @@ This also works on a remote machine."
    `(and ,(citre-core-filter-input (buffer-file-name) (citre-tags-file-path))
          (not (or ,(citre-core-filter
                     'extras
-                    '("anonymous" "reference" "inputFile")
+                    '("anonymous" "inputFile")
                     'csv-contain)
                   ,(citre-core-filter-kind "file"))))
    :sorter (citre-core-sorter 'line)
@@ -1202,7 +1217,7 @@ This also works on a remote machine."
    :filter
    `(not (or ,(citre-core-filter
                'extras
-               '("anonymous" "reference" "inputFile")
+               '("anonymous" "inputFile")
                'csv-contain)
              ,(citre-core-filter-kind "file")))
    :sorter (citre-core-sorter 'line)
