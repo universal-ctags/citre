@@ -100,8 +100,6 @@ Advantages of gtags:
   issue](https://github.com/universal-ctags/ctags/issues/2697) to know the
   progress of Universal Ctags on incremental updating).
 
-- Support searching for library functions.
-
 ## Citre & Ctags vs. intelligent tools
 
 By "intelligent tools", we mean language servers, rtags, etc.
