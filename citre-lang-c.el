@@ -98,6 +98,13 @@
           (setq syntax (if (eq syntax 'member)
                            'callable-member
                          'function))))
+      (save-excursion
+        (goto-char (car bounds))
+        (when (looking-back (rx symbol-start
+                                (group (or "struct" "union" "enum"))
+                                (+ space))
+                            (line-beginning-position))
+          (setq syntax (intern (match-string 1)))))
       (citre-put-property symbol 'syntax syntax))))
 
 (defun citre-lang-c-get-symbol ()
@@ -158,6 +165,38 @@
          `(filter (or ,(citre-core-filter-kind "function")
                       ,(citre-core-filter-kind "macro"))
                   +)))
+       ((and (or 'struct 'union 'enum)
+             keyword)
+        ;; If a symbol comes after keywords "struct", "union", or "enum",
+        ;; the symbol must a name of struct tag, union tag or enum tag.
+        ;; We utilize this fact to imporve the order of the list.
+        ;;
+        ;; e.g. input for ctags:
+        ;; --
+        ;; struct point { /* struct tag */
+        ;;    float x;
+        ;;    float y;
+        ;; };
+        ;;
+        ;; struct game {
+        ;;    ...
+        ;;    score point; /* member */
+        ;;    ...
+        ;; };
+        ;; --
+        ;;
+        ;; Consider your cursor is at | in the following buffer content:
+        ;; --
+        ;; struct rectangle {
+        ;;    struct po|int a, b;
+        ;; };
+        ;; --
+        ;; When a user presses M-., the user expects citre gives
+        ;; the struct tag higher priority than the member in the xref
+        ;; list though the struct tag and the member has the same name,
+        ;; "point".
+        (citre-core-sorter
+         `(filter ,(citre-core-filter-kind (symbol-name keyword)) +)))
        ;; Don't sort for other syntax.
        (_ 0))
     ,(citre-core-sorter 'input '(length name +) 'name)))
