@@ -41,3 +41,32 @@ DATA is a sequence of FIELD VALUE pairs."
         (puthash field val tag))
       (cl-incf i))
     tag))
+
+(defun get-definitions (mode buffer-file
+			     marker extra-move
+			     &optional tags-file)
+  "Call `citre-get-definitions' is the environment specified with the arguments.
+MODE is a function for entering a major mode.
+BUFFER-FILE is a file name that content fills the buffer.
+MARKER, and EXTRA-MOVE are for adjusting the point in the buffer.
+MARKER is a pattern string. This function searches MARKER
+with `re-search-forward` from the beginning of the buffer.
+EXTRA-MOVE is a function taking no argument. After searching
+MARKER, EXTRA-MOVE is called.
+After adjusting the point in this way, `xref-find-definitions' is
+called."
+  (with-temp-buffer
+    (insert-file-contents buffer-file)
+    (funcall mode)
+    (goto-char (point-min))
+    (re-search-forward marker)
+    (when extra-move
+      (funcall extra-move))
+    (citre-get-definitions nil tags-file)))
+
+(defun get-file-contet (file)
+  "Get file content of FILE."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (buffer-substring-no-properties
+     (point-min) (point-max))))
