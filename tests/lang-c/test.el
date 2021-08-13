@@ -1,18 +1,24 @@
 (defun defs-to-xref (defs)
   "Convert the value returned from `citre-get-definitions' to xref like string."
-  (with-temp-buffer
-    (mapc (lambda (def)
-	    (insert (gethash 'ext-abspath def))
-	    (insert ?\n)
-	    (insert (gethash 'line def))
-	    (insert ": ")
-	    (insert (format "(%s)\n" (gethash 'ext-kind-full def))))
-	  defs)
-    (replace-regexp-in-string
-     (concat "^" (regexp-quote (expand-file-name default-directory)))
-     ""
-     (buffer-substring-no-properties
-      (point-min) (point-max)))))
+  (let (last-abspath)
+    (with-temp-buffer
+      (mapc (lambda (def)
+	      (let ((abspath (gethash 'ext-abspath def)))
+		(unless (equal abspath last-abspath)
+		  (insert abspath)
+		  (insert ?\n)
+		  (setq last-abspath abspath)))
+	      (insert (citre-make-tag-str def nil
+					  '(location :no-path t :suffix ":")
+					  '(annotation :prefix "(" :suffix ")")
+					  '(content)))
+	      (insert ?\n))
+	    defs)
+      (replace-regexp-in-string
+       (concat "^" (regexp-quote (expand-file-name default-directory)))
+       ""
+       (buffer-substring-no-properties
+	(point-min) (point-max))))))
 
 (ert-deftest test-lang-c-header-sorting ()
   "Test `citre-lang-c--get-header-at-point' and `citre-lang-c-definition-sorter'"
