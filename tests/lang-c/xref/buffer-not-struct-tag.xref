@@ -1,0 +1,3 @@
+src/game.h
+3: (member/score@struct:game) score point;
+6: (struct) struct point {

@@ -7,5 +7,15 @@
 !_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//;"	extras:pseudo
 !_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/;"	extras:pseudo
 !_TAG_PROGRAM_URL	https://ctags.io/	/official site/;"	extras:pseudo
+game	src/game.h	/^struct game {$/;"	kind:struct	line:2	language:C++	roles:def	end:4
+game.h	src/game.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile	end:11
+game::point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	extras:qualified
 header.h	src/a/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
 header.h	src/b/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
+point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	end:3
+point	src/game.h	/^struct point {$/;"	kind:struct	line:6	language:C++	roles:def	end:9
+point::x	src/game.h	/^  float x;$/;"	kind:member	line:7	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	extras:qualified
+point::y	src/game.h	/^  float y;$/;"	kind:member	line:8	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	extras:qualified
+score	src/game.h	/^typedef unsigned long long score;$/;"	kind:typedef	line:1	language:C++	typeref:typename:unsigned long long	roles:def
+x	src/game.h	/^  float x;$/;"	kind:member	line:7	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	end:7
+y	src/game.h	/^  float y;$/;"	kind:member	line:8	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	end:8
