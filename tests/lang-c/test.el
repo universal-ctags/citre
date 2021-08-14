@@ -64,3 +64,23 @@
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-contet "xref/member-sorting/nomember.xref")))
   )
+
+(ert-deftest test-lang-c-callable-sorting ()
+  "Test the rule for `callable()' used in `citre-lang-c-definition-sorter'"
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@member"
+				(lambda () (backward-word 3)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/member.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@callable-member"
+				(lambda () (backward-word 4)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/callable-member.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@callable-func"
+				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/callable-func.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@macro"
+				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/macro.xref")))
+  )
