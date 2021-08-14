@@ -33,7 +33,7 @@
   )
 
 (ert-deftest test-lang-c-struct-tag-sorting ()
-  "Test `citre-lang-c--get-normal-symbol' and `citre-lang-c-definition-sorter'"
+  "Test the rule for (or \"struct\" \"union\" \"enum\") used in `citre-lang-c-definition-sorter'"
   (should (equal (defs-to-xref (get-definitions
 				'c-mode "buffer/buffer-struct-tag.h" "@"
 				(lambda () (forward-word 1) (forward-char 2)) "target.tags"))
