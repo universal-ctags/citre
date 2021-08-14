@@ -43,3 +43,24 @@
 				(lambda () (backward-word 1)) "target.tags"))
 		 (get-file-contet "xref/buffer-not-struct-tag.xref")))
   )
+
+(ert-deftest test-lang-c-member-sorting ()
+  "Test the rule for (or \"->\" \".\") used in `citre-lang-c-definition-sorter'"
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@arrow"
+				(lambda () (backward-word 2)) "target.tags"))
+		 (get-file-contet "xref/member-sorting/arrow.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@dotinit"
+				(lambda () (backward-word 3)) "target.tags"))
+		 (get-file-contet "xref/member-sorting/dotinit.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@dotassign"
+				(lambda () (backward-word 3)) "target.tags"))
+		 ;; The result should be the same as @arrow.
+		 (get-file-contet "xref/member-sorting/arrow.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@nomember"
+				(lambda () (backward-word 2)) "target.tags"))
+		 (get-file-contet "xref/member-sorting/nomember.xref")))
+  )
