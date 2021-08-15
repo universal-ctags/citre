@@ -8,7 +8,7 @@
 !_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/;"	extras:pseudo
 !_TAG_PROGRAM_URL	https://ctags.io/	/official site/;"	extras:pseudo
 game	src/game.h	/^struct game {$/;"	kind:struct	line:2	language:C++	roles:def	end:4
-game.h	src/game.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile	end:11
+game.h	src/game.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile	end:9
 game::point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	extras:qualified
 header.h	src/a/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
 header.h	src/b/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
