@@ -1260,7 +1260,8 @@ When BUF or POINT is nil, it's set to the current buffer and
 point."
   (interactive)
   (when citre-peek--mode
-    (citre-peek-abort))
+    (citre-peek-abort)
+    (cl-return))
   (let* ((buf (or buf (current-buffer)))
          (point (or point (point)))
          (tagsfile (with-current-buffer buf
