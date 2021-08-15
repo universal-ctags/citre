@@ -1259,15 +1259,15 @@ recalculated."
 When BUF or POINT is nil, it's set to the current buffer and
 point."
   (interactive)
-  (when citre-peek--mode
-    (citre-peek-abort))
-  (let* ((buf (or buf (current-buffer)))
-         (point (or point (point)))
-         (tagsfile (with-current-buffer buf
-                     (citre-tags-file-path))))
-    (citre-peek--setup-session (citre-peek--make-session buf point))
-    (citre-peek--set-current-tagsfile tagsfile 'maybe))
-  (citre-peek--mode))
+  (if citre-peek--mode
+      (citre-peek-abort)
+    (let* ((buf (or buf (current-buffer)))
+           (point (or point (point)))
+           (tagsfile (with-current-buffer buf
+                       (citre-tags-file-path))))
+      (citre-peek--setup-session (citre-peek--make-session buf point))
+      (citre-peek--set-current-tagsfile tagsfile 'maybe))
+    (citre-peek--mode)))
 
 ;;;###autoload
 (defun citre-ace-peek ()
