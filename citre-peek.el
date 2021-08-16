@@ -694,7 +694,7 @@ bounds as returned by `citre--search-symbols'.")
 (defvar-local citre-peek--buffer-file-name nil
   "File name in non-file buffers.
 `citre-peek' needs to open files in non-file temporary buffers,
-where `buffer-file-name' function doesn't work.  `citre-peek'
+where the function `buffer-file-name' doesn't work.  `citre-peek'
 uses hacks to make it work when getting the symbol and finding
 its definitions inside such buffers.  For this to work,
 `citre-peek--buffer-file-name' must be set in these buffers.")
