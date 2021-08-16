@@ -33,7 +33,7 @@
   )
 
 (ert-deftest test-lang-c-struct-tag-sorting ()
-  "Test `citre-lang-c--get-normal-symbol' and `citre-lang-c-definition-sorter'"
+  "Test the rule for (or \"struct\" \"union\" \"enum\") used in `citre-lang-c-definition-sorter'"
   (should (equal (defs-to-xref (get-definitions
 				'c-mode "buffer/buffer-struct-tag.h" "@"
 				(lambda () (forward-word 1) (forward-char 2)) "target.tags"))
@@ -42,4 +42,45 @@
 				'c-mode "buffer/buffer-struct-tag.h" "!"
 				(lambda () (backward-word 1)) "target.tags"))
 		 (get-file-contet "xref/buffer-not-struct-tag.xref")))
+  )
+
+(ert-deftest test-lang-c-member-sorting ()
+  "Test the rule for (or \"->\" \".\") used in `citre-lang-c-definition-sorter'"
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@arrow"
+				(lambda () (backward-word 2)) "target.tags"))
+		 (get-file-contet "xref/member-sorting/arrow.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@dotinit"
+				(lambda () (backward-word 3)) "target.tags"))
+		 (get-file-contet "xref/member-sorting/dotinit.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@dotassign"
+				(lambda () (backward-word 3)) "target.tags"))
+		 ;; The result should be the same as @arrow.
+		 (get-file-contet "xref/member-sorting/arrow.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/member-sorting.c" "@nomember"
+				(lambda () (backward-word 2)) "target.tags"))
+		 (get-file-contet "xref/member-sorting/nomember.xref")))
+  )
+
+(ert-deftest test-lang-c-callable-sorting ()
+  "Test the rule for `callable()' used in `citre-lang-c-definition-sorter'"
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@member"
+				(lambda () (backward-word 3)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/member.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@callable-member"
+				(lambda () (backward-word 4)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/callable-member.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@callable-func"
+				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/callable-func.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/callable-sorting.c" "@macro"
+				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
+		 (get-file-contet "xref/callable-sorting/macro.xref")))
   )

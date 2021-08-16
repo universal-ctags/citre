@@ -7,15 +7,42 @@
 !_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//;"	extras:pseudo
 !_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/;"	extras:pseudo
 !_TAG_PROGRAM_URL	https://ctags.io/	/official site/;"	extras:pseudo
+Guitar	src/dev.c	/^struct Guitar *Guitar;$/;"	kind:variable	line:1	language:C	typeref:struct:Guitar *	roles:def	end:1
+client_stats	src/poll.c	/^struct client_stats {$/;"	kind:struct	line:1	language:C	file:	roles:def	extras:fileScope	end:4
+client_stats::poll	src/poll.c	/^  unsigned int poll;$/;"	kind:member	line:2	language:C	scope:struct:client_stats	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope,qualified
+client_stats::run	src/poll.c	/^  unsigned int run;$/;"	kind:member	line:3	language:C	scope:struct:client_stats	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope,qualified
+codeHint	src/dev.c	/^enum codeHint {$/;"	kind:enum	line:2	language:C	file:	roles:def	extras:fileScope	end:6
+data	src/poll.c	/^int poll (struct polling_target *target, void *data)$/;"	kind:parameter	line:10	language:C	scope:function:poll	typeref:typename:void *	file:	roles:def	extras:fileScope	nth:1
+dev.c	src/dev.c	1;"	kind:file	line:1	language:C	roles:def	extras:inputFile	end:13
+device	src/dev.c	/^struct device {$/;"	kind:struct	line:8	language:C	file:	roles:def	extras:fileScope	end:12
+device::major	src/dev.c	/^  unsigned int major;$/;"	kind:member	line:10	language:C	scope:struct:device	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope,qualified
+device::minor	src/dev.c	/^  unsigned int minor;$/;"	kind:member	line:11	language:C	scope:struct:device	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope,qualified
+device::name	src/dev.c	/^  const char *name;$/;"	kind:member	line:9	language:C	scope:struct:device	typeref:typename:const char *	file:	access:public	roles:def	extras:fileScope,qualified
 game	src/game.h	/^struct game {$/;"	kind:struct	line:2	language:C++	roles:def	end:4
 game.h	src/game.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile	end:9
 game::point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	extras:qualified
 header.h	src/a/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
 header.h	src/b/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
+major	src/dev.c	/^  major,$/;"	kind:enumerator	line:3	language:C	scope:enum:codeHint	file:	access:public	roles:def	extras:fileScope
+major	src/dev.c	/^  unsigned int major;$/;"	kind:member	line:10	language:C	scope:struct:device	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope	end:10
+minor	src/dev.c	/^  minor,$/;"	kind:enumerator	line:4	language:C	scope:enum:codeHint	file:	access:public	roles:def	extras:fileScope
+minor	src/dev.c	/^  unsigned int minor;$/;"	kind:member	line:11	language:C	scope:struct:device	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope	end:11
+name	src/dev.c	/^  const char *name;$/;"	kind:member	line:9	language:C	scope:struct:device	typeref:typename:const char *	file:	access:public	roles:def	extras:fileScope	end:9
 point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	end:3
 point	src/game.h	/^struct point {$/;"	kind:struct	line:6	language:C++	roles:def	end:9
 point::x	src/game.h	/^  float x;$/;"	kind:member	line:7	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	extras:qualified
 point::y	src/game.h	/^  float y;$/;"	kind:member	line:8	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	extras:qualified
+poll	src/poll.c	/^  int (* poll) (void *);$/;"	kind:member	line:7	language:C	scope:struct:polling_target	typeref:typename:int (*)(void *)	file:	access:public	roles:def	extras:fileScope	end:7
+poll	src/poll.c	/^  unsigned int poll;$/;"	kind:member	line:2	language:C	scope:struct:client_stats	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope	end:2
+poll	src/poll.c	/^int poll (struct polling_target *target, void *data)$/;"	kind:function	line:10	language:C	typeref:typename:int	signature:(struct polling_target * target,void * data)	roles:def	end:13
+poll.c	src/poll.c	1;"	kind:file	line:1	language:C	roles:def	extras:inputFile	end:16
+polling_target	src/poll.c	/^struct polling_target {$/;"	kind:struct	line:6	language:C	file:	roles:def	extras:fileScope	end:8
+polling_target::poll	src/poll.c	/^  int (* poll) (void *);$/;"	kind:member	line:7	language:C	scope:struct:polling_target	typeref:typename:int (*)(void *)	file:	access:public	roles:def	extras:fileScope,qualified
+run	src/poll.c	/^  unsigned int run;$/;"	kind:member	line:3	language:C	scope:struct:client_stats	typeref:typename:unsigned int	file:	access:public	roles:def	extras:fileScope	end:3
+run	src/poll.c	/^#define run(/;"	kind:macro	line:16	language:C	file:	signature:()	roles:def	extras:fileScope	end:16
+run	src/poll.c	/^int run;$/;"	kind:variable	line:15	language:C	typeref:typename:int	roles:def	end:15
 score	src/game.h	/^typedef unsigned long long score;$/;"	kind:typedef	line:1	language:C++	typeref:typename:unsigned long long	roles:def
+target	src/poll.c	/^int poll (struct polling_target *target, void *data)$/;"	kind:parameter	line:10	language:C	scope:function:poll	typeref:struct:polling_target *	file:	roles:def	extras:fileScope	nth:0
+unknown	src/dev.c	/^  unknown,$/;"	kind:enumerator	line:5	language:C	scope:enum:codeHint	file:	access:public	roles:def	extras:fileScope
 x	src/game.h	/^  float x;$/;"	kind:member	line:7	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	end:7
 y	src/game.h	/^  float y;$/;"	kind:member	line:8	language:C++	scope:struct:point	typeref:typename:float	access:public	roles:def	end:8

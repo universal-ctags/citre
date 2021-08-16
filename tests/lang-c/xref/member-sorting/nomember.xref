@@ -1,0 +1,3 @@
+src/dev.c
+3: (enumerator@enum:codeHint) major,
+10: (member/unsigned int@struct:device) unsigned int major;

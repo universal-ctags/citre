@@ -1,0 +1,3 @@
+src/dev.c
+11: (member/unsigned int@struct:device) unsigned int minor;
+4: (enumerator@enum:codeHint) minor,
