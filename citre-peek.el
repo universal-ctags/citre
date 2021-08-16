@@ -48,6 +48,7 @@
 
 (require 'citre-util)
 (require 'color)
+(require 'fringe)
 
 ;; Suppress compiler warning
 
@@ -1124,7 +1125,9 @@ ROOT is the project root."
 (defun citre-peek--make-border ()
   "Return the border to be used in peek windows."
   (if (display-graphic-p)
-      (propertize "\n" 'face 'citre-peek-border-face)
+      (propertize
+       (citre-peek--decorate-fringes "\n")
+       'face 'citre-peek-border-face)
     (propertize
      (concat (make-string (1- (window-body-width)) ?-) "\n")
      'face (list :inherit 'default
@@ -1229,6 +1232,33 @@ definitions, and the current chain in the code reading history."
                            :extend t))
     session-info))
 
+(defcustom citre-peek-use-fringe t
+  "Non-nil means use fringe for drawing the vertical border of the peek window."
+  :type 'boolean
+  :group 'citre)
+
+(when (fboundp 'define-fringe-bitmap)
+  (define-fringe-bitmap 'citre-peek-fringe [0]))
+
+(defun citre-peek--decorate-fringes (str)
+  "Decorate STR with left and right fringes."
+  (if (and (fringe-bitmap-p 'citre-peek-fringe)
+           citre-peek-use-fringe)
+      (replace-regexp-in-string
+       "\n"
+       (concat
+        (propertize " "
+                    'display
+                    '(left-fringe citre-peek-fringe
+                                  citre-peek-border-face))
+        (propertize " "
+                    'display
+                    '(right-fringe citre-peek-fringe
+                                   citre-peek-border-face))
+        "\n")
+       str)
+    str))
+
 (defun citre-peek--update-display (&optional force)
   "Deal with the update of contents in peek windows.
 When FORCE is non-nil, the content of the peek window is
@@ -1242,10 +1272,13 @@ recalculated."
                                   "\n" ""))
              (border (citre-peek--make-border)))
         (overlay-put citre-peek--ov 'after-string
-                     (concat initial-newline border
-                             (citre-peek--file-content deflist)
-                             (citre-peek--displayed-defs-str deflist)
-                             (citre-peek--session-info deflist)
+                     (concat initial-newline
+                             border
+                             (citre-peek--decorate-fringes
+                              (concat
+                               (citre-peek--file-content deflist)
+                               (citre-peek--displayed-defs-str deflist)
+                               (citre-peek--session-info deflist)))
                              border)))
       (setq citre-peek--content-update nil))))
 
