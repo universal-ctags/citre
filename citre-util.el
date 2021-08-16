@@ -648,7 +648,7 @@ PROP controls the format.  See `citre-make-tag-str' for details."
   (let* ((kind (unless (plist-get prop :no-kind)
                  (citre-core-get-field 'ext-kind-full tag)))
          (type (unless (plist-get prop :no-type)
-                 (citre-core-get-field 'typeref tag 'after-colon)))
+                 (citre-core-get-field 'typeref tag)))
          (scope (unless (plist-get prop :no-scope)
                   (citre-core-get-field 'scope tag)))
          (extras (citre-core-get-field 'extras tag))
@@ -659,6 +659,10 @@ PROP controls the format.  See `citre-make-tag-str' for details."
          (reference (when reference citre-definition-reference-mark))
          (ref-first (plist-get prop :reference-first))
          (face 'citre-definition-annotation-face))
+    ;; "typename:" is a placeholder. It doesn't offer useful info, so we can
+    ;; drop it.  We don't drop it if it is, say, "struct" or "union".
+    (when (string-prefix-p "typename:" type)
+      (setq type (substring type (length "typename:"))))
     (unless (plist-get prop :full-anonymous-name)
       (when type (setq type (citre--reduce-anonymous-value type)))
       (when scope (setq scope (citre--reduce-anonymous-value scope))))
