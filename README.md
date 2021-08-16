@@ -287,7 +287,8 @@ and tweak it to your own need.
   :init
   ;; This is needed in `:init' block for lazy load to work.
   (require 'citre-config)
-  ;; Bind your frequently used commands.
+  ;; Bind your frequently used commands.  Alternatively, you can define them
+  ;; in `citre-mode-map' so you can only use them when `citre-mode' is enabled.
   (global-set-key (kbd "C-x c j") 'citre-jump)
   (global-set-key (kbd "C-x c J") 'citre-jump-back)
   (global-set-key (kbd "C-x c p") 'citre-ace-peek)

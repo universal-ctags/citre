@@ -1242,10 +1242,14 @@ This also works on a remote machine."
 
 ;;;; Tool: Citre mode
 
+(defvar citre-mode-map (make-sparse-keymap)
+  "Keymap used in `citre-mode'.")
+
 ;;;###autoload
 (define-minor-mode citre-mode
   "Enable `completion-at-point', xref and imenu integration."
   :lighter " Citre"
+  :keymap citre-mode-map
   (cond
    (citre-mode
     ;; Make sure we can find a tags file first.
