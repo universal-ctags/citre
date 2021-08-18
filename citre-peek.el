@@ -1126,7 +1126,7 @@ ROOT is the project root."
   "Return the border to be used in peek windows."
   (if (display-graphic-p)
       (propertize
-       (citre-peek--decorate-fringes "\n")
+       (citre-peek--maybe-decorate-fringes "\n")
        'face 'citre-peek-border-face)
     (propertize
      (concat (make-string (1- (window-body-width)) ?-) "\n")
@@ -1238,10 +1238,13 @@ definitions, and the current chain in the code reading history."
   :group 'citre)
 
 (when (fboundp 'define-fringe-bitmap)
-  (define-fringe-bitmap 'citre-peek-fringe [0]))
+  (define-fringe-bitmap 'citre-peek-fringe []))
 
-(defun citre-peek--decorate-fringes (str)
-  "Decorate STR with left and right fringes."
+(defun citre-peek--maybe-decorate-fringes (str)
+  "Decorate STR with left and right fringes.
+This is only done wihen `citre-peek-use-fringe' is non-nil, and
+bitmap can be used in the display.  Otherwise STR is returned
+directly."
   (if (and (fringe-bitmap-p 'citre-peek-fringe)
            citre-peek-use-fringe)
       (replace-regexp-in-string
@@ -1255,7 +1258,8 @@ definitions, and the current chain in the code reading history."
                     'display
                     '(right-fringe citre-peek-fringe
                                    citre-peek-border-face))
-        "\n")
+        ;; Use "\\&" rather than "\n" to keep the original face.
+        "\\&")
        str)
     str))
 
@@ -1274,7 +1278,7 @@ recalculated."
         (overlay-put citre-peek--ov 'after-string
                      (concat initial-newline
                              border
-                             (citre-peek--decorate-fringes
+                             (citre-peek--maybe-decorate-fringes
                               (concat
                                (citre-peek--file-content deflist)
                                (citre-peek--displayed-defs-str deflist)
