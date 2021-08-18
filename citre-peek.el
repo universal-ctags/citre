@@ -146,6 +146,13 @@ non-nil."
   :type 'keymap
   :group 'citre)
 
+;;;;; Appearance
+
+(defcustom citre-peek-fill-fringe t
+  "Non-nil means fill the fringes with a vertical border of the peek window."
+  :type 'boolean
+  :group 'citre)
+
 ;;;;; Faces
 
 (defface citre-peek-border-face
@@ -1232,21 +1239,16 @@ definitions, and the current chain in the code reading history."
                            :extend t))
     session-info))
 
-(defcustom citre-peek-use-fringe t
-  "Non-nil means use fringe for drawing the vertical border of the peek window."
-  :type 'boolean
-  :group 'citre)
-
 (when (fboundp 'define-fringe-bitmap)
   (define-fringe-bitmap 'citre-peek-fringe []))
 
 (defun citre-peek--maybe-decorate-fringes (str)
   "Decorate STR with left and right fringes.
-This is only done wihen `citre-peek-use-fringe' is non-nil, and
+This is only done wihen `citre-peek-fill-fringe' is non-nil, and
 bitmap can be used in the display.  Otherwise STR is returned
 directly."
   (if (and (fringe-bitmap-p 'citre-peek-fringe)
-           citre-peek-use-fringe)
+           citre-peek-fill-fringe)
       (replace-regexp-in-string
        "\n"
        (concat
