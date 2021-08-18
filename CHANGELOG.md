@@ -8,8 +8,16 @@
   - New user option: `citre-update-tags-file-when-no-definitions`.
   - An empty keymap, `citre-mode-map` for `citre-mode` for the user to
     customize.
+  - `citre-peek`: Fringes are now filled by vertical borders for the peek
+    window. The user option `citre-peek-fill-fringe` controls this behavior.
   - Imenu: Qualified tags (tags like `class.method` or `struct::member`)and
     reference tags are in their own categories now.
+  - Various little improvements
+
+- Language specific improvements
+
+  - C: More accurate definition sorting for names after "struct", "union" or
+    "enum".
 
 ### 0.1.1 (released 2021-08-02)
 
