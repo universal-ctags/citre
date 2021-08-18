@@ -5,6 +5,7 @@
 - Improvements
 
   - New user option: `citre-auto-enable-citre-mode-modes`.
+  - New user option: `citre-update-tags-file-when-no-definitions`.
   - An empty keymap, `citre-mode-map` for `citre-mode` for the user to
     customize.
   - Imenu: Qualified tags (tags like `class.method` or `struct::member`)and

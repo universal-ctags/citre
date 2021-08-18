@@ -79,6 +79,13 @@
 
 ;;;;; Options: Generate/update tags file
 
+(defcustom citre-update-tags-file-when-no-definitions t
+  "Non-nil means ask me to update the tags file when no definitions are found.
+When the tags file in use doesn't contain a recipe, this has no
+effect."
+  :type 'string
+  :group 'citre)
+
 (defcustom citre-ctags-program nil
   "The name or path of the ctags program.
 Citre requires ctags program provided by Universal Ctags.  Set
@@ -587,15 +594,17 @@ See *ctags* buffer" s))))
 
 (defun citre-get-definitions-maybe-update-tags-file (&optional symbol tagsfile)
   "Get definitions of SYMBOL from TAGSFILE.
-When the definitions are not found, update TAGSFILE if it
-contains recipe for updating, and try again.  If still no
-definitions found, return nil.
+When the definitions are not found, and
+`citre-update-tags-file-when-no-definitions' is non-nil, update
+TAGSFILE if it contains recipe for updating, and try again.  If
+still no definitions found, return nil.
 
 See `citre-get-definitions' to know the behavior of \"getting
 definitions\"."
   (let ((tagsfile (or tagsfile (citre-tags-file-path))))
     (or (citre-get-definitions symbol tagsfile)
-        (when (and (citre-tags-file-updatable-p tagsfile)
+        (when (and citre-update-tags-file-when-no-definitions
+                   (citre-tags-file-updatable-p tagsfile)
                    (y-or-n-p "Can't find definition.  \
 Update the tags file and search again? "))
           (citre-update-tags-file tagsfile 'sync)
