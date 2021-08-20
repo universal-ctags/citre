@@ -930,7 +930,7 @@ When there's multiple definitions, it lets you pick one using the
   (let* ((marker (point-marker))
          (symbol (citre-get-symbol))
          (definitions
-           (citre-get-definitions-maybe-update-tags-file))
+           (citre-get-definitions-maybe-update-tags-file symbol))
          (root (funcall citre-project-root-function))
          (loc-alist
           (mapcar (lambda (def)

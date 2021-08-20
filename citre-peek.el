@@ -1030,8 +1030,9 @@ peek session."
            (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
                             (list (citre--make-tag-of-current-xref-item))
                           (if (featurep 'citre-basic-tools)
-                              (citre-get-definitions-maybe-update-tags-file)
-                            (citre-get-definitions))))
+                              (citre-get-definitions-maybe-update-tags-file
+                               symbol)
+                            (citre-get-definitions symbol))))
            (deflist (citre-peek--def-list-create definitions symbol)))
       (when (null definitions)
         (user-error "Can't find definition for %s" symbol))
