@@ -400,8 +400,9 @@ directory of Ctags.  It's expanded and convert to a local path."
   (setq cwd (file-local-name (expand-file-name cwd)))
   ;; Ctags on windows generates disk symbol in capital letter.
   (when (<= ?a (aref cwd 0) ?z)
-    (setf (aref cwd 0)
-          (upcase (aref cwd 0))))
+    ;; TODO: we are using private function in core here.  We should extract
+    ;; useful ones in them into a library.
+    (setq cwd (citre-core--upcase-first-letter cwd)))
   (citre-core-write-pseudo-tag
    tagsfile "TAG_PROC_CWD" (file-local-name cwd)
    "dir in which ctags runs"))

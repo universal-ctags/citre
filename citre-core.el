@@ -95,6 +95,13 @@ backslash is \"\\\\\"."
   (and (stringp string)
        (not (string-empty-p string))))
 
+(defun citre-core--upcase-first-letter (str)
+  "Return STR with the first letter upcased."
+  (if (zerop (length str))
+      str
+    (concat (upcase (substring str 0 1))
+            (substring str 1))))
+
 ;; NOTE: On Windows, ctags uses slash as the default directory separator, and
 ;; it can be handled by Emacs, so for now we don't care about backslash.
 (defun citre-core--file-name-extension (file)
@@ -198,7 +205,7 @@ This returns a cons pair like (dir . os)."
     ;; is given by Emacs, it may be a small letter.  We don't use `system-type'
     ;; to detect since we may work on a remote Unix machine on Windows.
     (unless (eq (aref dir-local 0) ?/)
-      (setf (aref dir-local 0) (upcase (aref dir-local 0))))
+      (setq dir-local (citre-core--upcase-first-letter dir-local)))
     (cons
      ;; If tagsfile is a remote file, we may have to prefix dir by the remote
      ;; identifier (e.g., if dir comes from the TAG_PROC_CWD ptag).
@@ -1057,9 +1064,9 @@ MATCH can be:
     ;; Windows.  We don't need the same treatment for cwd as it uses capital
     ;; disk symbols on Windows, see `citre-core--get-dir'.
     (when (eq os 'nt)
-      (setf (aref local-name 0) (upcase (aref local-name 0)))
+      (setq local-name (citre-core--upcase-first-letter local-name))
       (when truename
-        (setf (aref truename 0) (upcase (aref truename 0)))))
+        (setq truename (citre-core--upcase-first-letter truename))))
     (dolist (f (list local-name truename))
       (when f
         (push (citre-core-filter 'input f match) filter)
