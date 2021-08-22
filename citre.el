@@ -45,6 +45,7 @@
 ;;;; Libraries
 
 (require 'citre-basic-tools)
+(require 'citre-ctags)
 (require 'citre-peek)
 
 (provide 'citre)

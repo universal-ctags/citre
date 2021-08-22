@@ -7,8 +7,8 @@
 ITEM="test"
 
 PRELOAD="citre-common.el citre-core-tables.el citre-core.el citre-util.el \
-citre-basic-tools.el citre-peek.el citre-lang-c.el citre-lang-fileref.el
-citre.el citre-config.el"
+citre-ctags.el citre-basic-tools.el citre-peek.el citre-lang-c.el
+citre-lang-fileref.el citre.el citre-config.el"
 
 d=$(pwd)
 preload_options=

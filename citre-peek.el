@@ -37,6 +37,9 @@
 ;; - README.md
 ;; - docs/user-manual/citre-peek.md
 
+;; If you haven't received these docs, please visit
+;; https://github.com/universal-ctags/citre.
+
 ;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and
@@ -46,6 +49,7 @@
 
 ;;;; Libraries
 
+(require 'citre-ctags)
 (require 'citre-util)
 (require 'color)
 (require 'fringe)
@@ -1015,12 +1019,6 @@ peek session."
          (deflist (citre-peek--def-list-create (list tag) nil)))
     deflist))
 
-;; TODO: extract some of the ctags tool to "citre-util.el"?
-(declare-function citre-tags-file-updatable-p "citre-basic-tools"
-                  (&optional tagsfile))
-(declare-function citre-update-this-tags-file "citre-basic-tools"
-                  (&optional sync))
-
 (defun citre-peek--get-def-list ()
   "Return the def list of symbol under point."
   (citre-peek--hack-buffer-file-name
@@ -1029,10 +1027,8 @@ peek session."
                      (substring-no-properties (citre-get-symbol))))
            (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
                             (list (citre--make-tag-of-current-xref-item))
-                          (if (featurep 'citre-basic-tools)
-                              (citre-get-definitions-maybe-update-tags-file
-                               symbol)
-                            (citre-get-definitions symbol))))
+                          (citre-get-definitions-maybe-update-tags-file
+                           symbol)))
            (deflist (citre-peek--def-list-create definitions symbol)))
       (when (null definitions)
         (user-error "Can't find definition for %s" symbol))
