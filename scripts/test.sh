@@ -6,7 +6,7 @@
 . "./scripts/common.sh"
 ITEM="test"
 
-PRELOAD="citre-core-tables.el citre-core.el citre-util.el \
+PRELOAD="citre-common.el citre-core-tables.el citre-core.el citre-util.el \
 citre-basic-tools.el citre-peek.el citre-lang-c.el citre-lang-fileref.el
 citre.el citre-config.el"
 

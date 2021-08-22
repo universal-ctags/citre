@@ -40,6 +40,7 @@
 
 ;;;; Libraries
 
+(require 'citre-common)
 (require 'citre-core-tables)
 (require 'cl-lib)
 (require 'subr-x)
@@ -61,58 +62,12 @@ Set this if readtags is not in your PATH, or its name is not
 Citre requires the readtags program provided by Universal Ctags."
   :type 'string)
 
-;;;; Basic Helpers
-
-(defun citre-core--string-after-1st-colon (string)
-  "Return the part in STRING after the first colon in it.
-If STRING doesn't contain a colon, it will be returned directly."
-  (if-let ((sep (string-match ":" string)))
-      (substring string (1+ sep))
-    string))
-
-(defun citre-core--string-match-all-escaping-backslash
-    (string &optional start)
-  "Find all occurence of escaping backslashes in STRING.
-If START is non-nil, start search at that index in STRING.
-
-This assumes the only escape sequence containing a second
-backslash is \"\\\\\"."
-  (let ((result nil)
-        (start (or start 0))
-        (idx nil))
-    (while (setq idx (string-match "\\\\" string start))
-      (push idx result)
-      ;; Jump over the char after the backslash to search for next escaping
-      ;; sequence.  NOTE: This may cause an "args out of range" error, but only
-      ;; on string containing invalid trailing backslashes.  We don't check it
-      ;; for performance.
-      (setq start (+ idx 2)))
-    (nreverse result)))
+;;;; Internals: Basic Helpers
 
 (defun citre-core--string-non-empty-p (string)
   "Test if STRING is an non-empty string."
-  ;; We need to test it first since `string-empty-p' returns nil on nil.
   (and (stringp string)
        (not (string-empty-p string))))
-
-(defun citre-core--upcase-first-letter (str)
-  "Return STR with the first letter upcased."
-  (if (zerop (length str))
-      str
-    (concat (upcase (substring str 0 1))
-            (substring str 1))))
-
-;; NOTE: On Windows, ctags uses slash as the default directory separator, and
-;; it can be handled by Emacs, so for now we don't care about backslash.
-(defun citre-core--file-name-extension (file)
-  "Return the extension of FILE.
-If it doesn't have an extension, return the file name without
-directory.
-
-This is faster than `file-name-extension'."
-  (or (string-match "\\.\\([^./]+\\)$" file)
-      (string-match "/\\([^/]+\\)$" file))
-  (match-string 1 file))
 
 (defun citre-core--strip-text-property-in-list (object)
   "Recursively traverse OBJECT and strip properties in strings."
@@ -205,7 +160,7 @@ This returns a cons pair like (dir . os)."
     ;; is given by Emacs, it may be a small letter.  We don't use `system-type'
     ;; to detect since we may work on a remote Unix machine on Windows.
     (unless (eq (aref dir-local 0) ?/)
-      (setq dir-local (citre-core--upcase-first-letter dir-local)))
+      (setq dir-local (citre-upcase-first-letter dir-local)))
     (cons
      ;; If tagsfile is a remote file, we may have to prefix dir by the remote
      ;; identifier (e.g., if dir comes from the TAG_PROC_CWD ptag).
@@ -387,7 +342,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
 See tags(5) manpage to know about the escaped sequences.  VALUE
 should be a field value in a tags file."
   (if-let ((backslash-idx
-            (citre-core--string-match-all-escaping-backslash value)))
+            (citre-string-match-all-escaping-backslash value)))
       (let ((last 0)
             (i nil)
             (parts nil))
@@ -825,7 +780,7 @@ It tries these in turn:
 - Return nil."
   (or (gethash 'language tag)
       (when-let ((input (gethash 'input tag))
-                 (extension (citre-core--file-name-extension input)))
+                 (extension (citre-file-name-extension input)))
         (or (gethash (downcase extension) citre-core--extension-lang-table)
             extension))))
 
@@ -1064,9 +1019,9 @@ MATCH can be:
     ;; Windows.  We don't need the same treatment for cwd as it uses capital
     ;; disk symbols on Windows, see `citre-core--get-dir'.
     (when (eq os 'nt)
-      (setq local-name (citre-core--upcase-first-letter local-name))
+      (setq local-name (citre-upcase-first-letter local-name))
       (when truename
-        (setq truename (citre-core--upcase-first-letter truename))))
+        (setq truename (citre-upcase-first-letter truename))))
     (dolist (f (list local-name truename))
       (when f
         (push (citre-core-filter 'input f match) filter)
@@ -1378,7 +1333,7 @@ real-time based on TAG.  The built-in ones are:
   and returns nil if it doesn't record the matched string (e.g.,
   in tags file generated using the -n option)."
   (let ((maybe-split (if after-colon
-                         #'citre-core--string-after-1st-colon
+                         #'citre-string-after-1st-colon
                        #'identity))
         value)
     (if-let ((method (gethash field citre-core-extra-ext-fields-table)))
@@ -1449,7 +1404,7 @@ chars.  See the code of this function for the detail."
                              (if from-beg 1 0)
                              (if to-end -1 nil))))
     (if-let ((backslash-idx
-              (citre-core--string-match-all-escaping-backslash pattern)))
+              (citre-string-match-all-escaping-backslash pattern)))
         (let ((last 0)
               (i nil)
               (parts nil))

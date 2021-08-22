@@ -220,26 +220,9 @@ This uses `project-current' internally."
   (when-let ((project (project-current nil)))
     (expand-file-name (cdr project))))
 
-(defun citre-current-dir ()
-  "Full current directory of the buffer.
-This means the directory of the buffer file, or expanded
-`default-directory' if it's not a file buffer."
-  (expand-file-name
-   (if-let (file (buffer-file-name))
-       (file-name-directory file)
-     default-directory)))
-
-(defun citre-non-dir-file-exists-p (file)
-  "Return t if FILE exists and is not a directory."
-  (and (file-exists-p file)
-       (not (file-directory-p file))))
-
-(defun citre-dir-exists-p (dir)
-  "Return t if DIR exists and is a directory."
-  (and (file-exists-p dir)
-       (file-directory-p dir)))
-
 ;;;;; APIs: Find tags file
+
+;;;;;; Internals
 
 (defvar-local citre--tags-file nil
   "Buffer-local cache for tags file path.")
@@ -860,32 +843,6 @@ WINDOW can be:
 This is suitable to run after jumping to a location."
   (recenter)
   (pulse-momentary-highlight-one-line (point)))
-
-;;;;; APIs: Text property related
-
-(defun citre-get-property (field str)
-  "Get the text property corresponding to FIELD in STR.
-STR should be propertized by `citre-put-property'.
-
-What it actually does is prefix FIELD by `citre-', and get that
-text property."
-  (get-text-property 0 (intern (concat "citre-" (symbol-name field))) str))
-
-(defun citre-put-property (str &rest properties)
-  "Set the text property of STR.
-STR is the string to be modified.  PROPERTIES form a sequence of
-PROPERTY VALUE pairs for test properties to add.  Each PROPERTY
-is prefixed by \"citre-\".  Propertized STR is returned."
-  (let ((i 0)
-        (len (length properties)))
-    (while (< (1+ (* 2 i)) len)
-      (let ((prop (nth (* 2 i) properties))
-            (val (nth (1+ (* 2 i)) properties)))
-        (put-text-property 0 (length str)
-                           (intern (concat "citre-" (symbol-name prop)))
-                           val str))
-      (cl-incf i)))
-  str)
 
 (provide 'citre-util)
 
