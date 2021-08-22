@@ -700,7 +700,7 @@ An updating recipe is written to it so later it can be updated by
                      (or (and citre-use-project-root-when-creating-tags
                               (funcall citre-project-root-function))
                          (read-directory-name
-                          "In which dir you want to use the tags file? "
+                          "I want to use the tags file when in this dir: "
                           project))))
          scheme
          (read-scheme
