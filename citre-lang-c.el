@@ -64,19 +64,23 @@
                   (rx "#include"
                       (* space) (or "<" "\""))
                   (line-beginning-position))))
-      (let* ((xsymbol (buffer-substring-no-properties
-                       (car bounds) (cdr bounds)))
+      (let* ((full-symbol (buffer-substring-no-properties
+                           (car bounds) (cdr bounds)))
              ;; Path name can be used in #include directive, so the same header
              ;; can be referenced differently in different files.  We only keep
              ;; the non-directory part.  By doing so we can't match #includes
              ;; that uses paths, but we make use of binary search of readtags.
-             (symbol (file-name-nondirectory xsymbol))
-             ;; Remove upper components above ../
-             ;; ../linux/foo.h => linux/foo.h
-             (path (if (string-match (rx (* "../") (group (* anything)))
-                                     xsymbol)
-                       (match-string 1 xsymbol)
-                     xsymbol)))
+             (symbol (file-name-nondirectory full-symbol))
+             ;; When SYMBOL and FULL-SYMBOL are not equal, we know we are using
+             ;; path, and we want to get it to filter the input field of file
+             ;; tags.
+             (path (when (not (equal symbol full-symbol))
+                     ;; Remove upper components above ../
+                     ;; ../linux/foo.h => linux/foo.h
+                     (if (string-match (rx (* "../") (group (* anything)))
+                                       full-symbol)
+                         (match-string 1 full-symbol)
+                       full-symbol))))
         (citre-put-property symbol
                             'bounds (cons (- (cdr bounds) (length symbol))
                                           (cdr bounds))
@@ -134,10 +138,12 @@
     ,(pcase (citre-get-property 'syntax symbol)
        ('header
         (apply #'citre-core-sorter
+               ;; Put the reference tags below.
                `(filter ,(citre-core-filter-kind "header") -)
-               (and-let* ((path (citre-get-property 'literal-path symbol)))
-                 (list
-                  `(filter ,(citre-core-filter 'input path 'suffix) +)))))
+               ;; For definitions (i.e., the file tags of the header), put
+               ;; those with the right directory above others.
+               (when-let* ((path (citre-get-property 'literal-path symbol)))
+                 (list `(filter ,(citre-core-filter 'input path 'suffix) +)))))
        ('member
         (citre-core-sorter (citre-sorter-arg-put-kinds-above '("member"))))
        ('callable-member
