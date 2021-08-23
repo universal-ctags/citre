@@ -406,6 +406,40 @@ Use this when a new tags file is created."
     (with-current-buffer b
       (kill-local-variable 'citre--tags-file))))
 
+;;;;; APIs: Common filter/sorter snippets
+
+(defun citre-filter-extra-tags (extras)
+  "Filter that matches extra tags in list EXTRAS."
+  (citre-core-filter 'extras extras 'csv-contain))
+
+(defvar citre-filter-file-tags
+  `(or
+    ,(citre-core-filter 'extras '("inputFile") 'csv-contain)
+    ,(citre-core-filter-kind "file"))
+  "Filter that matches file tags.")
+
+(defun citre-filter-local-symbol-in-other-file (file tagsfile)
+  "Filter that matches tags with \"file\" scope, but not in FILE.
+TAGSFILE is the absolute path of the tags file to use this filter
+on."
+  `(and (not ,(citre-core-filter-input file tagsfile))
+        (or ,(citre-core-filter-field-exist 'file)
+            ,(citre-core-filter 'extras "fileScope" 'csv-contain))))
+
+(defvar citre-sorter-arg-put-references-below
+  `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -)
+  "Put reference tags below others.
+This can be used as an arg for `citre-core-sorter'.")
+
+(defun citre-sorter-arg-put-kinds-above (kinds)
+  "Put tags with kind field in list KINDS above others.
+This can be used as an arg for `citre-core-sorter'."
+  (let ((filters (mapcar (lambda (k) (citre-core-filter-kind k))
+                         kinds)))
+    (if (eq (length filters) 1)
+        (setq filters `(filter ,(car filters) +))
+      (setq filters `(filter (or ,@filters) +)))))
+
 ;;;;; APIs: Language support framework
 
 ;;;;;; The lookup table
@@ -530,19 +564,10 @@ filters/sorters can make use of them."
         (file-path (citre-get-property 'file-path symbol)))
     `(not
       (or
-       ,(citre-core-filter 'extras '("anonymous" "reference" "inputFile")
-                           'csv-contain)
-       ;; For tags file using single-letter kind, apply `not' to
-       ;; `citre-core-filter-kind' may exclude more tags than it should.
-       ;; But we know the "F" (file) kind is preserved by ctags, and "F" is
-       ;; not used anywhere else, so we could do this.
-       ,(citre-core-filter-kind "file")
-       ;; Exclude tags that have "file" scope, and is not in this file.
+       ,(citre-filter-extra-tags '("anonymous" "reference"))
+       ,citre-filter-file-tags
        ,(if file-path
-            `(and (not ,(citre-core-filter-input file-path tags-file))
-                  (or ,(citre-core-filter-field-exist 'file)
-                      ,(citre-core-filter 'extras "fileScope"
-                                          'csv-contain)))
+            (citre-filter-local-symbol-in-other-file file-path tags-file)
           'false)))))
 
 (defvar citre-completion-default-sorter
@@ -769,19 +794,14 @@ used when it's nil."
        ;; Don't excluded "anonymous" here as such symbols can appear in typeref
        ;; or scope fields of other tags, which may be shown in an xref buffer,
        ;; so we should be able to find their definitions.
-       ,(citre-core-filter 'extras '("inputFile") 'csv-contain)
-       ,(citre-core-filter-kind "file")
-       ;; Exclude tags that have "file" scope, and is not in this file.
+       ,citre-filter-file-tags
        ,(if file-path
-            `(and (not ,(citre-core-filter-input file-path tags-file))
-                  (or ,(citre-core-filter-field-exist 'file)
-                      ,(citre-core-filter 'extras "fileScope"
-                                          'csv-contain)))
+            (citre-filter-local-symbol-in-other-file file-path tags-file)
           'false)))))
 
 (defvar citre-definition-default-sorter
   (citre-core-sorter
-   `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -)
+   citre-sorter-arg-put-references-below
    'input '(length name +) 'name)
   "The default sorter expression for finding definitions.
 This sorts the file name by their alphabetical order, then the

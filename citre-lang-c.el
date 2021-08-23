@@ -128,9 +128,8 @@
 (defun citre-lang-c-definition-sorter (symbol)
   "Sorter for finding definitions of SYMBOL in C."
   `(<or>
-    ;; Put reference below others.
     ,(citre-core-sorter
-      `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -))
+      citre-sorter-arg-put-references-below)
     ;; Sort on the kinds.
     ,(pcase (citre-get-property 'syntax symbol)
        ('header
@@ -140,11 +139,10 @@
                  (list
                   `(filter ,(citre-core-filter 'input path 'suffix) +)))))
        ('member
-        (citre-core-sorter
-         `(filter ,(citre-core-filter-kind "member") +)))
+        (citre-core-sorter (citre-sorter-arg-put-kinds-above '("member"))))
        ('callable-member
         (citre-core-sorter
-         `(filter ,(citre-core-filter-kind "member") +)
+         (citre-sorter-arg-put-kinds-above '("member"))
          ;; If a member is callable, its typeref field may include
          ;; "(*)" as substring.
          ;;
@@ -162,9 +160,7 @@
          `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
        ('function
         (citre-core-sorter
-         `(filter (or ,(citre-core-filter-kind "function")
-                      ,(citre-core-filter-kind "macro"))
-                  +)))
+         (citre-sorter-arg-put-kinds-above '("function" "macro"))))
        ((and (or 'struct 'union 'enum)
              keyword)
         ;; If a symbol comes after keywords "struct", "union", or "enum",
@@ -196,7 +192,7 @@
         ;; list though the struct tag and the member has the same name,
         ;; "point".
         (citre-core-sorter
-         `(filter ,(citre-core-filter-kind (symbol-name keyword)) +)))
+         (citre-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
        ;; Don't sort for other syntax.
        (_ 0))
     ,(citre-core-sorter 'input '(length name +) 'name)))
@@ -207,7 +203,7 @@
   "Filter for auto-completing SYMBOL in C."
   (pcase (citre-get-property 'syntax symbol)
     ('header
-     (citre-core-filter-kind "file"))
+     citre-filter-file-tags)
     (_
      (citre-completion-default-filter symbol))))
 
@@ -216,18 +212,20 @@
   `(<or>
     ,(pcase (citre-get-property 'syntax symbol)
        ('member
-        (citre-core-sorter
-         `(filter ,(citre-core-filter-kind "member") +)))
+        (citre-core-sorter (citre-sorter-arg-put-kinds-above '("member"))))
        ('callable-member
         (citre-core-sorter
-         `(filter ,(citre-core-filter-kind "member") +)
+         (citre-sorter-arg-put-kinds-above '("member"))
          ;; See the comment in `citre-lang-c-definition-sorter'.
          `(filter ,(citre-core-filter 'typeref "(*)" 'substr) +)))
        ('function
         (citre-core-sorter
-         `(filter (or ,(citre-core-filter-kind "function")
-                      ,(citre-core-filter-kind "macro"))
-                  +)))
+         (citre-sorter-arg-put-kinds-above '("function" "member"))))
+       ((and (or 'struct 'union 'enum)
+             keyword)
+        ;; See the comment in `citre-lang-c-definition-sorter'.
+        (citre-core-sorter
+         (citre-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
        (_ 0))
     ,citre-completion-default-sorter))
 

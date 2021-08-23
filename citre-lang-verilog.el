@@ -65,13 +65,10 @@
   "Sorter for finding definitions of SYMBOL in (System) Verilog."
   (pcase (citre-get-property 'syntax symbol)
     ('macro
-     `(<or>
-       ;; Put reference below others.
-       ,(citre-core-sorter
-         ;; TODO: Extract common filter snippets into somewhere.
-         `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -))
-       ,(citre-core-sorter `(filter ,(citre-core-filter-kind "constant") +))
-       ,(citre-core-sorter 'input '(length name +) 'name)))
+     (citre-core-sorter
+      citre-sorter-arg-put-references-below
+      (citre-sorter-arg-put-kinds-above '("constant"))
+      'input '(length name +) 'name))
     (_ citre-definition-default-sorter)))
 
 ;;;; Auto-completion
@@ -81,8 +78,7 @@
   `(<or>
     ,(pcase (citre-get-property 'syntax symbol)
        ('macro
-        (citre-core-sorter
-         `(filter ,(citre-core-filter-kind "constant") +)))
+        (citre-core-sorter (citre-sorter-arg-put-kinds-above '("constant"))))
        (_ 0))
     ,citre-completion-default-sorter))
 
