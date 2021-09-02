@@ -1024,7 +1024,8 @@ peek session."
   (citre-peek--hack-buffer-file-name
     (let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
                        citre-peek-root-symbol-str
-                     (substring-no-properties (citre-get-symbol))))
+                     (or (citre-get-symbol)
+                         (user-error "No symbol at point"))))
            (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
                             (list (citre--make-tag-of-current-xref-item))
                           (citre-get-definitions-maybe-update-tags-file
