@@ -1057,14 +1057,12 @@ creates a peek session for it."
   (with-current-buffer buf
     (save-excursion
       (goto-char point)
-      (let* ((symbol (substring-no-properties
-                      (citre-peek--hack-buffer-file-name (citre-get-symbol))))
-             (deflist (citre-peek--get-def-list)))
+      (when-let* ((deflist (citre-peek--get-def-list)))
         ;; For file buffers, we create a root def list for current position, so
         ;; the user can go back to it later.
         (if (buffer-file-name)
             (let ((root-list (citre-peek--make-def-list-of-current-location
-                              symbol)))
+                              (citre-peek--def-list-symbol deflist))))
               (citre-peek--push-branch-in-current-entry-in-def-list
                root-list deflist)
               (citre-peek--session-create root-list 1))
