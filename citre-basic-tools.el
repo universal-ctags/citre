@@ -331,7 +331,7 @@ When there's multiple definitions, it lets you pick one using the
                   definitions))
          (locations (mapcar #'car loc-alist)))
     (when (null locations)
-      (user-error "Can't find definition for %s.  " symbol))
+      (user-error "Can't find definition for %s" symbol))
     (citre-goto-tag (alist-get
                      (funcall citre-jump-select-definition-function
                               locations symbol)
