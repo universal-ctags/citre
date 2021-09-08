@@ -377,8 +377,13 @@ When it's in the cwd, it's converted to relative path."
   (interactive)
   (let ((dir (read-file-name "Dir: " citre--edit-cmd-buf-cwd)))
     (if (file-in-directory-p dir citre--edit-cmd-buf-cwd)
-        (setq dir (file-relative-name dir citre--edit-cmd-buf-cwd))
+        (progn
+          (setq dir (file-relative-name dir citre--edit-cmd-buf-cwd)))
       (setq dir (file-local-name dir)))
+    ;; For cwd itself, if we use "./" in ctags command, a file named "file"
+    ;; under cwd will be "./file" in the input field.  But if we use ".", it
+    ;; will be "file", which saves some space.
+    (when (equal dir "./") (setq dir "."))
     (insert dir "\n")))
 
 (defun citre-edit-cmd-buf-add-lang ()
