@@ -87,21 +87,16 @@
   (should (equal (citre-core-filter-input
                   "/path/to/test.el" (expand-test-file))
                  '(or (and $input (eq? $input "/path/to/test.el"))
-                      (and $input (eq? $input "test.el")))))
+                      (and $input (eq? $input "test.el"))
+                      (and $input ((string->regexp "(^|/)..?/test\\.el$"
+                                                   :case-fold false)
+                                   $input)))))
   (should (equal (citre-core-filter-input
-                  "/path/to/test.el" (expand-test-file)
-                  'eq)
-                 '(or (and $input (eq? $input "/path/to/test.el"))
-                      (and $input (eq? $input "test.el")))))
-  (should (equal (citre-core-filter-input
-                  "/path/" (expand-test-file)
-                  'in-dir)
-                 '(or (and $input (prefix? $input "/path/")))))
-  (should (equal (citre-core-filter-input
-                  "/path/to/somewhere/" (expand-test-file)
-                  'in-dir)
-                 '(or (and $input (prefix? $input "/path/to/somewhere/"))
-                      (and $input (prefix? $input "somewhere/"))))))
+                  "/path/not/in/cwd/to/test.el" (expand-test-file))
+                 '(or (and $input (eq? $input "/path/not/in/cwd/to/test.el"))
+                      (and $input ((string->regexp "(^|/)..?/test\\.el$"
+                                                   :case-fold false)
+                                   $input))))))
 
 ;; Sorter builder
 

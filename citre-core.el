@@ -981,20 +981,16 @@ tags that don't have `kind' field."
              ")$")
      'regexp nil nil ignore-missing)))
 
-(defun citre-core-filter-input (filename tagsfile &optional match)
+(defun citre-core-filter-input (filename tagsfile)
   "Return a filter expression that matches the input field by FILENAME.
 TAGSFILE is the absolute path of the tags file.  FILENAME should
 be absolute.  The generated filter can work no matter the tag
-uses relative or absolute path.
-
-MATCH can be:
-
-- nil or `eq': Match input fields that is FILENAME.
-- `in-dir': Match input fields that is in directory FILENAME."
+uses relative or absolute path."
   (let* ((tagsfile (expand-file-name tagsfile))
          ;; We use this to match the input field in the tags file, so we need
          ;; the local path.
          (local-name (file-local-name (expand-file-name filename)))
+         (local-name-nondir (file-name-nondirectory local-name))
          ;; local-name and the path in a tag may look different, but actually
          ;; point to the same location, through symlink.  If the tag records
          ;; the symlink path, and FILENAME is the truepath, we can't solve it.
@@ -1006,10 +1002,19 @@ MATCH can be:
          (truename (file-local-name (file-truename filename)))
          ;; Don't bother with truename if it's the same as local-name.
          (truename (unless (equal local-name truename) truename))
+         (truename-nondir (when truename (file-name-nondirectory truename)))
+         (truename-nondir (unless (equal truename-nondir local-name-nondir)
+                            truename))
+         ;; When there are "./" or "../" in the input field, given the
+         ;; restrictions of readtags filter expressions, it's hard to match it
+         ;; with the "true" filename.  When this happens, we match against the
+         ;; non directory part.
+         (implied-relative-path-regex
+          (lambda (file-non-dir-part)
+            (concat "(^|/)..?/"
+                    (citre-core-regexp-quote file-non-dir-part)
+                    "$")))
          (filter (list 'or))
-         (match (pcase match
-                  ((or 'nil 'eq) 'eq)
-                  ('in-dir 'prefix)))
          (info (citre-core-tags-file-info tagsfile))
          (cwd (file-local-name (gethash 'dir info)))
          (os (gethash 'os info)))
@@ -1024,13 +1029,17 @@ MATCH can be:
         (setq truename (citre-upcase-first-letter truename))))
     (dolist (f (list local-name truename))
       (when f
-        (push (citre-core-filter 'input f match) filter)
-        (when (and (string-prefix-p cwd f)
-                   (not (equal cwd f)))
+        (push (citre-core-filter 'input f 'eq) filter)
+        (when (and (string-prefix-p cwd f))
           ;; We don't use `file-relative-name' due to the same reason.  Its
           ;; behavior depends on the platform.
-          (push (citre-core-filter 'input (substring f (length cwd)) match)
+          (push (citre-core-filter 'input (substring f (length cwd)) 'eq)
                 filter))))
+    (dolist (f (list local-name-nondir truename-nondir))
+      (when f
+        (push (citre-core-filter 'input (funcall implied-relative-path-regex f)
+                                 'regexp)
+              filter)))
     (nreverse filter)))
 
 ;;;;; Build sorter expressions
