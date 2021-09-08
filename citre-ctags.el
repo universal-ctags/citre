@@ -630,8 +630,11 @@ When NOCONFIRM is non-nil, don't ask the user whether to update
 the tags file now (update it directly instead)."
   (interactive)
   (let ((tagsfile (or tagsfile
-                      (read-file-name "Choose a tags file: "
-                                      (citre-tags-file-path)) nil t))
+                      (let* ((f (citre-tags-file-path))
+                             (dir (when f (file-name-directory f)))
+                             (file (when f (file-name-nondirectory f))))
+                        (read-file-name "Choose a tags file: "
+                                        dir nil t file))))
         (callback (lambda (tagsfile cwd ptag)
                     (unless (and tagsfile
                                  (citre-non-dir-file-exists-p tagsfile))
