@@ -326,6 +326,9 @@ manual talks about the strengths/weaknesses of ctags, and the design principle
 of Citre. Non-developers are also encouraged to read it to know more about
 these tools.
 
+You can convert the markdown files to texinfo documents with `make
+info` if pandoc and makeinfo commands are available on your system.
+
 ## FAQ
 
 - Q: What are the advantages of Citre & Ctags over etags, gtags, language

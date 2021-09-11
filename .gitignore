@@ -3,3 +3,5 @@
 !.gitignore
 !.github
 *.elc
+*.info
+*.texi
