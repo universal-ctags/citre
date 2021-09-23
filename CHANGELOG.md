@@ -1,6 +1,6 @@
 ## 0.1.x
 
-### Unreleased
+### 0.1.2 (released 2021-09-23)
 
 - Improvements
 
@@ -13,6 +13,10 @@
   - Imenu: Qualified tags (tags like `class.method` or `struct::member`)and
     reference tags are in their own categories now.
   - Various little improvements
+
+- Fixes
+
+  - Various bugfixes from the core to the UI.
 
 - Language specific improvements
 

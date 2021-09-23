@@ -74,6 +74,9 @@ These are some more options for tags file creating/updating:
 - `citre-default-create-tags-file-location`: If you want to always save the
   tags file to global cache dir, or in the directory that uses it, etc., use
   this option.
+- `citre-update-tags-file-when-no-definitions`: By default, when Citre fails to
+  find definitions, it asks if you want to update the tags file and try again.
+  If you don't want this prompt, set this option to nil.
 
 ## Tags file concepts
 
