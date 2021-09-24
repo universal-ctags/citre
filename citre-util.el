@@ -182,8 +182,7 @@ This is like `citre-core-get-tags', except that:
 
 - TAGSFILE could be nil, and it will be find automatically.
 - When MATCH is nil or `exact', CASE-FOLD is always nil,
-  otherwise it's decided by `citre-completion-case-sensitive' and
-  NAME.
+  otherwise it's decided by `citre-completion-case-sensitive'.
 
 TAGSFILE is the absolute path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
@@ -195,7 +194,8 @@ and some of its fields, which can be utilized by
   (citre-core-get-tags (or tagsfile (citre-tags-file-path)
                            (user-error "Can't find a tags file"))
                        name match
-                       (not citre-completion-case-sensitive)
+                       (unless (or (null match) (eq match 'exact))
+                         (not citre-completion-case-sensitive))
                        :filter filter :sorter sorter
                        :require require :optional optional
                        :exclude exclude
