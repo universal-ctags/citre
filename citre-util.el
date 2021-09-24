@@ -397,6 +397,11 @@ root dir."
         (setq tagsfile (file-truename tagsfile))
         (puthash tagsfile current-dir
                  citre-core--tags-file-cwd-guess-table)
+        ;; Only cache the result for file buffers, since non-file buffers may
+        ;; change their own default directories, e.g., when cd to another
+        ;; project.
+        (when buffer-file-name
+          (setq citre--tags-file tagsfile))
         tagsfile))))
 
 (defun citre-clear-tags-file-cache ()
