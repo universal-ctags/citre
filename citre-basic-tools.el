@@ -261,7 +261,10 @@ simple tag name matching.  This function is for it."
   ((_backend (eql citre)))
   "Return a function for xref to find all completions of a prefix."
   (lambda (str pred action)
-    (let* ((tagsfile (citre-tags-file-path))
+    ;; We need this since Xref calls this function in minibuffer.
+    (let* ((tagsfile (with-selected-window (or (minibuffer-selected-window)
+                                               (selected-window))
+                       (citre-tags-file-path)))
            (update-time (gethash 'time (citre-core-tags-file-info tagsfile)))
            (collection
             (if (and (equal tagsfile
