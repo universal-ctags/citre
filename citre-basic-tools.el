@@ -279,7 +279,10 @@ simple tag name matching.  This function is for it."
                       (mapcar
                        (lambda (tag) (citre-core-get-field 'name tag))
                        (citre-get-tags
-                        tagsfile str nil
+                        ;; We don't use STR here, but return all tag names,
+                        ;; since we need to work with completion styles that
+                        ;; may not do a prefix completion.
+                        tagsfile nil nil
                         :filter citre-xref--filter
                         :sorter (citre-core-sorter '(length name +) 'name)
                         :require '(name)))
