@@ -238,7 +238,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
-         (output-buf (get-buffer-create " *readtags*"))
+         (output-buf (get-buffer-create " *citre-readtags*"))
          (tagsfile (substring-no-properties tagsfile))
          (name (when name (substring-no-properties name)))
          (filter (citre-core--strip-text-property-in-list filter))
