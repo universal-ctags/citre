@@ -171,7 +171,7 @@ all major modes."
   "Filter for finding definitions when the symbol is inputted by user.")
 
 (defvar citre-xref--completion-table-cache
-  '(:tage-file nil :time nil :collection nil)
+  '(:tags-file nil :time nil :collection nil)
   "Plist for caching identifier completions.
 Its props and vals are:
 
