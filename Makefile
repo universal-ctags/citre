@@ -25,3 +25,7 @@ test-tags:
 .PHONY: clean
 clean:
 	rm -f ./*.elc
+
+.PHONY: version
+version:
+	$(SHELL) scripts/version.sh
