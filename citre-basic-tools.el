@@ -222,7 +222,7 @@ number if they know the file is renamed/moved to which file."
                                       ;; In xref buffer, we may want to jump to
                                       ;; the tags with these anonymous names.
                                       :full-anonymous-name t)
-                         '(content))
+                         '(content :ensure t))
      (xref-make-file-location (concat file-existance path) line 0))))
 
 (defun citre-xref--get-definition-for-completed-symbol (symbol)

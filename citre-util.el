@@ -722,10 +722,30 @@ PROP controls the format.  See `citre-make-tag-str' for details."
 (defun citre--make-tag-content-str (tag prop)
   "Return the string recorded in the pattern field of TAG.
 PROP controls the format.  See `citre-make-tag-str' for details."
-  (when-let ((str (citre-core-get-field 'extra-matched-str tag)))
-    (concat (or (plist-get prop :prefix) "")
-            (string-trim str)
-            (or (plist-get prop :suffix) ""))))
+  (if-let ((str (citre-core-get-field 'extra-matched-str tag)))
+      (concat (or (plist-get prop :prefix) "")
+              (string-trim str)
+              (or (plist-get prop :suffix) ""))
+    (when (plist-get prop :ensure)
+      ;; TODO: Make this a macro.
+      (let* ((path (citre-core-get-field 'ext-abspath tag))
+             (buf-opened (find-buffer-visiting path))
+             buf line)
+        (when (citre-non-dir-file-exists-p path))
+        (if buf-opened
+            (setq buf buf-opened)
+          (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
+          (with-current-buffer buf
+            (insert-file-contents path)))
+        (with-current-buffer buf
+          (save-excursion
+            (goto-char (citre-core-locate-tag tag))
+            (setq line
+                  (buffer-substring (line-beginning-position)
+                                    (line-end-position)))))
+        (unless buf-opened
+          (kill-buffer buf))
+        line))))
 
 ;;;;;; The API
 
@@ -765,9 +785,13 @@ Avaliable ones are:
 
   relevant fields: `ext-abspath', `extra-line'.
 
-- content: The string recorded in the pattern field of TAG.
+- content: The string recorded in the pattern field of TAG.  When
+  `:ensure' is non-nil, and the search pattern is not presented,
+  get the line content from the file containing the tag.
 
-  relevant fields: `pattern'.
+  relevant fields: `pattern'.  When `:ensure' is non-nil, all
+  fields used for locating the tag may be relevant, including
+  `ext-abspath', `line', `pattern' and `name'.
 
 All components have `:prefix' and `:suffix' properties to attach
 extra prefix and suffix strings to them.  When a component or
