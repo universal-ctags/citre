@@ -1510,33 +1510,39 @@ the position of a tag."
         (widen)
         (goto-char 1)
         (when line (forward-line (1- line)))
-        (when pat
-          (or
-           ;; Search for the whole line.
-           (citre-core--find-nearest-regexp
-            (concat pat-beg (regexp-quote str) pat-end)
-            lim)
-           ;; Maybe the indentation or trailing whitespaces has changed, or
-           ;; something is added after.  From now on we also use case-fold
-           ;; search to deal with projects that uses a case-insensitive
-           ;; language and don't have a consistant style on it.
-           (citre-core--find-nearest-regexp
-            (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
-            lim 'case-fold)
-           ;; The content is changed.  Try cutting from the end of the tag name
-           ;; and search.
-           (when-let ((name name)
-                      (bound (when (let ((case-fold-search nil))
-                                     (string-match (regexp-quote name) str))
-                               (match-end 0)))
-                      (str (substring str 0 bound)))
-             (citre-core--find-nearest-regexp
-              (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
-              lim 'case-fold))
-           ;; Last try: search for the tag name.
-           (when name
-             (citre-core--find-nearest-regexp (regexp-quote name)
-                                              lim 'case-fold))))
+        (or
+         (when pat
+           (or
+            ;; Search for the whole line.
+            (citre-core--find-nearest-regexp
+             (concat pat-beg (regexp-quote str) pat-end)
+             lim)
+            ;; Maybe the indentation or trailing whitespaces has changed, or
+            ;; something is added after.  From now on we also use case-fold
+            ;; search to deal with projects that uses a case-insensitive
+            ;; language and don't have a consistant style on it.
+            (citre-core--find-nearest-regexp
+             (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
+             lim 'case-fold)
+            ;; The content is changed.  Try cutting from the end of the tag
+            ;; name and search.
+            (when-let ((name name)
+                       (bound (when (let ((case-fold-search nil))
+                                      (string-match (regexp-quote name) str))
+                                (match-end 0)))
+                       (str (substring str 0 bound)))
+              (citre-core--find-nearest-regexp
+               (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
+               lim 'case-fold))))
+         ;; Last try: search for the tag name.
+         (when name
+           (or
+            (citre-core--find-nearest-regexp (concat "\\_<"
+                                                     (regexp-quote name)
+                                                     "\\_>")
+                                             lim 'case-fold)
+            (citre-core--find-nearest-regexp (regexp-quote name)
+                                             lim 'case-fold))))
         (if use-linum (line-number-at-pos) (point))))))
 
 ;;;;; Edit pseudo tags
