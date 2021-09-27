@@ -1,5 +1,10 @@
 ## 0.1.x
 
+### 0.1.3 (released 2021-09-27)
+
+- Various bugfixes and minor improvements.
+- Some refactoring for the upcoming GNU Global plugin.
+
 ### 0.1.2 (released 2021-09-23)
 
 - Improvements

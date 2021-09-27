@@ -7,7 +7,7 @@
 ;; Created: 16 May 2020
 ;; Keywords: convenience, tools
 ;; Homepage: https://github.com/universal-ctags/citre
-;; Version: 0.1.1
+;; Version: 0.1.3
 ;; Package-Requires: ((emacs "26.1"))
 
 ;; This file is NOT part of GNU Emacs.
