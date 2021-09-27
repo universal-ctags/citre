@@ -309,7 +309,15 @@ This uses the `completing-read' interface.  See
 `citre-jump-select-definition-function' for the use of this function."
   (pcase (length definitions)
     (1 (car definitions))
-    (_ (completing-read (format "%s: " symbol) definitions nil t))))
+    (_ (let ((collection
+              (lambda (str pred action)
+                (if (eq action 'metadata)
+                    '(metadata
+                      (category . citre-jump)
+                      (cycle-sort-function . identity)
+                      (display-sort-function . identity))
+                  (complete-with-action action definitions str pred)))))
+         (completing-read (format "%s: " symbol) collection nil t)))))
 
 ;;;;; API
 
