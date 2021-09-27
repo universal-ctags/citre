@@ -52,6 +52,10 @@ Let's see them in action!
 All above screenshots were taken in a huge project (the Linux kernel), and
 Citre is still fast, because readtags performes binary search on the tags file.
 
+Besides, Citre has a GNU Global plugin that can find references using xref or
+the above UIs. See [this user manual](docs/user-manual/citre-global.md) to know
+about it.
+
 ## Quick start
 
 ### Prerequisites
@@ -390,6 +394,7 @@ Below are the status of tools provided by Citre:
 | capf, xref, imenu | Integration with built-in mechanisms | stable |      |
 | `citre-jump`      | Jump to the definition               | stable |      |
 | `citre-peek`      | Deep code reading in a peek window   | beta   | [^2] |
+| `citre-global`    | GNU Global plugin                    | alpha  |      |
 
 [^1]: Universal Ctags is exploring concepts like [incremental
       updating](https://github.com/universal-ctags/ctags/issues/2697),

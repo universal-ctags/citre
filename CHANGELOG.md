@@ -1,4 +1,9 @@
-## 0.1.x
+## 0.2 (released 2021-09-27)
+
+### Features
+
+- `citre-global` is a GNU Global plugin that can find references using xref, or
+  UI similar to `citre-jump` and `citre-peek`.
 
 ### 0.1.3 (released 2021-09-27)
 
