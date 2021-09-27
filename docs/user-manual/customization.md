@@ -43,9 +43,9 @@ To separate these 2 use cases, we need to create a customized
 ```
 
 If you need finer customization on the completion styles, you can customize
-`completion-category-overrides` for the category `citre`. For example, you
-normally use `substring` completion style, but you only want prefix completion
-for Citre, you can do:
+`completion-category-overrides` for the category `citre-completion`. For
+example, you normally use `substring` completion style, but you only want
+prefix completion for Citre, you can do:
 
 ```elisp
 (add-to-list 'completion-category-overrides

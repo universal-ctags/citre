@@ -480,7 +480,7 @@ STR is a candidate in a capf session.  See the implementation of
                (lambda (str pred action)
                  (if (eq action 'metadata)
                      '(metadata
-                       (category . citre)
+                       (category . citre-completion)
                        (cycle-sort-function . identity)
                        (display-sort-function . identity))
                    (complete-with-action action collection str pred))))
