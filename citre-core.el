@@ -764,9 +764,9 @@ It tries these in turn:
   "Get the string contained by the pattern field from TAG.
 Returns nil if the pattern field doesn't exist or contain a
 search pattern."
-  (when-let ((pat (nth 1 (citre-core--split-pattern
-                          (citre-core-get-field 'pattern tag)))))
-    (car (citre-core--parse-search-pattern pat))))
+  (when-let* ((pat (citre-core-get-field 'pattern tag))
+              (search-pat (nth 1 (citre-core--split-pattern pat))))
+    (car (citre-core--parse-search-pattern search-pat))))
 
 (defun citre-core--get-lang-from-tag (tag)
   "Get language from TAG.
