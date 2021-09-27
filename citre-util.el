@@ -673,8 +673,8 @@ PROP controls the format.  See `citre-make-tag-str' for details."
          (ref-first (plist-get prop :reference-first))
          (face 'citre-definition-annotation-face))
     ;; "typename:" is a placeholder. It doesn't offer useful info, so we can
-    ;; drop it.  We don't drop it if it is, say, "struct" or "union".
-    (when (string-prefix-p "typename:" type)
+    ;; drop it.  We don't drop it if it is, say, "struct:" or "union:".
+    (when (and type (string-prefix-p "typename:" type))
       (setq type (substring type (length "typename:"))))
     (unless (plist-get prop :full-anonymous-name)
       (when type (setq type (citre--reduce-anonymous-value type)))
