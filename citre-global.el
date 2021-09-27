@@ -128,13 +128,18 @@ This is designed to allow local quit to terminate the process."
                  (error (concat exit-msg output))
                (split-string output "\n" t))))))))
 
-(defun citre-global--get-reference-lines (name &optional case-fold)
+(defun citre-global--get-reference-lines (name &optional case-fold start-file)
   "Find references to NAME using global and return the outputed lines.
-When CASE-FOLD is non-nil, do case-insensitive matching."
+When CASE-FOLD is non-nil, do case-insensitive matching.  When
+START-FILE is non-nil, sort the result by nearness (see the help
+message of global) start from START-FILE."
   (let* ((name (when name (substring-no-properties name)))
          inhibit-message
          args)
     (when case-fold (push "--ignore-case" args))
+    ;; Global doesn't know how to expand "~", so we need to expand START-FILE.
+    (when start-file (push (concat "--nearness=" (expand-file-name start-file))
+                           args))
     (setq args (append args citre-global--find-references-args
                        (list "--" name)))
     (citre-global--get-output-lines args )))
@@ -183,18 +188,31 @@ The value of `extras' field is \"reference\"."
 
 ;;;;; API
 
-(defun citre-global-get-references (&optional name case-fold)
+(defun citre-global-get-references (&optional name case-fold start-file)
   "Get reference tags using global.
 When NAME is non-nil, get references of NAME, otherwise get
 references of the symbol under point.
 
 When CASE-FOLD is non-nil, do case-insensitive matching.
 
+By default, the result is sort by nearness (see the `--nearness'
+option in global) start from the current file or directory.
+START-FILE can be nil to keep this behavior, be a string to
+specify the start file, or be a symbol (like `alpha') to use the
+default alphabetical sort.
+
 Global program is run under current `default-directory'."
-  (let ((name (or name (citre-get-symbol))))
+  (let ((name (or name (citre-get-symbol)))
+        (start-file
+         (pcase start-file
+           ('nil (with-selected-window (or (minibuffer-selected-window)
+                                           (selected-window))
+                   (or (buffer-file-name) default-directory)))
+           ((pred stringp) start-file)
+           ((pred symbolp) nil))))
     (mapcar (lambda (line)
               (citre-global--parse-line line default-directory name))
-            (citre-global--get-reference-lines name case-fold))))
+            (citre-global--get-reference-lines name case-fold start-file))))
 
 ;;;; Tags file generating & updating
 

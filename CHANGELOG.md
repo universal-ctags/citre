@@ -1,3 +1,10 @@
+### 0.2.x (unreleased)
+
+- Improvements
+
+  - `citre-global`: references are sorted by nearness. See the `--nearness`
+    option in global for details.
+
 ## 0.2 (released 2021-09-27)
 
 ### Features

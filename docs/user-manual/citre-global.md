@@ -187,7 +187,7 @@ To find the reference of a symbol, Citre internally runs:
 
 ```console
 $ global --color=never --encode-path=' :' --result=grep --literal --reference \
-> --symbol -- <symbol-name>
+> --symbol --nearness=<current-file-or-dir> -- <symbol-name>
 ```
 
 This also works in any directory under the project root. The meanings of some
@@ -199,6 +199,9 @@ of the arguments are:
 - `--literal`: <symbol-name> is a literal string, not a regexp pattern.
 - `--reference`: Find the references to <symbol-name>
 - `--symbol`: Find the references even if <symbol-name> is not defined.
+- `--nearness`: Sort the result by nearness. This means references in the
+  current file appears at top, those in the current directory, parent
+  directory, grandparent directory... follow them in order.
 
 The following command prints the path containing the tags files:
 
