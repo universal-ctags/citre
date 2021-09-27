@@ -91,6 +91,8 @@ jobs:
       - name: '[dep] Check if download failed'
         if: steps.cache.outputs.cache-hit != 'true'
         run: exit 1
+      - name: '[dep] Install GNU Global'
+        run: sudo apt-get install global
       - name: '[dep] Install Emacs'
         uses: purcell/setup-emacs@master
         with:

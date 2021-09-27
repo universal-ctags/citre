@@ -100,6 +100,9 @@ Advantages of gtags:
   issue](https://github.com/universal-ctags/ctags/issues/2697) to know the
   progress of Universal Ctags on incremental updating).
 
+Citre has a GNU Global plugin for finding references. See [How to Use
+`citre-global`](citre-global.md).
+
 ## Citre & Ctags vs. intelligent tools
 
 By "intelligent tools", we mean language servers, rtags, etc.
