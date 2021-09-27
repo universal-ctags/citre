@@ -311,6 +311,31 @@ This uses the `completing-read' interface.  See
     (1 (car definitions))
     (_ (completing-read (format "%s: " symbol) definitions nil t))))
 
+;;;;; API
+
+(defun citre-jump-show (symbol tags &optional marker root)
+  "Show TAGS as the definitions of SYMBOL using `citre-jump' UI.
+SYMBOL is a string, TAGS is a list of tags.
+
+When MARKER is non-nil, push that into the history so we can go
+back to it using `citre-jump-back'.  When ROOT is non-nil, show
+paths relative to ROOT."
+  (let* ((loc-alist
+          (mapcar (lambda (tag)
+                    (cons (citre-make-tag-str
+                           tag nil
+                           '(annotation)
+                           `(location :suffix ":" :root ,root)
+                           '(content :ensure t))
+                          tag))
+                  tags))
+         (locations (mapcar #'car loc-alist)))
+    (citre-goto-tag (alist-get
+                     (funcall citre-jump-select-definition-function
+                              locations symbol)
+                     loc-alist nil nil #'equal))
+    (when marker (ring-insert citre-jump--marker-ring marker))))
+
 ;;;;; Commands
 
 ;;;###autoload
@@ -324,29 +349,14 @@ When there's multiple definitions, it lets you pick one using the
          (symbol (citre-get-symbol))
          (definitions
            (citre-get-definitions-maybe-update-tags-file symbol))
-         (root (funcall citre-project-root-function))
-         (loc-alist
-          (mapcar (lambda (def)
-                    (cons
-                     (citre-make-tag-str
-                      def nil
-                      '(annotation)
-                      `(location :suffix ":" :root ,root)
-                      '(content))
-                     def))
-                  definitions))
-         (locations (mapcar #'car loc-alist)))
-    (when (null locations)
+         (root (funcall citre-project-root-function)))
+    (when (null definitions)
       (user-error "Can't find definition for %s" symbol))
-    (citre-goto-tag (alist-get
-                     (funcall citre-jump-select-definition-function
-                              locations symbol)
-                     loc-alist nil nil #'equal))
+    (citre-jump-show symbol definitions marker root)
     (unless (citre-tags-file-path)
       (setq citre--tags-file
             (with-current-buffer (marker-buffer marker)
-              (citre-tags-file-path))))
-    (ring-insert citre-jump--marker-ring marker)))
+              (citre-tags-file-path))))))
 
 (defun citre-jump-back ()
   "Go back to the position before last `citre-jump'."
