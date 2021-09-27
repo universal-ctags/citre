@@ -1005,6 +1005,28 @@ it."
                       (citre-tags-file-path))))
       (setq citre--tags-file tagsfile))))
 
+;;;;; Find definitions
+
+(defun citre-peek--get-symbol-and-definitions ()
+  "Return the symbol under point and definitions of it.
+This works for temporary buffer created by `citre-peek'.
+
+The return value is a cons cell.  When in an Xref buffer, return
+`citre-peek-root-symbol-str' and a list of the tag of the
+definition under point."
+  (citre-peek--hack-buffer-file-name
+    (if-let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
+                          citre-peek-root-symbol-str
+                        (citre-get-symbol)))
+              (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
+                               (list (citre--make-tag-of-current-xref-item))
+                             (citre-get-definitions-maybe-update-tags-file
+                              symbol))))
+        (cons symbol definitions)
+      (if symbol
+          (user-error "Can't find definitions for %s" symbol)
+        (user-error "No symbol at point")))))
+
 ;;;;; Create def lists & sessions
 
 (defun citre-peek--make-def-list-of-current-location (name)
@@ -1019,54 +1041,40 @@ peek session."
          (deflist (citre-peek--def-list-create (list tag) nil)))
     deflist))
 
-(defun citre-peek--get-def-list ()
-  "Return the def list of symbol under point."
-  (citre-peek--hack-buffer-file-name
-    (let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
-                       citre-peek-root-symbol-str
-                     (or (citre-get-symbol)
-                         (user-error "No symbol at point"))))
-           (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
-                            (list (citre--make-tag-of-current-xref-item))
-                          (citre-get-definitions-maybe-update-tags-file
-                           symbol)))
-           (deflist (citre-peek--def-list-create definitions symbol)))
-      (when (null definitions)
-        (user-error "Can't find definition for %s" symbol))
-      deflist)))
-
-(defun citre-peek--make-branch (buf point)
+(defun citre-peek--make-branch (symbol tags)
   "Create a new branch in the history.
-It grabs the definitions of the symbol in BUF under POINT, and
-push its def list into the branches of current def entry."
-  (with-current-buffer buf
-    (save-excursion
-      (goto-char point)
-      (let* ((branch (citre-peek--get-def-list))
-             (tagsfile (citre-peek--current-tagsfile)))
-        (citre-peek--push-branch-in-current-entry-in-def-list
-         (citre-peek--current-def-list) branch)
-        (citre-peek--session-depth-add 1)
-        (citre-peek--set-current-tagsfile tagsfile 'maybe)
-        (citre-peek--setup-displayed-defs-interval branch)))))
+It treats TAGS as the definitions of SYMBOL, and make these a
+branch of current def entry."
+  (unless tags (error "TAGS is nil"))
+  (let ((branch (citre-peek--def-list-create tags symbol)))
+    (citre-peek--push-branch-in-current-entry-in-def-list
+     (citre-peek--current-def-list) branch)
+    (citre-peek--session-depth-add 1)
+    (citre-peek--setup-displayed-defs-interval branch)))
 
-(defun citre-peek--make-session (buf point)
+(defun citre-peek--make-session (symbol tags &optional marker)
   "Create a peek session.
-It grabs the definitions of the symbol in BUF under POINT, and
-creates a peek session for it."
-  (with-current-buffer buf
-    (save-excursion
-      (goto-char point)
-      (when-let* ((deflist (citre-peek--get-def-list)))
-        ;; For file buffers, we create a root def list for current position, so
-        ;; the user can go back to it later.
-        (if (buffer-file-name)
-            (let ((root-list (citre-peek--make-def-list-of-current-location
-                              (citre-peek--def-list-symbol deflist))))
-              (citre-peek--push-branch-in-current-entry-in-def-list
-               root-list deflist)
-              (citre-peek--session-create root-list 1))
-          (citre-peek--session-create deflist 0))))))
+It treats TAGS as the definition of SYMBOL, and creates a peek
+session for them.
+
+When MARKER is non-nil, and it's in a file buffer, make a tag for
+it and make it the root def list, also using SYMBOL as the
+symbol.  Make SYMBOL and TAGS the child of it."
+  (let ((deflist (citre-peek--def-list-create tags symbol)))
+    (if (and marker (buffer-local-value 'buffer-file-name
+                                        (marker-buffer marker)))
+        (save-excursion
+          (goto-char marker)
+          (let ((root-list (citre-peek--make-def-list-of-current-location
+                            (citre-peek--def-list-symbol deflist))))
+            (if deflist
+                (progn
+                  (citre-peek--push-branch-in-current-entry-in-def-list
+                   root-list deflist)
+                  (citre-peek--session-create root-list 1))
+              (citre-peek--session-create root-list 0))))
+      (if deflist (citre-peek--session-create deflist 0)
+        (error "TAGS is nil")))))
 
 ;;;;; Manage session state
 
@@ -1284,37 +1292,12 @@ recalculated."
                              border)))
       (setq citre-peek--content-update nil))))
 
-;;;; Commands
+;;;;; Pick point in "ace" style
 
-;;;;; Create/end/restore peek sessions
-
-;;;###autoload
-(defun citre-peek (&optional buf point)
-  "Peek the definition of the symbol at point.
-When BUF or POINT is nil, it's set to the current buffer and
-point."
-  (interactive)
-  (when citre-peek--mode
-    (citre-peek-abort))
-  (let* ((buf (or buf (current-buffer)))
-         (point (or point (point)))
-         (tagsfile (with-current-buffer buf
-                     (citre-tags-file-path))))
-    (citre-peek--setup-session (citre-peek--make-session buf point))
-    (citre-peek--set-current-tagsfile tagsfile 'maybe))
-  (citre-peek--mode))
-
-;;;###autoload
-(defun citre-ace-peek ()
-  "Peek the definition of a symbol on screen using ace jump.
-Press a key in `citre-peek-ace-pick-symbol-at-point-keys' to pick
-the symbol under point.
-
-This command is useful when you want to see the definition of a
-function while filling its arglist."
-  (interactive)
-  (when citre-peek--mode
-    (citre-peek-abort))
+(defun citre-ace-pick-point ()
+  "Pick a point in the showed part of current buffer using \"ace\" operation.
+If a key in `citre-peek-ace-pick-symbol-at-point-keys' is
+pressed, the current point is returned."
   (let* ((sym-bounds (save-excursion
                        (goto-char (window-start))
                        (citre--search-symbols
@@ -1338,8 +1321,89 @@ function while filling its arglist."
             (setq pt (car (nth i sym-bounds)))
             (citre--clean-ace-ov)
             (cl-return)))))
-    (when pt
-      (citre-peek nil pt))))
+    pt))
+
+(defun citre-ace-pick-point-in-peek-window ()
+  "Pick a point in the buffer shown in peek window using \"ace\" operation.
+The buffer and the point is returned in a cons cell."
+  (citre-peek--error-if-not-peeking)
+  (pcase-let ((`(,buf . ,pos) (citre-peek--get-buf-and-pos
+                               (citre-peek--current-def-entry)))
+              (key nil))
+    (unless buf
+      (user-error "The file doesn't exist"))
+    (setq citre-peek--symbol-bounds
+          (with-current-buffer buf
+            (save-excursion
+              (goto-char pos)
+              (cons (point)
+                    (citre--search-symbols citre-peek-file-content-height)))))
+    (setq citre-peek--ace-seqs (citre--ace-key-seqs
+                                (length (cdr citre-peek--symbol-bounds))))
+    (citre-peek--update-display 'force)
+    (cl-block nil
+      (while (setq key (read-key "Ace char:"))
+        (when (memq key citre-peek-ace-cancel-keys)
+          (setq citre-peek--symbol-bounds nil)
+          (setq citre-peek--ace-seqs nil)
+          (citre-peek--update-display 'force)
+          (cl-return))
+        (pcase (citre--pop-ace-key-seqs citre-peek--ace-seqs key)
+          ((and (pred integerp) i)
+           (let ((pos (car (nth i (cdr citre-peek--symbol-bounds)))))
+             (setq citre-peek--symbol-bounds nil)
+             (setq citre-peek--ace-seqs nil)
+             (citre-peek--update-display 'force)
+             (cl-return (cons buf pos))))
+          (_ (citre-peek--update-display 'force)))))))
+
+;;;; APIs
+
+(defun citre-peek-show (symbol tags &optional marker)
+  "Show TAGS as the definitions of SYMBOL using `citre-peek' UI.
+SYMBOL is a string, TAGS is a list of tags.
+
+When MARKER is non-nil, and it's in a file buffer, record it as
+the root of the peek history so we can browse and jump to it
+later."
+  (when citre-peek--mode
+    (citre-peek-abort))
+  (citre-peek--setup-session (citre-peek--make-session symbol tags marker))
+  (citre-peek--mode))
+
+;;;; Commands
+
+;;;;; Create/end/restore peek sessions
+
+;;;###autoload
+(defun citre-peek (&optional buf point)
+  "Peek the definition of the symbol in BUF at POINT.
+When BUF or POINT is nil, it's set to the current buffer and
+point."
+  (interactive)
+  (let* ((buf (or buf (current-buffer)))
+         (point (or point (point)))
+         (symbol-defs (save-excursion
+                        (with-current-buffer buf
+                          (goto-char point)
+                          (citre-peek--get-symbol-and-definitions))))
+         (tagsfile (with-current-buffer buf
+                     (citre-tags-file-path)))
+         (marker (if (buffer-file-name) (point-marker))))
+    (citre-peek-show (car symbol-defs) (cdr symbol-defs) marker)
+    (citre-peek--set-current-tagsfile tagsfile 'maybe)))
+
+;;;###autoload
+(defun citre-ace-peek ()
+  "Peek the definition of a symbol on screen using ace jump.
+Press a key in `citre-peek-ace-pick-symbol-at-point-keys' to pick
+the symbol under point.
+
+This command is useful when you want to see the definition of a
+function while filling its arglist."
+  (interactive)
+  (when-let ((pt (citre-ace-pick-point)))
+    (citre-peek (current-buffer) pt)))
 
 (defun citre-peek-abort ()
   "Abort peeking."
@@ -1549,37 +1613,15 @@ A Saved session can be loaded by `citre-peek-load-session'."
 (defun citre-peek-through ()
   "Peek through a symbol in current peek window."
   (interactive)
-  (citre-peek--error-if-not-peeking)
-  (pcase-let ((`(,buf . ,pos) (citre-peek--get-buf-and-pos
-                               (citre-peek--current-def-entry)))
-              (key nil))
-    (unless buf
-      (user-error "The file doesn't exist"))
-    (setq citre-peek--symbol-bounds
-          (with-current-buffer buf
-            (save-excursion
-              (goto-char pos)
-              (cons (point)
-                    (citre--search-symbols citre-peek-file-content-height)))))
-    (setq citre-peek--ace-seqs (citre--ace-key-seqs
-                                (length (cdr citre-peek--symbol-bounds))))
-    (citre-peek--update-display 'force)
-    (cl-block nil
-      (while (setq key (read-key "Ace char:"))
-        (when (memq key citre-peek-ace-cancel-keys)
-          (setq citre-peek--symbol-bounds nil)
-          (setq citre-peek--ace-seqs nil)
-          (citre-peek--update-display 'force)
-          (cl-return))
-        (pcase (citre--pop-ace-key-seqs citre-peek--ace-seqs key)
-          ((and (pred integerp) i)
-           (citre-peek-make-current-def-first)
-           (let ((pos (car (nth i (cdr citre-peek--symbol-bounds)))))
-             (citre-peek--make-branch buf pos))
-           (setq citre-peek--symbol-bounds nil)
-           (setq citre-peek--ace-seqs nil)
-           (cl-return))
-          (_ (citre-peek--update-display 'force)))))))
+  (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window))
+              (symbol-defs (save-excursion
+                             (with-current-buffer (car buffer-point)
+                               (goto-char (cdr buffer-point))
+                               (citre-peek--get-symbol-and-definitions))))
+              (tagsfile (citre-peek--current-tagsfile)))
+    (citre-peek-make-current-def-first)
+    (citre-peek--make-branch (car symbol-defs) (cdr symbol-defs))
+    (citre-peek--set-current-tagsfile tagsfile 'maybe)))
 
 (defun citre-peek-jump ()
   "Jump to the definition that is currently peeked."
