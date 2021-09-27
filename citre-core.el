@@ -1493,8 +1493,8 @@ This function has no side-effect on the buffer.  Upper components
 could wrap this function to provide a desired UI for jumping to
 the position of a tag."
   (pcase-let*
-      ((name (or (citre-core-get-field 'name tag)))
-       (pat (or (citre-core-get-field 'pattern tag)))
+      ((name (citre-core-get-field 'name tag))
+       (pat (citre-core-get-field 'pattern tag))
        (`(,line ,pat) (when pat (citre-core--split-pattern pat)))
        (line (or (citre-core-get-field 'line tag) line))
        (`(,str ,from-beg ,to-end)
