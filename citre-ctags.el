@@ -457,11 +457,11 @@ synchronously).  Otherwise return nil."
     (let ((default-directory cwd))
       (if sync
           (progn (apply #'process-file (car cmd) nil
-                        (get-buffer-create "*ctags*") nil (cdr cmd))
+                        (get-buffer-create "*citre-ctags*") nil (cdr cmd))
                  (funcall after-process))
         (make-process
          :name "ctags"
-         :buffer (get-buffer-create "*ctags*")
+         :buffer (get-buffer-create "*citre-ctags*")
          :command cmd
          :connection-type 'pipe
          :stderr nil
@@ -472,9 +472,10 @@ synchronously).  Otherwise return nil."
               (pcase (process-exit-status proc)
                 (0 (funcall after-process)
                    (message "Finished updating %s" tagsfile))
-                (s (user-error "Ctags exits %s.  See *ctags* buffer" s))))
+                (s (user-error "Ctags exits %s.  See *citre-ctags* buffer"
+                               s))))
              (s (user-error "Abnormal status of ctags: %s.  \
-See *ctags* buffer" s))))
+See *citre-ctags* buffer" s))))
          :file-handler t)
         (message "Updating %s..." tagsfile))
       t)))
