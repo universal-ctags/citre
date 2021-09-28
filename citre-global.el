@@ -135,14 +135,16 @@ START-FILE is non-nil, sort the result by nearness (see the help
 message of global) start from START-FILE."
   (let* ((name (when name (substring-no-properties name)))
          inhibit-message
-         args)
-    (when case-fold (push "--ignore-case" args))
+         cmd)
+    (when case-fold (push "--ignore-case" cmd))
+    (push (or citre-global-program "global") cmd)
     ;; Global doesn't know how to expand "~", so we need to expand START-FILE.
     (when start-file (push (concat "--nearness=" (expand-file-name start-file))
-                           args))
-    (setq args (append args citre-global--find-references-args
-                       (list "--" name)))
-    (citre-global--get-output-lines args )))
+                           cmd))
+    (setq cmd (append (nreverse cmd) citre-global--find-references-args
+                      (list "--" name)))
+    (citre-get-output-lines cmd (get-buffer-create " *citre-global*")
+                            'get-lines)))
 
 (defun citre-global--read-path (path)
   "Translate escaped sequences in PATH.
@@ -174,16 +176,14 @@ The value of `extras' field is \"reference\"."
                         ":")
                     line)
       (let ((path (match-string 1 line))
-            (linum (match-string 2 line))
-            (tag (make-hash-table :test #'eq)))
+            (linum (match-string 2 line)))
         ;; We don't record the pattern field since it's generate in real time,
         ;; so it can't be used to deal with file updates.
         (setq path (expand-file-name (citre-global--read-path path) rootdir))
-        (when name (puthash 'name (substring-no-properties name) tag))
-        (puthash 'ext-abspath path tag)
-        (puthash 'line linum tag)
-        (puthash 'extras "reference" tag)
-        tag)
+        (citre-make-tag 'name (when name (substring-no-properties name))
+                        'ext-abspath path
+                        'line linum
+                        'extras "reference"))
     (error "Invalid LINE")))
 
 ;;;;; API

@@ -193,28 +193,28 @@ line number in TAG, or 0 if it doesn't record the line number.
 This is because we don't want to fail an xref session only
 because one file is lost, and users may manually use the line
 number if they know the file is renamed/moved to which file."
-  (let* ((path (citre-core-get-field 'ext-abspath tag))
+  (let* ((path (citre-get-tag-field 'ext-abspath tag))
          (buf-opened (find-buffer-visiting path))
          buf linum)
     (if (not (citre-non-dir-file-exists-p path))
-        (or (citre-core-get-field 'extra-line tag) 0)
+        (or (citre-get-tag-field 'extra-line tag) 0)
       (if buf-opened
           (setq buf buf-opened)
         (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
         (with-current-buffer buf
           (insert-file-contents path)))
       (with-current-buffer buf
-        (setq linum (citre-core-locate-tag tag 'use-linum)))
+        (setq linum (citre-locate-tag tag 'use-linum)))
       (unless buf-opened
         (kill-buffer buf))
       linum)))
 
 (defun citre-xref--make-object (tag)
   "Make xref object of TAG."
-  (let* ((path (citre-core-get-field 'ext-abspath tag))
+  (let* ((path (citre-get-tag-field 'ext-abspath tag))
          (file-existance
           (if (citre-non-dir-file-exists-p path) ""
-            citre-definition-missing-file-mark))
+            citre-tag-missing-file-mark))
          (line (citre-xref--get-linum tag)))
     (xref-make
      (citre-make-tag-str tag nil
@@ -277,7 +277,7 @@ simple tag name matching.  This function is for it."
               (let ((collection
                      (cl-remove-duplicates
                       (mapcar
-                       (lambda (tag) (citre-core-get-field 'name tag))
+                       (lambda (tag) (citre-get-tag-field 'name tag))
                        (citre-get-tags
                         ;; We don't use STR here, but return all tag names,
                         ;; since we need to work with completion styles that
@@ -449,7 +449,7 @@ STR is a candidate in a capf session.  See the implementation of
           ;; Make sure we get a non-nil collection first, then setup the cache,
           ;; since the calculation can be interrupted by user input, and we get
           ;; nil, which aren't the actual completions.
-          (when-let ((citre-core-stop-process-on-input t)
+          (when-let ((citre-stop-process-on-input t)
                      (completions
                       (citre-get-completions
                        symbol nil citre-capf-substr-completion))
@@ -525,8 +525,8 @@ is a list of tags of that kind."
     (dolist (tag tags)
       (cl-symbol-macrolet ((place (alist-get class
                                              result nil nil #'equal)))
-        (let* ((kind (citre-core-get-field 'ext-kind-full tag))
-               (extras (when-let ((extras (citre-core-get-field 'extras tag)))
+        (let* ((kind (citre-get-tag-field 'ext-kind-full tag))
+               (extras (when-let ((extras (citre-get-tag-field 'extras tag)))
                          (split-string extras ","
                                        t (rx (+ " ")))))
                (classes (or (mapcar
@@ -561,11 +561,11 @@ This also works on a remote machine."
   (cons (citre-make-tag-str
          tag nil
          '(name)
-         `(annotation :no-kind ,(not (member (citre-core-get-field 'extras tag)
+         `(annotation :no-kind ,(not (member (citre-get-tag-field 'extras tag)
                                              '("reference" "qualified")))
                       :prefix "(" :suffix ")")
          '(location :no-path t))
-        (citre-core-locate-tag tag)))
+        (citre-locate-tag tag)))
 
 (defun citre-imenu--ctags-command-cwd ()
   "Return ctags command and its cwd for tags file for imenu."

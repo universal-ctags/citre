@@ -6,12 +6,20 @@
 . "./scripts/common.sh"
 ITEM="test"
 
-PRELOAD="citre-common.el citre-core-tables.el citre-core.el citre-util.el
-citre-ctags.el citre-basic-tools.el citre-peek.el citre-global.el
+PRELOAD="citre-common.el citre-tag.el citre-core-tables.el citre-core.el
+citre-util.el citre-ctags.el citre-basic-tools.el citre-peek.el citre-global.el
 citre-lang-c.el citre-lang-fileref.el citre.el citre-config.el"
 
 d=$(pwd)
 preload_options=
+
+if [ -v 1 ]; then
+    test_files="tests/$1-*/test.el"
+else
+    test_files="tests/*/test.el"
+fi
+
+echo $test_files
 
 for p in $PRELOAD; do
     [ ! -e  $p ] && error "Cannot find $p."
@@ -22,7 +30,7 @@ for p in $PRELOAD; do
     preload_options="${preload_options} -l $p "
 done
 
-for t in tests/*/test.el; do
+for t in $test_files; do
     d=$(dirname $t)
     info "$d"
     (cd $d

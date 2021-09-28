@@ -1,5 +1,8 @@
 # Project Structure
 
+**WARNING:** The whole structure of Citre is under refactoring and this
+document contains outdated information.
+
 Citre is constructed by 3 layers:
 
 1. *Core layer*: `citre-core.el`, `citre-core-tables.el`.
@@ -96,7 +99,7 @@ What it does is:
   result of `citre-core--get-lines`, to get the *tags*.
 
 The *"tags"* are just hash tables, and can be utilized by
-`citre-core-get-field`, to extract all kinds of information offered by them.
+`citre-get-tag-field`, to extract all kinds of information offered by them.
 
 A wrapper `citre-get-tags` is defined in `citre-util.el`. It's a handier
 version of `citre-core-get-tags`. Tools offered by Citre should use
@@ -104,7 +107,7 @@ version of `citre-core-get-tags`. Tools offered by Citre should use
 
 ### Extra extension fields
 
-`citre-core-get-field` can accept another kind of extension fields,
+`citre-get-tag-field` can accept another kind of extension fields,
 called *extra extension fields* since I couldn't come up with a better
 name. The difference between it and the extension fields are:
 
@@ -115,7 +118,7 @@ name. The difference between it and the extension fields are:
 
 - Extra extension fields is just another way to calculate some info based on
   the records. So, they are not recorded by the tags, but generated "on the
-  fly" when calling `citre-core-get-field`.
+  fly" when calling `citre-get-tag-field`.
 
   Upper components could define more extra extension fields (using
   `citre-core-extra-ext-fields-table`) when certain procedure is frequently
