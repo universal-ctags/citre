@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 
-;; Lookup tables used by citre-core.el.
+;; Lookup tables used by citre-tag.el.
 
 ;;; Code:
 
@@ -450,7 +450,7 @@ when the `language' field is not presented. See
 ;; will be shown in a *Pp Eval Output* buffer, and it can be directly copied
 ;; into the variable definition.  Make sure to indent them!
 
-;; (let* ((ctags-program "ctags")
+;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
 ;;                 (format "%s --quiet --options=NONE --machinable --list-map-extensions"
 ;;                         ctags-program)))
@@ -1138,7 +1138,7 @@ TAG_KIND_DESCRIPTION pseudo tags are not presented too.")
 ;; The result will be shown in a *Pp Eval Output* buffer, and it can be
 ;; directly copied into the variable definition.  Make sure to indent them!
 
-;; (let* ((ctags-program "ctags")
+;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
 ;;                 (format "%s --quiet --options=NONE --machinable --list-kinds-full"
 ;;                         ctags-program)))
@@ -1802,7 +1802,7 @@ single-letter kind by full-length kind.  See
 ;; The result will be shown in a *Pp Eval Output* buffer, and it can be
 ;; directly copied into the variable definition.  Make sure to indent them!
 
-;; (let* ((ctags-program "ctags")
+;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
 ;;                 (format "%s --quiet --options=NONE --machinable --list-kinds-full"
 ;;                         ctags-program)))

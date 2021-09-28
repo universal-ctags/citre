@@ -1,4 +1,4 @@
-;; Basic
+;;; Basic
 
 (ert-deftest test-main-apis-basic-test ()
   "Basic test for main APIs."
@@ -16,7 +16,7 @@
     (should (equal (map-get-field 'non-exist-field tags)
                    '(nil nil)))))
 
-;; `citre-core-get-tags'
+;;; `citre-core-get-tags'
 
 (ert-deftest test-get-tags-no-match ()
   "Test `citre-core-get-tags' when no matching tags."
@@ -160,7 +160,7 @@
     (should (cl-every #'not (map-get-field 'kind tags)))
     (should (cl-every #'not (map-get-field 'signature tags)))))
 
-;; `citre-core-get-pseudo-tags'
+;;; `citre-core-get-pseudo-tags'
 
 (ert-deftest test-get-pseudo-tags ()
   "Test `citre-core-get-pseudo-tags'."
@@ -176,20 +176,20 @@
                          "!_TAG_PROGRAM_NAME"
                          "!_TAG_PROGRAM_URL")))))
 
-;; `citre-core-get-field'
+;;; `citre-get-tag-field' on ctags backend
 
 (ert-deftest test-get-field ()
-  "Test `citre-core-get-field'."
+  "Test `citre-get-tag-field' on ctags backend."
   (let ((tag (car (citre-core-get-tags
                    (expand-test-file)
                    "fpoint2d" nil nil
                    :require '(name input line)
                    :optional '(end)))))
-    (should (equal (citre-core-get-field 'name tag) "fpoint2d"))
-    (should (equal (citre-core-get-field 'input tag) "src/input.h"))
-    (should (equal (type-of (citre-core-get-field 'line tag)) 'integer))
-    (should (equal (type-of (citre-core-get-field 'end tag)) 'integer)))
+    (should (equal (citre-get-tag-field 'name tag) "fpoint2d"))
+    (should (equal (citre-get-tag-field 'input tag) "src/input.h"))
+    (should (equal (type-of (citre-get-tag-field 'line tag)) 'integer))
+    (should (equal (type-of (citre-get-tag-field 'end tag)) 'integer)))
   (let ((tag (car (citre-core-get-tags (expand-test-file) "parent"
                                        nil nil :require '(typeref)))))
-    (should (equal (citre-core-get-field 'typeref tag) "typename:fpoint2d"))
-    (should (equal (citre-core-get-field 'typeref tag t) "fpoint2d"))))
+    (should (equal (citre-get-tag-field 'typeref tag) "typename:fpoint2d"))
+    (should (equal (citre-get-tag-field 'typeref tag t) "fpoint2d"))))

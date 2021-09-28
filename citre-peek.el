@@ -262,18 +262,16 @@ The modified list is returned."
 (defun citre--make-tag-of-current-location (name)
   "Make a tag of the current line, with the name field being NAME.
 This is for generating the \"entry\" point of the symbol chain."
-  (let* ((pat (string-trim
-               (buffer-substring-no-properties
-                (line-beginning-position)
-                (line-end-position))))
-         (tag (make-hash-table :test #'eq)))
+  (let ((pat (string-trim
+              (buffer-substring-no-properties
+               (line-beginning-position)
+               (line-end-position)))))
     (setq pat (replace-regexp-in-string "\\\\\\|/\\|\\$$" "\\\\\\&" pat))
     (setq pat (concat "/" pat "/;\""))
-    (puthash 'name name tag)
-    (puthash 'ext-abspath (buffer-file-name) tag)
-    (puthash 'pattern pat tag)
-    (puthash 'line (number-to-string (line-number-at-pos)) tag)
-    tag))
+    (citre-make-tag 'name name
+                    'ext-abspath (buffer-file-name)
+                    'pattern pat
+                    'line (number-to-string (line-number-at-pos)))))
 
 (defun citre--make-tag-of-current-xref-item ()
   "Make a tag for current item in xref buffer.
@@ -281,12 +279,10 @@ This is for peeking the location of the item."
   (let* ((item (or (xref--item-at-point)
                    (user-error "No reference at point")))
          (location (xref-item-location item))
-         (tag (make-hash-table :test #'eq))
          (file (eieio-oref location 'file))
          (line (eieio-oref location 'line)))
-    (puthash 'ext-abspath (expand-file-name file) tag)
-    (puthash 'line (number-to-string line) tag)
-    tag))
+    (citre-make-tag 'ext-abspath (expand-file-name file)
+                    'line (number-to-string line))))
 
 ;;;;; Ace jump
 
@@ -836,11 +832,11 @@ Nil is returned when the file in the tag doesn't exist."
           marker))
       (let* ((tag (citre-peek--def-entry-tag entry))
              (buf (citre-peek--find-file-buffer
-                   (citre-core-get-field 'ext-abspath tag)))
+                   (citre-get-tag-field 'ext-abspath tag)))
              (marker (when buf
                        (with-current-buffer buf
                          (save-excursion
-                           (goto-char (citre-core-locate-tag tag))
+                           (goto-char (citre-locate-tag tag))
                            (point-marker))))))
         (when marker
           (setf (citre-peek--def-entry-base-marker entry) marker)
@@ -855,8 +851,8 @@ the beginning/end of buffer.
 
 A cons pair (BUF . POINT) is returned.  If the file in the tag
 doesn't exist, these 2 fields are all nil."
-  (let* ((path (citre-core-get-field 'ext-abspath
-                                     (citre-peek--def-entry-tag entry)))
+  (let* ((path (citre-get-tag-field 'ext-abspath
+                                    (citre-peek--def-entry-tag entry)))
          (base-marker (citre-peek--get-base-marker entry))
          (line-offset (citre-peek--def-entry-line-offset entry))
          (buf (citre-peek--find-file-buffer path))
@@ -1649,7 +1645,7 @@ This location is for using in Clue API calls."
   (pcase-let* ((entry (citre-peek--current-def-entry))
                (tag (citre-peek--def-entry-tag entry))
                (`(,buf . ,pos) (citre-peek--get-buf-and-pos entry))
-               (file (citre-core-get-field 'ext-abspath tag))
+               (file (citre-get-tag-field 'ext-abspath tag))
                (line) (project))
     (if buf
         (with-current-buffer buf

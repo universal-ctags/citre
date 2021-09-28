@@ -1,4 +1,4 @@
-;; Filter builder
+;;; Filter builder
 
 (ert-deftest test-filter-eq ()
   "Test filter builder for eq matches."
@@ -98,7 +98,7 @@
                                                    :case-fold false)
                                    $input))))))
 
-;; Sorter builder
+;;; Sorter builder
 
 (ert-deftest test-sorter ()
   "Test `citre-core-sorter'."

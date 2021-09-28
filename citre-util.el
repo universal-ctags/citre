@@ -103,16 +103,6 @@ dir-local variables."
 (put 'citre-tags-file-alist 'safe-local-variable #'listp)
 (make-variable-buffer-local 'citre-tags-file-alist)
 
-(defcustom citre-project-root-function #'citre-project-root
-  "A function that returns project root in current buffer.
-It takes no arguments.  It's used for:
-
-- Displaying the path of a tag relatively.
-- Expanding relative paths in `citre-tags-file-alist' and
-  `citre-tags-file-cache-dirs'."
-  :type 'function
-  :group 'citre)
-
 ;;;;; Options: Behavior of Citre
 
 (defcustom citre-completion-case-sensitive t
@@ -129,46 +119,6 @@ auto-completion."
 (defcustom citre-after-jump-hook '(citre-recenter-and-blink)
   "Hook to run after jumping to a location."
   :type 'hook
-  :group 'citre)
-
-;;;;; Options: Appearance
-
-(defface citre-definition-annotation-face
-  '((((background light))
-     :foreground "#666666" :slant italic)
-    (t
-     :foreground "#c0c0c0" :slant italic))
-  "Face used for annotations when presenting a definition.
-Annotations include kind, type, etc."
-  :group 'citre)
-
-(defcustom citre-definition-annotation-separator
-  (propertize "/" 'face 'citre-definition-annotation-face)
-  "The separator between kind and type in annotation."
-  :type 'string
-  :group 'citre)
-
-(defcustom citre-definition-annotation-separator-for-scope
-  (propertize "@" 'face 'citre-definition-annotation-face)
-  "The separator between kind/type and scope in annotation."
-  :type 'string
-  :group 'citre)
-
-(defcustom citre-definition-reference-mark
-  (propertize "<R>" 'face 'citre-definition-annotation-face)
-  "Mark added for references in definitions."
-  :type 'string
-  :group 'citre)
-
-(defface citre-definition-path-face
-  '((t :inherit font-lock-function-name-face))
-  "Face used for the path in a definition."
-  :group 'citre)
-
-(defcustom citre-definition-missing-file-mark
-  (propertize "!" 'face 'warning)
-  "Mark added before missing files in definitions."
-  :type 'string
   :group 'citre)
 
 ;;;; Core API wrapper
@@ -190,7 +140,7 @@ SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
-`citre-core-get-field'."
+`citre-get-tag-field'."
   (citre-core-get-tags (or tagsfile (citre-tags-file-path)
                            (user-error "Can't find a tags file"))
                        name match
@@ -211,14 +161,6 @@ When TAGSFILE is nil, find it automatically."
     (nth 1 (car ptag))))
 
 ;;;; APIs
-
-;;;;; APIs: Files
-
-(defun citre-project-root ()
-  "Caninical path of project root of current buffer.
-This uses `project-current' internally."
-  (when-let ((project (project-current nil)))
-    (expand-file-name (cdr project))))
 
 ;;;;; APIs: Find tags file
 
@@ -606,212 +548,6 @@ completion can't be done."
                     :require '(name)
                     :optional '(ext-kind-full signature scope typeref))))
 
-;;;;; APIs: Display tags
-
-;;;;;; Internals
-
-(defun citre--relative-path (path &optional root)
-  "Return PATH but relative to ROOT.
-If PATH is not under ROOT, it's directly returned.  If ROOT is
-nil, use project in current buffer (by
-`citre-project-root-function') instead."
-  (let ((root (or root (funcall citre-project-root-function))))
-    (if (and root (file-in-directory-p path root))
-        (file-relative-name path root)
-      path)))
-
-(defun citre--reduce-anonymous-value (value)
-  "Reduce \"__anon*\" parts in VALUE to \"__anon\".
-When Ctags generates anonymous tags, they can be used in typeref
-or scope fields.  For example, a symbol defined in an anonymous
-union scope could be:
-
-  C_lastcookie ... scope:union:cnode::__anon1146df5f01a
-
-Applying this to the scope field value makes it looks tidier."
-  ;; Notice there can be continuous "__anon*"s, meaning nested anonymous
-  ;; scopes.
-  (replace-regexp-in-string (rx (group (or line-start ":"))
-                                (group "__anon" (+ (not (any ":"))))
-                                (group (or line-end ":")))
-                            "\\1__anon\\3" value))
-
-(defun citre--make-tag-name-str (tag prop)
-  "Generate a string to display the name of TAG.
-PROP controls the format.  See `citre-make-tag-str' for details."
-  (let ((name (citre-core-get-field 'name tag))
-        (face
-         (pcase (citre-core-get-field 'ext-kind-full tag)
-           ("class" 'font-lock-type-face)
-           ((or "const" "constant") 'font-lock-constant-face)
-           ("macro" 'font-lock-keyword-face)
-           ((or "function" "f") 'font-lock-function-name-face)
-           ("method" 'font-lock-function-name-face)
-           ("struct" 'font-lock-type-face)
-           ((or "typedef" "type") 'font-lock-type-face)
-           ((or "variable" "var" "v") 'font-lock-variable-name-face))))
-    (when name
-      (concat (or (plist-get prop :prefix) "")
-              (if face (propertize name 'face face) name)
-              (or (plist-get prop :suffix) "")))))
-
-(defun citre--make-tag-annotation-str (tag prop)
-  "Generate a string to display the annotation of TAG.
-PROP controls the format.  See `citre-make-tag-str' for details."
-  (let* ((kind (unless (plist-get prop :no-kind)
-                 (citre-core-get-field 'ext-kind-full tag)))
-         (type (unless (plist-get prop :no-type)
-                 (citre-core-get-field 'typeref tag)))
-         (scope (unless (plist-get prop :no-scope)
-                  (citre-core-get-field 'scope tag)))
-         (extras (citre-core-get-field 'extras tag))
-         (reference
-          (unless (plist-get prop :no-reference)
-            (and extras
-                 (string-match "\\(^\\|,\\) ?reference\\(,\\|$\\)" extras))))
-         (reference (when reference citre-definition-reference-mark))
-         (ref-first (plist-get prop :reference-first))
-         (face 'citre-definition-annotation-face))
-    ;; "typename:" is a placeholder. It doesn't offer useful info, so we can
-    ;; drop it.  We don't drop it if it is, say, "struct:" or "union:".
-    (when (and type (string-prefix-p "typename:" type))
-      (setq type (substring type (length "typename:"))))
-    (unless (plist-get prop :full-anonymous-name)
-      (when type (setq type (citre--reduce-anonymous-value type)))
-      (when scope (setq scope (citre--reduce-anonymous-value scope))))
-    (when (or kind type scope reference)
-      (concat
-       (propertize (or (plist-get prop :prefix) "") 'face face)
-       (if ref-first (or reference ""))
-       (concat (propertize (or kind "") 'face face)
-               (if (and kind type) citre-definition-annotation-separator "")
-               (propertize (or type "") 'face face))
-       (concat
-        (if scope
-            citre-definition-annotation-separator-for-scope "")
-        (propertize (or scope "") 'face face))
-       (if (not ref-first) (or reference ""))
-       (propertize (or (plist-get prop :suffix) "") 'face face)))))
-
-(defun citre--make-tag-location-str (tag prop)
-  "Generate a string to display the location of TAG.
-PROP controls the format.  See `citre-make-tag-str' for details."
-  (let* ((abspath (unless (plist-get prop :no-path)
-                    (citre-core-get-field 'ext-abspath tag)))
-         (line (unless (plist-get prop :no-line)
-                 (citre-core-get-field 'extra-line tag))))
-    (when (or abspath line)
-      (concat
-       (or (plist-get prop :prefix) "")
-       ;; path
-       (if abspath
-           (concat
-            (if (citre-non-dir-file-exists-p abspath) ""
-              citre-definition-missing-file-mark)
-            (propertize (citre--relative-path abspath (plist-get prop :root))
-                        'face 'citre-definition-path-face))
-         "")
-       (if line
-           (concat (if abspath "(" "")
-                   (propertize (number-to-string line)
-                               'face 'warning)
-                   (if abspath ")" ""))
-         "")
-       (or (plist-get prop :suffix) "")))))
-
-(defun citre--make-tag-content-str (tag prop)
-  "Return the string recorded in the pattern field of TAG.
-PROP controls the format.  See `citre-make-tag-str' for details."
-  (if-let ((str (citre-core-get-field 'extra-matched-str tag)))
-      (concat (or (plist-get prop :prefix) "")
-              (string-trim str)
-              (or (plist-get prop :suffix) ""))
-    (when (plist-get prop :ensure)
-      ;; TODO: Make this a macro.
-      (let* ((path (citre-core-get-field 'ext-abspath tag))
-             (buf-opened (find-buffer-visiting path))
-             buf line)
-        (when (citre-non-dir-file-exists-p path))
-        (if buf-opened
-            (setq buf buf-opened)
-          (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
-          (with-current-buffer buf
-            (insert-file-contents path)))
-        (with-current-buffer buf
-          (save-excursion
-            (goto-char (citre-core-locate-tag tag))
-            (setq line
-                  (buffer-substring (line-beginning-position)
-                                    (line-end-position)))))
-        (unless buf-opened
-          (kill-buffer buf))
-        line))))
-
-;;;;;; The API
-
-(cl-defun citre-make-tag-str (tag separator &rest args)
-  "Generate a string for TAG for displaying.
-TAG should be an element in the returned value of
-`citre-get-definitions'.  ARGS is the components the string
-should contain, in the order of presence.  Each element of ARGS
-is a list of:
-
-  (component :prop val :prop val ...)
-
-Avaliable ones are:
-
-- name: Name of the tag.  It's propertized by font-lock faces
-  according to the kind of the tag.
-
-  relevant fields: `name', `ext-kind-full'.
-
-- annotation: Looks like \"kind/type@scope<R>\".  \"<R>\" is a
-  mark for reference tags, customizable by
-  `citre-definition-reference-mark'.  `:no-kind', `:no-type',
-  `:no-scope', `:no-reference' controls the presence of each
-  part, `:reference-first' puts the reference mark before other
-  parts, `:full-anonymous-name' means don't reduce \"__anon\"
-  parts in the type and scope parts, see
-  `citre--reduce-anonymous-value'.
-
-  relevant fields: `ext-kind-full', `typeref', `extras'.
-
-- location: Looks like \"path(line)\". `:no-path', `:no-line'
-  controls the presence of each part.  When there's only the line
-  number, the parentheses around it are omitted.  When `:root' is
-  specified, files under it will be displayed relative to it.
-  When the path doesn't exist,
-  `citre-definition-missing-file-mark' is prefixed to the path.
-
-  relevant fields: `ext-abspath', `extra-line'.
-
-- content: The string recorded in the pattern field of TAG.  When
-  `:ensure' is non-nil, and the search pattern is not presented,
-  get the line content from the file containing the tag.
-
-  relevant fields: `pattern'.  When `:ensure' is non-nil, all
-  fields used for locating the tag may be relevant, including
-  `ext-abspath', `line', `pattern' and `name'.
-
-All components have `:prefix' and `:suffix' properties to attach
-extra prefix and suffix strings to them.  When a component or
-some parts of it can't be generated, they are omitted.
-
-SEPARATOR specifies the separator between components.  A space is
-used when it's nil."
-  (let (parts)
-    (dolist (arg args)
-      (let ((prop (cdr arg)))
-        (push
-         (pcase (car arg)
-           ('name (citre--make-tag-name-str tag prop))
-           ('annotation (citre--make-tag-annotation-str tag prop))
-           ('location (citre--make-tag-location-str tag prop))
-           ('content (citre--make-tag-content-str tag prop)))
-         parts)))
-    (string-join (cl-remove nil (nreverse parts) :test #'eq)
-                 (or separator " "))))
-
 ;;;;; APIs: Finding definitions
 
 (defun citre-definition-default-filter (symbol)
@@ -858,41 +594,6 @@ is found."
                                 citre-definition-default-sorter)
                     :require '(name ext-abspath pattern)
                     :optional '(ext-kind-full line typeref scope extras))))
-
-(defun citre-goto-tag (tag &optional window)
-  "Jump to the location of TAG.
-WINDOW can be:
-
-- nil: Use current window.
-- `other-window': Use other window.
-- `other-window-noselect': Use other window but don't select it."
-  (let ((path (citre-core-get-field 'ext-abspath tag)))
-    (unless path
-      (error "TAG doesn't have the ext-abspath field"))
-    (unless (citre-non-dir-file-exists-p path)
-      (user-error "File %s doesn't exist" path))
-    (let* ((buf (find-file-noselect path))
-           (current-buf (current-buffer))
-           (current-window (selected-window)))
-      (if window
-          (pop-to-buffer
-           buf
-           '(display-buffer-use-some-window . ((inhibit-same-window . t)
-                                               (inhibit-switch-frame . t)))
-           (when (eq window 'other-window-noselect) 'norecord))
-        (pop-to-buffer buf '(display-buffer-same-window)))
-      (goto-char (citre-core-locate-tag tag))
-      (run-hooks 'citre-after-jump-hook)
-      (when (eq window 'other-window-noselect)
-        (select-window current-window)
-        (pop-to-buffer current-buf '(display-buffer-same-window) 'norecord)))))
-
-(defun citre-recenter-and-blink ()
-  "Recenter point and blink after point.
-This is suitable to run after jumping to a location."
-  (recenter)
-  (pulse-momentary-highlight-one-line (point)))
-
 (provide 'citre-util)
 
 ;; Local Variables:

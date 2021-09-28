@@ -42,6 +42,7 @@
 
 (require 'citre-common)
 (require 'citre-core-tables)
+(require 'citre-tag)
 (require 'cl-lib)
 (require 'subr-x)
 
@@ -216,14 +217,6 @@ returned."
 
 ;;;;; Get lines
 
-(defvar citre-core-stop-process-on-input nil
-  "Non-nil allows user input to stop readtags process.
-Let-bind this to non-nil for situations like popup completions to
-make a responsive UI.
-
-When the process is stopped on input, `citre-core-get-tags' and
-similar APIs return nil.")
-
 (defun citre-core--get-lines
     (tagsfile &optional name match case-fold filter sorter action)
   "Get lines in TAGSFILE using readtags.
@@ -244,19 +237,12 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
          (filter (citre-core--strip-text-property-in-list filter))
          (sorter (citre-core--strip-text-property-in-list sorter))
          inhibit-message
-         cmd proc exit-msg)
-    (with-current-buffer output-buf
-      (erase-buffer))
+         cmd)
     ;; Program name
     (push (or citre-readtags-program "readtags") cmd)
     ;; Read from this tags file
     (push "-t" cmd)
-    (let ((local-name (file-local-name tagsfile)))
-      (if (equal local-name tagsfile)
-          (push tagsfile cmd)
-        ;; Suppress TRAMP message when it starts a remote process.
-        (setq inhibit-message t)
-        (push local-name cmd)))
+    (push (file-local-name tagsfile) cmd)
     ;; Filter expression
     (when filter (push "-Q" cmd) (push (format "%S" filter) cmd))
     (when sorter (push "-S" cmd) (push (format "%S" sorter) cmd))
@@ -268,72 +254,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
           (push "-l" cmd)
         (push "-" cmd)
         (push name cmd)))
-    ;; We allow keyboard quit when waiting for the process to finish, by
-    ;; `with-local-quit'.  This line is to make sure the following cleanup
-    ;; can't be breaked by user input, especially quickly swapping the sentinel
-    ;; function, see comments later.
-    (let ((inhibit-quit t))
-      ;; Credit: This technique is developed from
-      ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=32986.
-      (pcase
-          ;; Allow keyboard quit when waiting the process.
-          (with-local-quit
-            (catch 'citre-done
-              (setq proc
-                    (make-process
-                     :name "readtags"
-                     :buffer output-buf
-                     :command (nreverse cmd)
-                     :connection-type 'pipe
-                     ;; NOTE: Using a buffer or pipe for :stderr has caused a
-                     ;; lot of troubles on Windows.
-                     :stderr nil
-                     :sentinel (lambda (_proc _msg)
-                                 ;; While we use `sleep-for' for pending,
-                                 ;; throw/catch can stop the pending.
-                                 (throw 'citre-done t))
-                     :file-handler t))
-              ;; Poll for the process to finish.  Once it's finished, the
-              ;; sentinel function throws a tag which breaks the sleeping.
-              (if citre-core-stop-process-on-input
-                  ;; `sit-for' wakes up when input is avaliable.
-                  (while (sit-for 30))
-                ;; `sleep-for' doesn't bother with input (except `C-g').
-                (while (sleep-for 30)))))
-        ;; Since we throw t, this can only receive nil when user input arrives.
-        ;; When this happens, we immediately replace the sentinel function, or
-        ;; it will throw to the wild and cause a "No catch for tag: citre-done"
-        ;; error.
-        ('nil (set-process-sentinel proc #'ignore)
-              (if (eq system-type 'windows-nt)
-                  ;; Based on my experiment on a large tags file,
-                  ;; `interrupt-process' doesn't work reliably on Windows,
-                  ;; while sighup seems does.  When using a remote Unix machine
-                  ;; on Windows, this may send a SIGHUP to the remote process,
-                  ;; but shouldn't be a problem since SIGHUP is not a harsh
-                  ;; signal.
-                  (signal-process proc 'sighup)
-                (interrupt-process proc))
-              nil)
-        (_ (pcase (process-status proc)
-             ('exit
-              (pcase (process-exit-status proc)
-                (0 nil)
-                (s (setq exit-msg (format "readtags exits %s\n" s)))))
-             (s (setq exit-msg
-                      (format "abnormal status of readtags: %s\n" s))))
-           (cl-symbol-macrolet
-               ((output (with-current-buffer output-buf (buffer-string)))
-                (output-list (split-string output "\n" t))
-                (output-list-while-no-input
-                 (pcase (while-no-input output-list) ('t nil) (val val))))
-             (if exit-msg
-                 (error (concat exit-msg output))
-               ;; Allow user input to stop the post-processing part as it can
-               ;; also take some time.
-               (if citre-core-stop-process-on-input
-                   output-list-while-no-input
-                 output-list))))))))
+    (citre-get-output-lines (nreverse cmd) output-buf 'get-lines)))
 
 ;;;;; Parse tagline
 
@@ -500,7 +421,7 @@ we still have:
   other.
 - EXT-DEP shouldn't intersect with REQUIRE or OPTIONAL.
 - OPTIONAL and EXCLUDE should not be used together."
-  (let* ((tag (make-hash-table :test #'eq :size 20))
+  (let* ((tag (citre-make-tag))
          (parse-all-fields (or exclude parse-all-fields))
          (require-num (length require))
          (require-counter 0)
@@ -512,10 +433,10 @@ we still have:
          (len (length line))
          field
          (write (lambda (field)
-                  (puthash field
-                           (citre-core--lexer-forward-field-value
-                            line len lexer t)
-                           tag))))
+                  (citre-set-tag-field
+                   field
+                   (citre-core--lexer-forward-field-value line len lexer t)
+                   tag))))
     (cl-block nil
       (while (setq field (citre-core--lexer-forward-field-name line len lexer))
         (cond
@@ -603,7 +524,7 @@ extension field (see `citre-core-extra-ext-fields-table').")
 TAG should contain the fields that FIELD depends on.
 TAGSFILE-INFO is the additional info that FIELD depends on."
   (if-let ((method (gethash field citre-core--ext-fields-method-table)))
-      (puthash field (funcall method tag tagsfile-info) tag)
+      (citre-set-tag-field field (funcall method tag tagsfile-info) tag)
     (error "Invalid FIELD")))
 
 ;;;;;; ext-abspath
@@ -614,7 +535,7 @@ This needs the `input' field to be presented in TAG, and if its
 value is a relative path, `dir' info in TAGSFILE-INFO is used.
 
 This returns a remote path when the tagsfile is remote."
-  (let* ((input (or (gethash 'input tag)
+  (let* ((input (or (citre-get-tag-field 'input tag)
                     (error "\"input\" field not found in TAG")))
          (remotep (gethash 'remotep tagsfile-info))
          (os (gethash 'os tagsfile-info))
@@ -637,17 +558,17 @@ This needs the `kind' field to be presented in TAG.  If the tags
 file uses full-length kind name (told by TAGSFILE-INFO), it's
 returned directly.  If not, then:
 
-- The language is guessed first, see `citre-core--get-ext-lang'.
+- The language is guessed first.
 - The single-letter kind is converted to full-length, based on
   the TAG_KIND_DESCRIPTION pseudo tags, or
   `citre-core--kind-name-single-to-full-table' if it's not
   presented.
 
 If this fails, the single-letter kind is returned directly."
-  (if-let* ((kind (gethash 'kind tag))
+  (if-let* ((kind (citre-get-tag-field 'kind tag))
             ;; Check if the kind is single letter.
             (single-letter-p (eq (length kind) 1))
-            (lang (citre-core--get-lang-from-tag tag))
+            (lang (citre-get-tag-field 'extra-lang tag))
             (table (or (gethash 'kind-table tagsfile-info)
                        citre-core--kind-name-single-to-full-table))
             (table (gethash lang table))
@@ -717,72 +638,6 @@ For SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
             (citre-core--get-lines
              tagsfile name match case-fold
              filter sorter nil))))
-
-;;;; Internals: Extra extension fields
-
-(defvar citre-core-extra-ext-fields-table
-  #s(hash-table
-     test eq
-     data
-     (extra-line
-      citre-core--get-line-from-tag
-      extra-matched-str
-      citre-core--get-matched-str-from-tag
-      extra-lang
-      citre-core--get-lang-from-tag))
-  "Hash table for getting extra extension fields from tags.
-It's used by `citre-core-get-field'. Its keys will be valid FIELD
-argument values for `citre-core-get-field', and values are
-functions that return the value of the fields.  The arguments of
-the functions are:
-
-- TAG: The tag to get field from.
-
-The needed fields in TAG should appear in the docstrings of the
-functions.  If the field can't be calculated, the functions
-should return nil, rather than signal an error, so it feels more
-like `gethash', which makes sense since the tags are indeed hash
-tables.
-
-Packages that uses citre-core could extend this table.  They
-should not modify existing key-value pairs in this table, and the
-added keys should be prefixed by the name of the library to avoid
-naming conflict.")
-
-(defun citre-core--get-line-from-tag (tag)
-  "Get the line number from TAG.
-It tries these in turn:
-
-- Use the line field directly.
-- Use the pattern field if it contains the line number.
-- Return nil."
-  (or (citre-core-get-field 'line tag)
-      (car (citre-core--split-pattern
-            (citre-core-get-field 'pattern tag)))))
-
-(defun citre-core--get-matched-str-from-tag (tag)
-  "Get the string contained by the pattern field from TAG.
-Returns nil if the pattern field doesn't exist or contain a
-search pattern."
-  (when-let* ((pat (citre-core-get-field 'pattern tag))
-              (search-pat (nth 1 (citre-core--split-pattern pat))))
-    (car (citre-core--parse-search-pattern search-pat))))
-
-(defun citre-core--get-lang-from-tag (tag)
-  "Get language from TAG.
-It tries these in turn:
-
-- Use the `language' field directly.
-- Guess the language based on the `input' field.  See
-  `citre-core--extension-lang-table'.
-- Return the file extension, or the filename if it doesn't have
-  an extension.
-- Return nil."
-  (or (gethash 'language tag)
-      (when-let ((input (gethash 'input tag))
-                 (extension (citre-file-name-extension input)))
-        (or (gethash (downcase extension) citre-core--extension-lang-table)
-            extension))))
 
 ;;;; APIs
 
@@ -1231,7 +1086,7 @@ Requirements of postprocessor expressions are:
 
 Each element in the returned value is a hash table containing the
 fields of matched tags, which can be utilized by
-`citre-core-get-field'.  The fields to contain can be customized
+`citre-get-tag-field'.  The fields to contain can be customized
 by these keyword arguments:
 
 - REQUIRE: A list containing fields that must be presented.  If
@@ -1298,252 +1153,6 @@ field, it must appear in REQUIRE or OPTIONAL."
                           :require require :optional optional
                           :exclude exclude
                           :parse-all-fields parse-all-fields)))
-
-;;;;; Get fields from tags
-
-(defun citre-core-get-field (field tag &optional after-colon)
-  "Get FIELD from TAG.
-TAG is an element in the return value of `citre-core-get-tags'.
-FIELD can be all normal and extension fields.
-
-When FIELD is `line' or `end', an integer is returned, instead of
-a string.
-
-When AFTER-COLON is non-nil, the field is splitted at the first
-colon, and the part after it is returned.  This is for fields
-like `scope' or `typeref'.  In a tagline they may look like this:
-
-    typeref:struct:structName
-
-when getting the `typeref' field from this tag, a non-nil
-AFTER-COLON gives \"structName\", while nil gives
-\"struct:structName\".
-
-If you use this option on a field that doesn't contain a colon,
-the whole field is returned.
-
-`citre-core-extra-ext-fields-table' defines some extra fields
-that can be used as FIELD.  Their values are calculated in
-real-time based on TAG.  The built-in ones are:
-
-- `extra-line': The line number of the tag.  This uses the `line'
-  field directly, and if it's not presented, get the line number
-  from the pattern field if it's recorded there.  If both can't
-  be done, return nil.
-
-- `extra-lang': The language.  It uses the `language' field if
-  it's presented, or guesses the language by the file extension.
-  When both fails, the file extension (or the file name, if it
-  doesn't have an extension) is returned.
-
-- `extra-matched-str': The substring in the source file that's
-  matched by ctags when generating the tag.  It's often the whole
-  line containing the tag.  This depends on the `pattern' field,
-  and returns nil if it doesn't record the matched string (e.g.,
-  in tags file generated using the -n option)."
-  (let ((maybe-split (if after-colon
-                         #'citre-string-after-1st-colon
-                       #'identity))
-        value)
-    (if-let ((method (gethash field citre-core-extra-ext-fields-table)))
-        (setq value (funcall method tag))
-      (setq value (gethash field tag))
-      (when value
-        (pcase field
-          ((or 'line 'end) (when-let ((val (gethash field tag)))
-                             (string-to-number val)))
-          (_ (funcall maybe-split (gethash field tag))))))))
-
-;;;;; Helper for finding the location of a tag
-
-;;;;;; Internals
-
-(defvar citre-core--pattern-search-limit 50000
-  "The limit of chars to go when searching for a pattern.")
-
-(defun citre-core--split-pattern (pattern)
-  "Split the pattern PATTERN.
-PATTERN should be the pattern field in a tag.  It returns (LINUM
-PAT) where:
-
-- LINUM is the line number PATTERN contains (an integer), or nil
-  if not presented.
-- PAT is the search pattern that PATTERN contains, or nil if not
-  presented."
-  (let (line pat)
-    (pcase pattern
-      ;; Line number pattern
-      ((guard (string-match "^\\([0-9]+\\);\"$" pattern))
-       (setq line (string-to-number (match-string 1 pattern))))
-      ;; Search/combined pattern
-      ((guard (string-match "^\\([0-9]*\\);?\\([/?].*[/?]\\);\"$" pattern))
-       (let ((num (match-string 1 pattern)))
-         (setq line (unless (string-empty-p num) (string-to-number num))))
-       (setq pat (match-string 2 pattern)))
-      (_ (error "Invalid PATTERN")))
-    (list line pat)))
-
-(defun citre-core--parse-search-pattern (pattern)
-  "Parse the search pattern PATTERN.
-PATTERN looks like /pat/ or ?pat?.  It should come from the
-pattern field of a tagline.
-
-The returned value is (STR FROM-BEG TO-END), where STR is
-the (literal) string that PATTERN matches.  If FROM-BEG is
-non-nil, the string should begin from the beginning of a line.
-The same for TO-END.
-
-The reason we need this function is the pattern field is actually
-not a regexp.  It only adds \"^\" and \"$\", and escape several
-chars.  See the code of this function for the detail."
-  (let* ((direction (pcase (aref pattern 0)
-                      (?/ 'forward)
-                      (?? 'backward)))
-         ;; Remove the surrounding "/"s or "?"s.
-         (pattern (substring pattern 1 -1))
-         (from-beg (unless (string-empty-p pattern) (eq ?^ (aref pattern 0))))
-         ;; Check if there's an unescaped trailing "$".  Don't be scared, eval:
-         ;;
-         ;; (rx (or (not "\\") line-start) (zero-or-more "\\\\") "$" line-end)
-         ;;
-         ;; to understand it.
-         (to-end (string-match "\\([^\\]\\|^\\)\\(\\\\\\\\\\)*\\$$" pattern))
-         ;; Remove the beginning "^" and trailing "$"
-         (pattern (substring pattern
-                             (if from-beg 1 0)
-                             (if to-end -1 nil))))
-    (if-let ((backslash-idx
-              (citre-string-match-all-escaping-backslash pattern)))
-        (let ((last 0)
-              (i nil)
-              (parts nil))
-          (while (setq i (pop backslash-idx))
-            (push (substring pattern last i) parts)
-            (setq last (+ 2 i))
-            (let ((char (aref pattern (1+ i))))
-              (push (pcase char
-                      (?\\ "\\")
-                      ((and ?$ (guard (eq i (- (length pattern) 2)))) "$")
-                      ((and ?? (guard (eq direction 'backward))) "?")
-                      ((and ?/ (guard (eq direction 'forward))) "/")
-                      (_ (error "Invalid escape sequence")))
-                    parts)))
-          (push (substring pattern last) parts)
-          (setq pattern (apply #'concat (nreverse parts)))))
-    (list pattern from-beg to-end)))
-
-(defun citre-core--find-nearest-regexp
-    (regexp &optional limit case-fold)
-  "Find the nearest occurence of REGEXP from current position.
-By \"nearar\" we mean there are fewer lines between current
-position and the occurence.
-
-This goes to the beginning of line position of the occurence, and
-returns the position there.  If it's not found, return nil and
-don't go anywhere.
-
-When LIMIT is non-nil, it's the limit of chars that the search
-goes.  CASE-FOLD decides case-sensitivity."
-  (let ((start (line-beginning-position))
-        (case-fold-search case-fold)
-        after after-lines
-        before before-lines)
-    (save-excursion
-      (beginning-of-line)
-      (when (re-search-forward
-             regexp (when limit (+ start limit)) t)
-        (beginning-of-line)
-        (setq after (point))
-        (setq after-lines (count-lines start after))))
-    (unless (and after (<= after-lines 1))
-      (save-excursion
-        (beginning-of-line)
-        (when (re-search-backward
-               regexp (when limit (- start limit)) t)
-          (beginning-of-line)
-          (setq before (point))
-          (setq before-lines (count-lines before start)))))
-    (cond
-     ((and after before)
-      (goto-char (if (< before-lines after-lines) before after)))
-     ((or after before)
-      (goto-char (or after before))))))
-
-;;;;;; The API
-
-(defun citre-core-locate-tag (tag &optional use-linum)
-  "Find TAG in current buffer.
-Returns the position to goto, or line number if USE-LINUM is
-non-nil.  Current buffer should be the buffer visiting the file
-containing the tag.
-
-The search is helped by:
-
-- The pattern field.
-- The line field, if the pattern is not a combined
-  pattern (i.e., not contatining the line number).
-- The name of the tag.
-
-This function does its best to find the tag if the file has been
-changed, and even when the line including the tag itself has been
-changed.  See the code for details.  If the search fails
-completely, it will return the beginning position of the file.
-
-This function has no side-effect on the buffer.  Upper components
-could wrap this function to provide a desired UI for jumping to
-the position of a tag."
-  (pcase-let*
-      ((name (citre-core-get-field 'name tag))
-       (pat (citre-core-get-field 'pattern tag))
-       (`(,line ,pat) (when pat (citre-core--split-pattern pat)))
-       (line (or (citre-core-get-field 'line tag) line))
-       (`(,str ,from-beg ,to-end)
-        (when pat (citre-core--parse-search-pattern pat)))
-       (pat-beg (if from-beg "^" ""))
-       (pat-end (if to-end "$" ""))
-       (lim citre-core--pattern-search-limit))
-    ;; NOTE: No need to explicitely throw/return whether the line or pattern
-    ;; exists, since this is "doing its best to search" and always need to
-    ;; return a position even if the search fails.
-    (save-excursion
-      (save-restriction
-        (widen)
-        (goto-char 1)
-        (when line (forward-line (1- line)))
-        (or
-         (when pat
-           (or
-            ;; Search for the whole line.
-            (citre-core--find-nearest-regexp
-             (concat pat-beg (regexp-quote str) pat-end)
-             lim)
-            ;; Maybe the indentation or trailing whitespaces has changed, or
-            ;; something is added after.  From now on we also use case-fold
-            ;; search to deal with projects that uses a case-insensitive
-            ;; language and don't have a consistant style on it.
-            (citre-core--find-nearest-regexp
-             (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
-             lim 'case-fold)
-            ;; The content is changed.  Try cutting from the end of the tag
-            ;; name and search.
-            (when-let ((name name)
-                       (bound (when (let ((case-fold-search nil))
-                                      (string-match (regexp-quote name) str))
-                                (match-end 0)))
-                       (str (substring str 0 bound)))
-              (citre-core--find-nearest-regexp
-               (concat pat-beg "[ \t]*" (regexp-quote (string-trim str)))
-               lim 'case-fold))))
-         ;; Last try: search for the tag name.
-         (when name
-           (or
-            (citre-core--find-nearest-regexp (concat "\\_<"
-                                                     (regexp-quote name)
-                                                     "\\_>")
-                                             lim 'case-fold)
-            (citre-core--find-nearest-regexp (regexp-quote name)
-                                             lim 'case-fold))))
-        (if use-linum (line-number-at-pos) (point))))))
 
 ;;;;; Edit pseudo tags
 

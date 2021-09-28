@@ -19,7 +19,7 @@ work correctly."
 
 (defun map-get-field (field tags)
   "Map the \"get FIELD\" operation over a list TAGS."
-  (mapcar (lambda (tag) (citre-core-get-field field tag)) tags))
+  (mapcar (lambda (tag) (citre-get-tag-field field tag)) tags))
 
 (defun set-equal (a b)
   "Check if lists A and B are equal in the sense of sets."
@@ -28,19 +28,6 @@ work correctly."
     (and (equal (length a) (length b))
          (equal (length (cl-intersection a b :test #'equal))
                 (length a)))))
-
-(defun make-tag (&rest data)
-  "Make a tag from DATA.
-DATA is a sequence of FIELD VALUE pairs."
-  (let ((tag (make-hash-table :test #'eq))
-        (i 0)
-        (len (length data)))
-    (while (< (1+ (* 2 i)) len)
-      (let ((field (nth (* 2 i) data))
-            (val (nth (1+ (* 2 i)) data)))
-        (puthash field val tag))
-      (cl-incf i))
-    tag))
 
 (defun get-definitions (mode buffer-file
 			     marker extra-move

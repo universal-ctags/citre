@@ -10,6 +10,18 @@ check: test compile style
 test:
 	$(SHELL) scripts/test.sh
 
+.PHONY: test-tag
+test-tag:
+	$(SHELL) scripts/test.sh tag
+
+.PHONY: test-ctags
+test-ctags:
+	$(SHELL) scripts/test.sh ctags
+
+.PHONY: test-global
+test-global:
+	$(SHELL) scripts/test.sh global
+
 .PHONY: compile
 compile: clean
 	$(SHELL) scripts/compile.sh
@@ -18,7 +30,7 @@ compile: clean
 style:
 	$(SHELL) scripts/style.sh
 
-.PHONY: test-tags
+.PHONY: update-test-tags
 test-tags:
 	$(SHELL) scripts/update-test-tags.sh
 
