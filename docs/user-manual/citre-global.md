@@ -29,7 +29,7 @@ save them using a global cache directory, do this:
 
 ```sh
 # Set this to save gtags database to GTAGSOBJDIRPREFIX/<project-root>.  This
-# requires --objdir option in gtags command line, see citre-global-gtags-args.
+# requires --objdir option in gtags command line, see citre-gtags-args.
 export GTAGSOBJDIRPREFIX=~/.cache/gtags/
 ```
 
@@ -39,6 +39,8 @@ to run:
 ```console
 $ mkdir -p ~/.cache/gtags/
 ```
+
+This may not work on Windows, see `citre-gtags-args`.
 
 If you want to use the Pygments plugin parser, you need the following config:
 

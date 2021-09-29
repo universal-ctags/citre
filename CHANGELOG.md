@@ -4,6 +4,7 @@
 
   - `citre-global`: references are sorted by nearness. See the `--nearness`
     option in global for details.
+  - New user option: `citre-gtags-args`.
 
 ## 0.2 (released 2021-09-27)
 

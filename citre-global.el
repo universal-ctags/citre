@@ -66,6 +66,15 @@ Set this if global is not in your PATH, or its name is not
   :type '(set string (const nil))
   :group 'citre)
 
+(defcustom citre-gtags-args '("--compact" "--objdir")
+  "Arguments for running gtags.
+On Windows, the \"--objdir\" argument may cause \"Objdir not
+found\" error.  If this happens, you need to customize this
+option to not use \"--objdir\", and gtags will always create
+database in the project directory."
+  :type '(repeat string)
+  :group 'citre)
+
 ;;;; Global program interface
 
 ;;;;; Internals
@@ -232,9 +241,8 @@ Global program is run under current `default-directory'."
     (make-process
      :name "gtags"
      :buffer (get-buffer-create "*citre-gtags*")
-     :command (list (or citre-gtags-program "gtags")
-                    "--compact"
-                    "--objdir")
+     :command (append (list (or citre-gtags-program "gtags"))
+                      citre-gtags-args)
      :connection-type 'pipe
      :stderr nil
      :sentinel
