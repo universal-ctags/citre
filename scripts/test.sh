@@ -13,13 +13,11 @@ citre-lang-c.el citre-lang-fileref.el citre.el citre-config.el"
 d=$(pwd)
 preload_options=
 
-if [ -v 1 ]; then
-    test_files="tests/$1-*/test.el"
-else
+if [ -z "$1" ]; then
     test_files="tests/*/test.el"
+else
+    test_files="tests/$1-*/test.el"
 fi
-
-echo $test_files
 
 for p in $PRELOAD; do
     [ ! -e  $p ] && error "Cannot find $p."
