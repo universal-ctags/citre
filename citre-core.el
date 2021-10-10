@@ -978,6 +978,16 @@ Each element of FIELDS can be:
 
 - A list
 
+      (expr SORTER-EXPR)
+
+  For example, `(expr (if (and $name &name) (<> $name &name) 0))'
+  means sorting based on the `name' field.  SORTER-EXPR can be
+  any valid sorter expression, but it should be built with care:
+  always check if the fields are avaliable (like in the example)
+  to prevent runtime error of readtags.
+
+- A list
+
       (filter FILTER-EXPR +/-)
 
   For example, `(filter (eq? $kind \"file\") +)' means puting
@@ -1008,6 +1018,7 @@ order) if they are in the same file."
        (pcase (car arg)
          ('field (citre-core--simple-sorter arg))
          ('filter (citre-core--filter-sorter arg))
+         ('expr (cadr arg))
          (_ (citre-core--simple-sorter arg)))
        sorter))
     (nreverse sorter)))

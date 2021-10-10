@@ -201,7 +201,8 @@
          (citre-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
        ;; Don't sort for other syntax.
        (_ 0))
-    ,(citre-core-sorter 'input '(length name +) 'name)))
+    ,(citre-core-sorter 'input '(length name +) 'name
+                        citre-sorter-arg-size-order)))
 
 ;;;; Auto-completion
 

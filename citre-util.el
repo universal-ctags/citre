@@ -373,6 +373,17 @@ on."
         (or ,(citre-core-filter-field-exist 'file)
             ,(citre-core-filter 'extras "fileScope" 'csv-contain))))
 
+(defvar citre-sorter-arg-size-order
+  '(expr (if (and $line $end &line &end)
+             (<> (- &end &line) (- $end $line))
+           0))
+  "For tags with `line' and `end' field, sort them by size.
+The \"size\" is the difference between its `end' and `line'
+field.  A \"smaller\" definition may be a prototype or forward
+declaration, while the \"bigger\" one is the actual definition.
+
+This can be used as an arg for `citre-core-sorter'.")
+
 (defvar citre-sorter-arg-put-references-below
   `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -)
   "Put reference tags below others.
@@ -567,7 +578,8 @@ completion can't be done."
 (defvar citre-definition-default-sorter
   (citre-core-sorter
    citre-sorter-arg-put-references-below
-   'input '(length name +) 'name)
+   'input '(length name +) 'name
+   citre-sorter-arg-size-order)
   "The default sorter expression for finding definitions.
 This sorts the file name by their alphabetical order, then the
 length and alphabetical order of the tag names.")

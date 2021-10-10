@@ -116,6 +116,8 @@
                  '(<or> (if (and $name &name)
                             (<> (length &name) (length $name))
                           0))))
+  (should (equal (citre-core-sorter '(expr (valid sorter expr)))
+                 '(<or> (valid sorter expr))))
   (should (equal (citre-core-sorter
                   `(filter ,(citre-core-filter 'name "hi" 'eq) +))
                  '(<or> (<> (if (and $name (eq\? $name "hi")) -1 1)
