@@ -29,27 +29,33 @@ work correctly."
          (equal (length (cl-intersection a b :test #'equal))
                 (length a)))))
 
-(defun get-definitions (mode buffer-file
-			     marker extra-move
-			     &optional tags-file)
-  "Call `citre-get-definitions' is the environment specified with the arguments.
-MODE is a function for entering a major mode.
-BUFFER-FILE is a file name that content fills the buffer.
-MARKER, and EXTRA-MOVE are for adjusting the point in the buffer.
-MARKER is a pattern string. This function searches MARKER
-with `re-search-forward` from the beginning of the buffer.
-EXTRA-MOVE is a function taking no argument. After searching
-MARKER, EXTRA-MOVE is called.
-After adjusting the point in this way, `xref-find-definitions' is
-called."
+(defun get-definitions (mode buffer-file marker extra-move &optional tags-file)
+  "Call `citre-get-definitions' in the environment specified with the arguments.
+This inserts the content of BUFFER-FILE in a buffer, and calls
+MODE, a function for entering a major mode.
+
+Then, MARKER and EXTRA-MOVE are used to adjust the point in the
+buffer.  MARKER is a pattern string.  EXTRA-MOVE is a function
+taking no argument.  MARKER is searched with `re-search-forward'
+from the beginning of the buffer, then EXTRA-MOVE is called.
+
+Finally, `citre-get-definitions' is called, which returns the
+definitions of the symbol at point.
+
+If TAGS-FILE is non-nil, use that tags file."
   (with-temp-buffer
     (insert-file-contents buffer-file)
+    (setq buffer-file-name (expand-file-name buffer-file))
     (funcall mode)
     (goto-char (point-min))
     (re-search-forward marker)
-    (when extra-move
-      (funcall extra-move))
-    (citre-get-definitions nil tags-file)))
+    (when extra-move (funcall extra-move))
+    (prog1
+        (citre-get-definitions nil tags-file)
+      ;; Unset the buffer file name, so when running tests interactively, Emacs
+      ;; won't ask if we want to kill the buffer when finishing the
+      ;; `with-temp-buffer' form.
+      (setq buffer-file-name nil))))
 
 (defun get-file-content (file)
   "Get file content of FILE."
