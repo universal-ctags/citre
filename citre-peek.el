@@ -62,7 +62,8 @@
 ;; that time.
 (declare-function xref--item-at-point "xref" ())
 (declare-function xref-item-location "xref" (arg &rest args))
-(declare-function eieio-oref "eieio" (obj slot))
+(declare-function xref-location-group "xref" (location))
+(declare-function xref-location-line "xref" (location))
 
 ;; We use this function for integration with the package "clue".  We don't
 ;; require it as it's not necessary for citre-peek to work.
@@ -279,8 +280,8 @@ This is for peeking the location of the item."
   (let* ((item (or (xref--item-at-point)
                    (user-error "No reference at point")))
          (location (xref-item-location item))
-         (file (eieio-oref location 'file))
-         (line (eieio-oref location 'line)))
+         (file (xref-location-group location))
+         (line (xref-location-line location)))
     (citre-make-tag 'ext-abspath (expand-file-name file)
                     'line (number-to-string line))))
 
