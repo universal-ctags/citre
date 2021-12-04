@@ -51,7 +51,7 @@ called."
       (funcall extra-move))
     (citre-get-definitions nil tags-file)))
 
-(defun get-file-contet (file)
+(defun get-file-content (file)
   "Get file content of FILE."
   (with-temp-buffer
     (insert-file-contents file)
