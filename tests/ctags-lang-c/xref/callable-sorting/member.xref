@@ -1,4 +1,4 @@
-src/poll.c
+src/poll.h
 7: (member/int (*)(void *)@struct:polling_target) int (* poll) (void *);
 2: (member/unsigned int@struct:client_stats) unsigned int poll;
 10: (function/int) int poll (struct polling_target *target, void *data)
