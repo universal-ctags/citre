@@ -20,7 +20,8 @@ device::minor	src/dev.h	/^  unsigned int minor;$/;"	kind:member	line:11	language
 device::name	src/dev.h	/^  const char *name;$/;"	kind:member	line:9	language:C++	scope:struct:device	typeref:typename:const char *	access:public	roles:def	extras:qualified
 game	src/game.h	/^struct game {$/;"	kind:struct	line:2	language:C++	roles:def	end:4
 game.h	src/game.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile	end:9
-game::point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	extras:qualified
+game::point	src/game.h	/^  score point;$/;"	kind:member	line:3	language:C++	scope:struct:game	typeref:typename:score	access:public	roles:def	extras:qualified	end:3
+goto-sorting.c	src/goto-sorting.c	1;"	kind:file	line:1	language:C	roles:def	extras:inputFile	end:10
 header.h	src/a/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
 header.h	src/b/header.h	1;"	kind:file	line:1	language:C++	roles:def	extras:inputFile
 major	src/dev.h	/^  major,$/;"	kind:enumerator	line:3	language:C++	scope:enum:codeHint	access:public	roles:def

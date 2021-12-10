@@ -84,3 +84,15 @@
 				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
 		 (get-file-content "xref/callable-sorting/macro.xref")))
   )
+
+(ert-deftest test-lang-c-goto-sorting ()
+  "Test the rule for \"goto\" used in `citre-lang-c-definition-sorter'"
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/goto-sorting.c" "@call"
+				(lambda () (backward-word 2)) "target.tags"))
+		 (get-file-content "xref/goto-sorting/call.xref")))
+  (should (equal (defs-to-xref (get-definitions
+				'c-mode "buffer/goto-sorting.c" "@goto"
+				(lambda () (backward-word 2)) "target.tags"))
+		 (get-file-content "xref/goto-sorting/goto.xref")))
+  )

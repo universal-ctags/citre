@@ -1,0 +1,4 @@
+src/goto-sorting.c
+8: (label@function:main) found:
+src/find-found.c
+6: (function/bool) bool found()
