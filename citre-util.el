@@ -502,16 +502,22 @@ recording the beginning/end positions of the symbol."
   (or (citre-get-marked-symbol)
       (citre-get-symbol-at-point)))
 
-(defun citre-get-symbol ()
+(defun citre-get-symbol (&optional tagsfile)
   "Get the symbol at point.
 Set `citre-get-symbol-function-alist' to control the behavior of
 this function for different languages.  `citre-file-path' and
 `citre-tags-file' properties are attached to the symbol string so
-filters/sorters can make use of them."
+filters/sorters can make use of them.
+
+When TAGSFILE is non-nil, write it (rather than the tags file
+associated with current buffer) to the `citre-tags-file' property
+in the returned string.  This is needed when getting
+definitions/completions of the returned symbol from a specified
+tags file."
   (let ((sym (funcall (or (citre--get-value-in-language-alist :get-symbol)
                           #'citre-get-symbol-default))))
     (citre-put-property sym 'file-path (buffer-file-name))
-    (citre-put-property sym 'tags-file (citre-tags-file-path))
+    (citre-put-property sym 'tags-file (or tagsfile (citre-tags-file-path)))
     sym))
 
 ;;;;; APIs: Auto-completion related
@@ -546,7 +552,7 @@ case sensitivity is controlled by
 
 The returned value is a list of tags.  Nil is returned when the
 completion can't be done."
-  (when-let* ((symbol (or symbol (citre-get-symbol)))
+  (when-let* ((symbol (or symbol (citre-get-symbol tagsfile)))
               (tagsfile (or tagsfile (citre-tags-file-path)))
               (match (if substr-completion 'substr 'prefix)))
     (citre-get-tags tagsfile symbol match
@@ -592,7 +598,7 @@ find it automatically.
 
 The result is a list of tags.  Nil is returned when no definition
 is found."
-  (let ((symbol (or symbol (citre-get-symbol)))
+  (let ((symbol (or symbol (citre-get-symbol tagsfile)))
         (tagsfile (or tagsfile (citre-tags-file-path)
                       (user-error "Can't find tags file for current buffer"))))
     (unless symbol
