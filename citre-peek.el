@@ -1241,7 +1241,7 @@ definitions, and the current chain in the code reading history."
     session-info))
 
 (when (fboundp 'define-fringe-bitmap)
-  (define-fringe-bitmap 'citre-peek-fringe []))
+  (define-fringe-bitmap 'citre-peek-fringe [0]))
 
 (defun citre-peek--maybe-decorate-fringes (str)
   "Decorate STR with left and right fringes.
