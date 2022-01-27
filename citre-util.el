@@ -68,7 +68,7 @@ which you want to use the tags file.
 
 If you work on a remote machine, this points to directory on the
 remote machine."
-  :type 'string
+  :type 'directory
   :group 'citre)
 
 (defcustom citre-tags-file-per-project-cache-dir "./.tags/"
@@ -79,7 +79,7 @@ the project, this directory is searched for a tags file.
 
 Tags files in it are named using the relative path to the
 directory in which you want to use the tags file."
-  :type 'string
+  :type 'directory
   :group 'citre)
 
 (defcustom citre-tags-file-alist nil
@@ -96,7 +96,7 @@ The global (default) value of this still works as a fallback for
 its buffer-local value.  So you can use `setq-default' to
 customize this for directories where it's inconvenient to have
 dir-local variables."
-  :type '(alist :key-type string :value-type string)
+  :type '(alist :key-type directory :value-type file)
   :group 'citre)
 
 ;;;###autoload
