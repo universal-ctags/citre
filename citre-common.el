@@ -33,6 +33,7 @@
 
 ;;;; Libraries
 
+(require 'project)
 (require 'subr-x)
 
 ;;;; User Options
@@ -165,11 +166,18 @@ is prefixed by \"citre-\".  Propertized STR is returned."
 
 ;;;; Project
 
+;; Suppress the compilation warning that `project-root' is not defined.
+(declare-function project-root "project")
+
 (defun citre--project-root ()
   "Full path of project root of current buffer.
 This uses `project-current' internally."
   (when-let ((project (project-current nil)))
-    (expand-file-name (cdr project))))
+    (if (fboundp #'project-root)
+        (project-root project)
+      ;; Suppress the warning in Emacs master that `project-roots' is
+      ;; deprecated.
+      (car (with-no-warnings (project-roots project))))))
 
 (defun citre-project-root ()
   "Return the project root of current buffer.
