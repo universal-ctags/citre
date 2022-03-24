@@ -248,11 +248,11 @@ you want to use the tags file.  The returned name can be used in
 (defun citre-tags-file-in-global-cache (dir)
   "Return the tags file name of DIR in global cache dir.
 DIR is absolute.  The full path of the tags file is returned."
-  (concat
-   (or (file-remote-p default-directory) "")
-   (expand-file-name
-    (citre--path-to-cache-tags-file-name (file-local-name (file-truename dir)))
-    citre-tags-file-global-cache-dir)))
+  (expand-file-name
+   (citre--path-to-cache-tags-file-name (file-local-name (file-truename dir)))
+   ;; TODO: We may want to put this in a function.
+   (concat (or (file-remote-p default-directory) "")
+           citre-tags-file-global-cache-dir)))
 
 (defun citre-tags-file-in-per-project-cache (dir &optional project)
   "Return the tags file name of DIR in per-project cache dir.
