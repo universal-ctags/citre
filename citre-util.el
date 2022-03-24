@@ -223,7 +223,7 @@ against PROJECT, an absolute path."
 ;;;;;; By `citre-tags-file-global/per-project-cache-dir'
 
 (defun citre--path-to-cache-tags-file-name (path)
-  "Convert PATH to the non-directory part a tagsfile name.
+  "Encode PATH into a tagsfile name and return it.
 PATH is canonical or relative to the project root.  It's where
 you want to use the tags file.  The returned name can be used in
 `citre-tags-file-global-cache-dir' or
