@@ -61,7 +61,7 @@
                (save-excursion
                  (goto-char (car bounds))
                  (looking-back
-                  (rx "#include"
+                  (rx "#" (* space) "include"
                       (* space) (or "<" "\""))
                   (line-beginning-position))))
       (let* ((full-symbol (buffer-substring-no-properties
