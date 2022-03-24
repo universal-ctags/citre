@@ -233,7 +233,7 @@ you want to use the tags file.  The returned name can be used in
     ;; Check if it's a Windows path.  We don't use `system-type' as the user
     ;; may work on a remote Windows machine (people really do this?)
     (when (string-match "^[[:alpha:]]:" (file-local-name path))
-      ;; We remote the colon after the disk symbol, or Emacs will think
+      ;; We remove the colon after the disk symbol, or Emacs will think
       ;; "d:!project!path" is absolute and refuse to expand it against the
       ;; cache dir.
       (setq path (concat (or (file-remote-p path) "")
