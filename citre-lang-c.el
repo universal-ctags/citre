@@ -168,7 +168,11 @@
         (citre-core-sorter
          (citre-sorter-arg-put-kinds-above '("function" "macro"))))
        ('goto
-        (citre-core-sorter (citre-sorter-arg-put-kinds-above '("label"))))
+        (citre-core-sorter (citre-sorter-arg-put-kinds-above '("label"))
+                           ;; Asm parser defines "label" kind, too.
+                           ;; By default, ctags deals .h files as C++ input.
+                           `(filter ,(citre-core-filter-lang "C") +)
+                           `(filter ,(citre-core-filter-lang "C++") +)))
        ((and (or 'struct 'union 'enum)
              keyword)
         ;; If a symbol comes after keywords "struct", "union", or "enum",
