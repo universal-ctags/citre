@@ -20,6 +20,7 @@ device::minor	src/dev.h	/^  unsigned int minor;$/;"	kind:member	line:11	language
 device::name	src/dev.h	/^  const char *name;$/;"	kind:member	line:9	language:C++	scope:struct:device	typeref:typename:const char *	access:public	roles:def	extras:qualified	end:9
 find	src/find-found.c	/^void find(const char *what)$/;"	kind:function	line:1	language:C	typeref:typename:void	signature:(const char * what)	roles:def	end:4
 find-found.c	src/find-found.c	1;"	kind:file	line:1	language:C	roles:def	extras:inputFile	end:10
+found	src/dummy.S	/^found:$/;"	kind:label	line:1	language:Asm	roles:def
 found	src/find-found.c	/^bool found()$/;"	kind:function	line:6	language:C	typeref:typename:bool	signature:()	roles:def	end:9
 found	src/goto-sorting.c	/^ found:$/;"	kind:label	line:8	language:C	scope:function:main	file:	roles:def	extras:fileScope
 game	src/game.h	/^struct game {$/;"	kind:struct	line:2	language:C++	roles:def	end:4

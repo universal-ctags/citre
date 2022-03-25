@@ -1,0 +1,2 @@
+found:
+	call func
