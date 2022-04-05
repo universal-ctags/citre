@@ -169,8 +169,10 @@
          (citre-sorter-arg-put-kinds-above '("function" "macro"))))
        ('goto
         (citre-core-sorter (citre-sorter-arg-put-kinds-above '("label"))
-                           ;; Asm parser defines "label" kind, too.
-                           ;; By default, ctags deals .h files as C++ input.
+                           ;; Several languages defines "label" kind, and we
+                           ;; should put labels in C above others.  We do this
+                           ;; for C++ too as ctags considers header files to be
+                           ;; C++ source files.
                            `(filter ,(citre-core-filter-lang "C") +)
                            `(filter ,(citre-core-filter-lang "C++") +)))
        ((and (or 'struct 'union 'enum)
