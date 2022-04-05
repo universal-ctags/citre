@@ -176,25 +176,21 @@ it.
 
 If there's no directory up, return nil.  Also return nil if FILE
 is a local/remote user home dir."
+  (setq file (file-local-name file))
   (unless (string-match
-           (rx (or (seq bol (opt (seq alpha ":")) "/" eol)
-                   (seq bol
-                        ;; remote identifier
-                        (opt "/"
-                             ;; method
-                             (+ (or alnum "-")) ":"
-                             ;; user.  NOTE: (not (any ...)) seems to be the
-                             ;; only accepted form for Emacs 26.
-                             (+ (not (any "/" "|" ":" "\t")))
-                             ;; host
-                             (opt "@" (+ (or alnum "_" "." "%" "-"))) ":")
-                        ;; local filename
-                        (or (seq "/home/" (+ (not (any "/"))) "/" eol)
-                            (seq bol "~/" eol)))))
+           (rx (or
+                ;; Windows root
+                (seq alpha ":" (opt (or "/" "\\")))
+                ;; Unix root
+                "/"
+                ;; Home dir
+                (seq bol "/home/" (+ (not (any "/"))) "/" eol)
+                (seq bol "~" (opt "/") eol)))
            file)
     (let* ((dirname (directory-file-name file))
            (dir (file-name-directory dirname)))
-      dir)))
+      (unless (equal dir file)
+        dir))))
 
 ;;;;;; By `citre-tags-file-alist'
 
