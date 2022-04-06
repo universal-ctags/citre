@@ -169,29 +169,6 @@ When TAGSFILE is nil, find it automatically."
 (defvar-local citre--tags-file nil
   "Buffer-local cache for tags file path.")
 
-(defun citre--up-directory (file)
-  "Return the directory up from FILE.
-No matter if FILE is a file or dir, return the dir contains
-it.
-
-If there's no directory up, return nil.  Also return nil if FILE
-is a local/remote user home dir."
-  (setq file (file-local-name file))
-  (unless (string-match
-           (rx (or
-                ;; Windows root
-                (seq alpha ":" (opt (or "/" "\\")))
-                ;; Unix root
-                "/"
-                ;; Home dir
-                (seq bol "/home/" (+ (not (any "/"))) "/" eol)
-                (seq bol "~" (opt "/") eol)))
-           file)
-    (let* ((dirname (directory-file-name file))
-           (dir (file-name-directory dirname)))
-      (unless (equal dir file)
-        dir))))
-
 ;;;;;; By `citre-tags-file-alist'
 
 (defun citre--find-tags-by-tags-file-alist (dir project alist)
@@ -330,7 +307,7 @@ root dir."
                   (and citre-tags-files
                        (citre--find-tags-in-dir current-dir))))
         (unless tagsfile
-          (setq current-dir (citre--up-directory current-dir))))
+          (setq current-dir (citre-directory-of current-dir))))
       (when tagsfile
         (setq tagsfile (file-truename tagsfile))
         (puthash tagsfile current-dir

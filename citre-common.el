@@ -253,6 +253,16 @@ the buffer being widened."
          (unless buf-opened
            (kill-buffer buf))))))
 
+(defun citre-directory-of (file)
+  "Return the directory that contains FILE.
+FILE can be a file or directory.
+
+If FILE is already the root directory, return nil."
+  (let* ((dirname (directory-file-name file))
+         (dir (file-name-directory dirname)))
+    (unless (equal dir file)
+      dir)))
+
 ;;;; Visual
 
 (defun citre-recenter-and-blink ()
