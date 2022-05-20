@@ -449,10 +449,12 @@ STR is a candidate in a capf session.  See the implementation of
           ;; Make sure we get a non-nil collection first, then setup the cache,
           ;; since the calculation can be interrupted by user input, and we get
           ;; nil, which aren't the actual completions.
-          (when-let ((citre-stop-process-on-input t)
-                     (completions
-                      (citre-get-completions
-                       symbol nil citre-capf-substr-completion))
+          (when-let ((completions
+                      (pcase (while-no-input
+                               (citre-get-completions
+                                symbol nil citre-capf-substr-completion))
+                        ('t nil)
+                        (val val)))
                      (collection
                       (pcase (while-no-input
                                (citre-capf--make-collection completions))

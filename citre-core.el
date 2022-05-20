@@ -231,7 +231,6 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
                     ('prefix "p")
                     (_ (error "Unexpected value of MATCH")))
                   (if case-fold "i" "")))
-         (output-buf (get-buffer-create " *citre-readtags*"))
          (tagsfile (substring-no-properties tagsfile))
          (name (when name (substring-no-properties name)))
          (filter (citre-core--strip-text-property-in-list filter))
@@ -254,7 +253,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
           (push "-l" cmd)
         (push "-" cmd)
         (push name cmd)))
-    (citre-get-output-lines (nreverse cmd) output-buf 'get-lines)))
+    (citre-get-output-lines (nreverse cmd))))
 
 ;;;;; Parse tagline
 
