@@ -152,8 +152,7 @@ message of global) start from START-FILE."
                            cmd))
     (setq cmd (append (nreverse cmd) citre-global--find-references-args
                       (list "--" name)))
-    (citre-get-output-lines cmd (get-buffer-create " *citre-global*")
-                            'get-lines)))
+    (citre-get-output-lines cmd)))
 
 (defun citre-global--read-path (path)
   "Translate escaped sequences in PATH.

@@ -273,97 +273,236 @@ This is suitable to run after jumping to a location."
 
 ;;;; Process
 
-(defvar citre-stop-process-on-input nil
-  "Non-nil allows user input to stop the process in `citre-get-output-lines'.
-Let-bind this to non-nil for situations like popup completions to
-make a responsive UI.")
+(cl-defstruct (citre-process
+               (:constructor nil)
+               (:constructor
+                citre-process-create)
+               (:copier nil))
+  "Helper data structure for async processes.
+Use `citre-make-async-process' to create an instance.  This does
+not fully cover Emacs async process functionalities and is for
+Citre's internal use only."
+  (proc
+   nil
+   :documentation
+   "The process object."
+   :type "process")
+  (callback
+   nil
+   :documentation
+   "The callback function.
+See `citre-make-async-process' for details."
+   :type "function")
+  (stderr-buffer
+   nil
+   :documentation
+   "Stderr buffer."
+   :type "buffer")
+  (remote-p
+   nil
+   :documentation
+   "Whether the process is a remote one."
+   :type "boolean")
+  (-stdout-str
+   ""
+   :documentation
+   "Internal variable for storing a part of stdout output."
+   :type "string"))
 
-(defun citre-get-output-lines (cmd buffer &optional get-lines)
-  "Run CMD and write its output to BUFFER.
-CMD is a list of the program name and its arguments.
+;; NOTE: In Emacs 28 we could use INHIBIT-BUFFER-HOOKS argument in
+;; `get-buffer-create' so we don't need this.
+(defun citre-kill-process-buffer (buffer)
+  "Delete the process in BUFFER and kill BUFFER.
+This doesn't run `kill-buffer-hook' and
+`kill-buffer-query-functions' so it should be faster."
+  (let ((kill-buffer-hook nil)
+        (kill-buffer-query-functions nil))
+    (when-let ((proc (get-buffer-process buffer)))
+      (delete-process proc))
+    (kill-buffer buffer)))
 
-This will return when the process is finished, and local quit is
-allowed to terminate the process.
+(defun citre-destruct-process (citre-proc)
+  "Destruct citre-process CITRE-PROC.
+This means terminating the process if it's running, and cleaning
+temporary buffers and maybe other resources."
+  (let ((proc (citre-process-proc citre-proc)))
+    ;; Based on my experiment reading a large tags file using readtags,
+    ;; `interrupt-process' doesn't work reliably on Windows, while sighup seems
+    ;; does.
+    (when (process-live-p proc)
+      (if (and (eq system-type 'windows-nt)
+               (not (citre-process-remote-p citre-proc)))
+          (signal-process proc 'sighup)
+        (interrupt-process proc))))
+  (let ((stderr-buffer (citre-process-stderr-buffer citre-proc)))
+    (when (buffer-live-p stderr-buffer)
+      (citre-kill-process-buffer stderr-buffer))))
 
-BUFFER is cleaned first.
+(defun citre-make-async-process (cmd callback &optional name)
+  "Run CMD in an async process.
+A `citre-process' instance is returned.
 
-When GET-LINES is non-nil, return the output lines in a list.
+The process is killed when its status changes, so this function
+is not suited for process that needs to be
+stopped/continued/connected, etc.  The process is assumed to just
+run, and then exit or be terminated by a signal.
 
-When the process exits abnormally or run into abnormal status,
-this signals an error."
-  (let* ((name (car cmd))
-         inhibit-message proc exit-msg)
-    (with-current-buffer buffer
-      (erase-buffer))
-    ;; Suppress TRAMP messages
-    (when (file-remote-p default-directory)
-      (setq inhibit-message t))
-    ;; We allow keyboard quit when waiting for the process to finish, by
-    ;; `with-local-quit'.  This line is to make sure the following cleanup
-    ;; can't be breaked by user input, especially quickly swapping the sentinel
-    ;; function, see comments later.
-    (let ((inhibit-quit t))
-      ;; Credit: This technique is developed from
-      ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=32986.
-      (pcase (with-local-quit
-               (catch 'citre-done
-                 (setq proc
-                       (make-process
-                        :name name
-                        :buffer buffer
-                        :command cmd
-                        :connection-type 'pipe
-                        ;; NOTE: Using a buffer or pipe for :stderr has caused
-                        ;; a lot of troubles on Windows.
-                        :stderr nil
-                        :sentinel (lambda (_proc _msg)
-                                    ;; While we use `sleep-for' for pending,
-                                    ;; throw/catch can stop the pending.
-                                    (throw 'citre-done t))
-                        :file-handler t))
-                 ;; Poll for the process to finish.  Once it's finished,
-                 ;; the sentinel function throws a tag which breaks the
-                 ;; sleeping.  `sleep-for' can be waken up by `C-g'.
-                 (if citre-stop-process-on-input
-                     ;; `sit-for' wakes up when input is avaliable.
-                     (while (sit-for 30))
-                   ;; `sleep-for' doesn't bother with input (except `C-g').
-                   (while (sleep-for 30)))))
-        ;; Since we throw t, this can only receive nil when `C-g' arrives.
-        ;; When this happens, we immediately replace the sentinel function, or
-        ;; it will throw to the wild and cause a "No catch for tag: citre-done"
-        ;; error.
-        ('nil (set-process-sentinel proc #'ignore)
-              (if (eq system-type 'windows-nt)
-                  ;; Based on my experiment on a large tags file,
-                  ;; `interrupt-process' doesn't work reliably on Windows,
-                  ;; while sighup seems does.  When using a remote Unix machine
-                  ;; on Windows, this may send a SIGHUP to the remote process,
-                  ;; but shouldn't be a problem since SIGHUP is not a harsh
-                  ;; signal.
-                  (signal-process proc 'sighup)
-                (interrupt-process proc))
-              nil)
-        (_ (pcase (process-status proc)
-             ('exit
-              (pcase (process-exit-status proc)
-                (0 nil)
-                (s (setq exit-msg (format "%s exits %s\n" name s)))))
-             (s (setq exit-msg
-                      (format "abnormal status of %s: %s\n" name s))))
-           (cl-symbol-macrolet
-               ((output (with-current-buffer buffer (buffer-string)))
-                (output-list (split-string output "\n" t))
-                (output-list-while-no-input
-                 (pcase (while-no-input output-list) ('t nil) (val val))))
-             (if exit-msg
-                 (error (concat exit-msg output))
-               (when get-lines
-                 ;; Allow user input to stop the post-processing part as it can
-                 ;; also take some time.
-                 (if citre-stop-process-on-input
-                     output-list-while-no-input
-                   output-list)))))))))
+NAME is the name of the process.  When it's nil, the first
+element in CMD is used as the name.  The name may be uniquified.
+
+CALLBACK is called when the output of the process is received, or
+when the status of it changed.  It receives 2 arguments: STATUS
+and MSG.  STATUS can be:
+
+- output: We've received a chunk from stdout of the process.  MSG
+  is this chunk, and is guaranteed to end in a newline char.
+- an integer: The process exited with STATUS.  If it's 0, MSG is
+  nil; otherwise MSG is the stderr output.
+- signal: The process is terminated by a signal.  MSG is nil.
+- other status: See `process-status' for details.  This is the
+  abnormal case as we assume the process is either running,
+  exited or terminated by a signal.
+
+There's no guarantee that `output' status doesn't occur after the
+process exits or be terminated as the output is buffered.  Refer
+to `citre-get-output-lines' for how to deal with it if it matters
+for your callback function."
+  (let* ((name (or name (car cmd)))
+         (stderr-buffer (generate-new-buffer
+                         (concat " *" name "-stderr*")))
+         (remote-p (when (file-remote-p default-directory) t))
+         (proc-data (citre-process-create
+                     :callback callback
+                     :stderr-buffer stderr-buffer
+                     :remote-p remote-p))
+         (inhibit-message remote-p)
+         (proc
+          (make-process
+           :name name
+           :buffer nil
+           :command cmd
+           :connection-type 'pipe
+           :stderr stderr-buffer
+           :file-handler t
+           :filter
+           (lambda (_proc str)
+             (let* ((chunk-end
+                     ;; Find last newline char.
+                     (pcase (string-match (rx "\n" (* (not (any "\n")))
+                                              string-end)
+                                          str)
+                       ((and i (guard i)) (1+ i))
+                       ('nil nil))))
+               (cl-symbol-macrolet ((stdout-cache
+                                     (citre-process--stdout-str proc-data)))
+                 (if chunk-end
+                     (progn
+                       (funcall (citre-process-callback proc-data)
+                                'output (concat stdout-cache
+                                                (substring str 0 chunk-end)))
+                       (setf stdout-cache (substring str chunk-end)))
+                   (setf stdout-cache (concat stdout-cache str))))))
+           :sentinel
+           (lambda (proc _msg)
+             (let ((stderr-buffer (citre-process-stderr-buffer proc-data))
+                   (callback (citre-process-callback proc-data)))
+               (unwind-protect
+                   (pcase (process-status proc)
+                     ('exit
+                      (pcase (process-exit-status proc)
+                        (0 (funcall callback 0 nil))
+                        (s (if (buffer-live-p stderr-buffer)
+                               (funcall callback s
+                                        (with-current-buffer stderr-buffer
+                                          (buffer-string)))
+                             ""))))
+                     (s (funcall callback s nil)))
+                 (when (buffer-live-p stderr-buffer)
+                   (citre-kill-process-buffer stderr-buffer)))))))
+         inhibit-message)
+    (setf (citre-process-proc proc-data) proc)
+    proc-data))
+
+;; This is a synchronous function, but we use async process in it internally,
+;; rather than using the synchronous `call-process', is quitting (pressing
+;; `C-g') during `call-process' tries to terminate the process using SIGINT,
+;; and only when the process doesn't end immediately, and quitting happens
+;; again, it uses SIGKILL.  This may cause lagging for popup completion.
+;;
+;; The detailed explanation is: The completion UI may wrap this function in
+;; `while-no-input' for not blocking the UI, which sends a quit signal when
+;; user input arrives, which triggers SIGINT or SIGKILL.  But SIGINT may not
+;; kill the process immediately, which freezes the UI.  This is the case when
+;; reading a large tags file using readtags in Windows.
+;;
+;; Citre before (and including) commit "093722a: ctags, fix: wrong usage of
+;; read-file-name" uses a different trick which works well for me,
+;; unfortunately Windows users often report bugs related to processes.
+(defun citre-get-output-lines (cmd)
+  "Run CMD and return its output in a list of lines.
+Keyboard quit is allowed to terminate the process.  When the
+process exits abnormally or run into abnormal status, an error is
+signaled."
+  (let* ((result nil)
+         (err-msg nil)
+         (finished nil)
+         (success nil)
+         (callback
+          (lambda (status msg)
+            (pcase status
+              ('output (setq result
+                             (nconc result (split-string msg "\n" t))))
+              (0 (setq success t))
+              ((and s (pred integerp))
+               (setq err-msg (format "Process %s exits %s:\n%s"
+                                     (car cmd) s msg)))
+              ('signal nil)
+              (s (setq err-msg (format "Abnormal status of process %s:\n%s"
+                                       (car cmd) s))))
+            (unless (eq status 'output)
+              (setq finished t))))
+         (proc-data (citre-make-async-process cmd callback))
+         (proc (citre-process-proc proc-data)))
+    (unwind-protect
+        ;; We need to poll the process in a non-blocking way (i.e., allow
+        ;; quitting).  In order to understand this, we need to keep in mind 2
+        ;; facts about `accept-process-output':
+        ;;
+        ;; 1. user input could not be processed during `accept-process-output'
+        ;;    (so it blocks, see
+        ;;    https://debbugs.gnu.org/cgi/bugreport.cgi?bug=32986).
+        ;;
+        ;; 2. When it accepts output from a certain process, it waits till the
+        ;;    process outputs something or finishes.  Try:
+        ;;
+        ;;    ;; This blocks
+        ;;    (let ((proc (make-process :name "test" :command '("sleep" "1"))))
+        ;;      (accept-process-output proc))
+        ;;
+        ;;    ;; This doesn't block as `accept-process-output' returns quickly
+        ;;    ;; and keyboard input is handled in between calls to
+        ;;    ;; `accept-process-output'.
+        ;;    (let ((proc (make-process :name "test" :command '("sleep" "1"))))
+        ;;      (accept-process-output))
+        (progn
+          ;; Wait for the process to finish.  This trick is borrowed from
+          ;; emacs-aio (https://github.com/skeeto/emacs-aio).  This doesn't
+          ;; block.
+          (while (not finished) (accept-process-output))
+          ;; The process is finished, but there may still be buffered output
+          ;; that's pending, so we `accept-process-output' from the process,
+          ;; and the related stderr pipe process.  This blocks, but doesn't
+          ;; cause a problem, as the process is finished, and the remaining
+          ;; data should be consumed rather quickly.  No need to wait for the
+          ;; stderr pipe process as the error message is already set when the
+          ;; process exits, and in practice this lags popup completion.
+          (when success
+            (while (accept-process-output proc)))
+          (cond
+           (success result)
+           (err-msg (error err-msg))
+           (t nil)))
+      (citre-destruct-process proc-data))))
 
 (provide 'citre-common)
 
