@@ -432,8 +432,7 @@ STR is a candidate in a capf session.  See the implementation of
       (let* ((cache citre-capf--cache)
              (file (buffer-file-name))
              (bounds (citre-get-property 'bounds symbol)))
-        (if (and citre-capf-optimize-for-popup
-                 (equal (plist-get cache :file) file)
+        (if (and (equal (plist-get cache :file) file)
                  (string-prefix-p (plist-get cache :symbol) symbol)
                  ;; We also need to make sure we are in the process of
                  ;; completing the same whole symbol, since same symbol in
