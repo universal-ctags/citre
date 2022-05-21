@@ -319,6 +319,18 @@ root dir."
           (setq citre--tags-file tagsfile))
         tagsfile))))
 
+(defun citre-read-tags-file-name ()
+  "Prompt the user for an existing file.
+This should be used for selecting a tags file.  When the current
+buffer has a related tags file, it's used as the initial input."
+  (let* ((current-tags-file (citre-tags-file-path))
+         (dir (when current-tags-file
+                (file-name-directory current-tags-file)))
+         (initial (when current-tags-file
+                    (file-name-nondirectory
+                     current-tags-file))))
+    (read-file-name "Tags file: " dir nil t initial)))
+
 (defun citre-clear-tags-file-cache ()
   "Clear the cache of buffer -> tagsfile.
 Use this when a new tags file is created."

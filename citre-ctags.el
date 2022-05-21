@@ -441,8 +441,8 @@ When SYNC is non-nil, update TAGSFILE synchronously.
 Return t if the ctags process starts successfully (when updating
 asynchronously), or the updating is finished (when updating
 synchronously).  Otherwise return nil."
-  (when-let* ((tagsfile (or tagsfile (read-file-name "Tags file: "
-                                                     (citre-tags-file-path))))
+  (when-let* ((tagsfile
+               (or tagsfile (citre-read-tags-file-name)))
               (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile))
               (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
               (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
@@ -600,8 +600,8 @@ user to edit one and save it to TAGSFILE.
 When SYNC is non-nil, update TAGSFILE synchronously if it
 contains a recipe."
   (interactive)
-  (setq tagsfile (or tagsfile (read-file-name "Tags file: "
-                                              (citre-tags-file-path))))
+  (setq tagsfile
+        (or tagsfile (citre-read-tags-file-name)))
   (or (citre-update-updatable-tags-file tagsfile sync)
       (when (y-or-n-p (format "%s doesn't contain recipe for updating.  \
 Edit its recipe? " tagsfile))
