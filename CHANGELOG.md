@@ -1,10 +1,19 @@
-### 0.2.x (unreleased)
+### 0.2.1 (released 2022-05-23)
 
 - Improvements
 
   - `citre-global`: references are sorted by nearness. See the `--nearness`
     option in global for details.
   - New user option: `citre-gtags-args`.
+  - Basic asynchronous infrastructure is added for future features. The current
+    synchronous process API is also rebuilt on it, making it less hachy and
+    more robust.
+  - Minor improvements of C language support.
+  - Other Minor improvements.
+
+- Fixes
+
+  - Various bugfixes
 
 ## 0.2 (released 2021-09-27)
 
