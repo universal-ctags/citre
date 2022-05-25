@@ -46,7 +46,7 @@
 
 (require 'citre-basic-tools)
 (require 'citre-ctags)
-(require 'citre-peek)
+(require 'citre-tags)
 
 (provide 'citre)
 

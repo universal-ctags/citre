@@ -140,6 +140,17 @@
 (require 'cl-lib)
 (require 'rx)
 
+;; Suppress compiler warning
+
+(eval-when-compile (require 'xref))
+
+;; We use these functions only in xref buffer, and they will be avaliable at
+;; that time.
+(declare-function xref--item-at-point "xref" ())
+(declare-function xref-item-location "xref" (arg &rest args))
+(declare-function xref-location-group "xref" (location))
+(declare-function xref-location-line "xref" (location))
+
 ;;;; User Options
 
 (defcustom citre-tag-pattern-search-limit 50000
@@ -482,6 +493,29 @@ This returns a valid `pattern' field of a tag."
                     str
                     (if to-end "$" "")))
   (setq str (concat "/" str "/;\"")))
+
+(defun citre-make-tag-of-current-location (name)
+  "Make a tag of the current line, with the name field being NAME."
+  (let* ((line-content (string-trim
+                        (buffer-substring-no-properties
+                         (line-beginning-position)
+                         (line-end-position))))
+         (pat (citre-create-tag-search-pattern line-content)))
+    (citre-make-tag 'name name
+                    'ext-abspath (buffer-file-name)
+                    'pattern pat
+                    'line (number-to-string (line-number-at-pos)))))
+
+(defun citre-make-tag-of-current-xref-item (name)
+  "Make a tag for current item in xref buffer.
+The name field is set to NAME."
+  (when-let* ((item (xref--item-at-point))
+              (location (xref-item-location item))
+              (file (xref-location-group location))
+              (line (xref-location-line location)))
+    (citre-make-tag 'name name
+                    'ext-abspath (expand-file-name file)
+                    'line (number-to-string line))))
 
 ;;;;; Helpers for getting information from a tag
 
