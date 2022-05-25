@@ -50,6 +50,7 @@
 
 (require 'citre-basic-tools)
 (require 'citre-peek)
+(require 'citre-ui-jump)
 (require 'citre-util)
 
 (defcustom citre-gtags-program nil
@@ -291,14 +292,12 @@ See *citre-global-update* buffer" s))))
   "Jump to the reference of the symbol at point.
 This uses the `citre-jump' UI."
   (interactive)
-  (let* ((marker (point-marker))
-         (symbol (citre-get-symbol))
+  (let* ((symbol (citre-get-symbol))
          (references
-          (citre-global-get-references symbol))
-         (root (funcall citre-project-root-function)))
+          (citre-global-get-references symbol)))
     (when (null references)
       (user-error "Can't find references for %s" symbol))
-    (citre-jump-show symbol references marker root)))
+    (citre-jump-show references)))
 
 ;;;; `citre-peek' equivalent
 

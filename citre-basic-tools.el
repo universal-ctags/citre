@@ -43,6 +43,7 @@
 ;;;; Libraries
 
 (require 'citre-ctags)
+(require 'citre-ui-jump)
 (require 'citre-util)
 (require 'ring)
 (require 'subr-x)
@@ -77,26 +78,6 @@
 ;;;###autoload
 (put 'citre-enable-imenu-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-imenu-integration)
-
-;;;;; Options: `citre-jump' related
-
-(defcustom citre-jump-select-definition-function
-  #'citre-jump-completing-read
-  "The function for the user to select a definition from a list.
-It receives 2 arguments:
-
-- A list of one or more strings to show the definitions.  The
-  function should let the user choose one in it.  The list is
-  guaranteed to have one or more elements.  When there are only
-  one element, the function can decide to let the user confirm,
-  or return it directly.
-- A string of the symbol name that's interested in.  The function
-  can show it to the user.
-
-See `citre-jump-completing-read' for an example of
-implementation."
-  :type 'function
-  :group 'citre)
 
 ;;;;; Options: capf related
 
@@ -299,52 +280,6 @@ simple tag name matching.  This function is for it."
 
 ;;;; Tool: `citre-jump'
 
-;;;;; Internals
-
-(defvar citre-jump--marker-ring (make-ring 50)
-  "The marker ring used by `citre-jump'.")
-
-(defun citre-jump-completing-read (definitions symbol)
-  "Select an element in DEFINITIONS, with SYMBOL as a prompt.
-This uses the `completing-read' interface.  See
-`citre-jump-select-definition-function' for the use of this function."
-  (pcase (length definitions)
-    (1 (car definitions))
-    (_ (let ((collection
-              (lambda (str pred action)
-                (if (eq action 'metadata)
-                    '(metadata
-                      (category . citre-jump)
-                      (cycle-sort-function . identity)
-                      (display-sort-function . identity))
-                  (complete-with-action action definitions str pred)))))
-         (completing-read (format "%s: " symbol) collection nil t)))))
-
-;;;;; API
-
-(defun citre-jump-show (symbol tags &optional marker root)
-  "Show TAGS as the definitions of SYMBOL using `citre-jump' UI.
-SYMBOL is a string, TAGS is a list of tags.
-
-When MARKER is non-nil, push that into the history so we can go
-back to it using `citre-jump-back'.  When ROOT is non-nil, show
-paths relative to ROOT."
-  (let* ((loc-alist
-          (mapcar (lambda (tag)
-                    (cons (citre-make-tag-str
-                           tag nil
-                           '(annotation)
-                           `(location :suffix ":" :root ,root)
-                           '(content :ensure t))
-                          tag))
-                  tags))
-         (locations (mapcar #'car loc-alist)))
-    (citre-goto-tag (alist-get
-                     (funcall citre-jump-select-definition-function
-                              locations symbol)
-                     loc-alist nil nil #'equal))
-    (when marker (ring-insert citre-jump--marker-ring marker))))
-
 ;;;;; Commands
 
 ;;;###autoload
@@ -357,29 +292,14 @@ When there's multiple definitions, it lets you pick one using the
   (let* ((marker (point-marker))
          (symbol (citre-get-symbol))
          (definitions
-           (citre-get-definitions-maybe-update-tags-file symbol))
-         (root (funcall citre-project-root-function)))
+           (citre-get-definitions-maybe-update-tags-file symbol)))
     (when (null definitions)
       (user-error "Can't find definition for %s" symbol))
-    (citre-jump-show symbol definitions marker root)
+    (citre-jump-show definitions)
     (unless (citre-tags-file-path)
       (setq citre--tags-file
             (with-current-buffer (marker-buffer marker)
               (citre-tags-file-path))))))
-
-(defun citre-jump-back ()
-  "Go back to the position before last `citre-jump'."
-  (interactive)
-  (let ((ring citre-jump--marker-ring))
-    (when (ring-empty-p ring)
-      (user-error "No more previous history"))
-    (let ((marker (ring-remove ring 0)))
-      (switch-to-buffer
-       (or (marker-buffer marker)
-           (user-error "The previous buffer has been deleted")))
-      (goto-char (marker-position marker))
-      (set-marker marker nil)
-      (run-hooks 'citre-after-jump-hook))))
 
 ;;;; Tool: Capf integration
 
