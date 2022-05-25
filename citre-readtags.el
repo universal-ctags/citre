@@ -40,8 +40,8 @@
 
 ;;;; Libraries
 
-(require 'citre-common-basic)
 (require 'citre-common-tag)
+(require 'citre-common-util)
 (require 'citre-readtags-tables)
 (require 'cl-lib)
 (require 'subr-x)

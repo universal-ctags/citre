@@ -1,4 +1,4 @@
-;;; citre-common-basic.el --- Common functions and utilities -*- lexical-binding: t -*-
+;;; citre-common-util.el --- Common functions and utilities -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Hao Wang
 
@@ -504,7 +504,7 @@ signaled."
            (t nil)))
       (citre-destruct-process proc-data))))
 
-(provide 'citre-common-basic)
+(provide 'citre-common-util)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -514,4 +514,4 @@ signaled."
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre-common-basic.el ends here
+;;; citre-common-util.el ends here
