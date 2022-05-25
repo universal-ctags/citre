@@ -1,4 +1,4 @@
-;;; citre-core-tables.el --- Lookup tables for citre-core -*- lexical-binding: t -*-
+;;; citre-readtags-tables.el --- Lookup tables for citre-readtags -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2020 Hao Wang
 
@@ -36,178 +36,9 @@
 ;; variable declarations in each section, run M-x occur with the
 ;; following query: ^;;;;* \|^(
 
-;;;; extension -> language
-
-(defvar citre-core--extension-lang-table
-  #s(hash-table
-     test equal
-     data
-     ("inp" "Abaqus"
-      "abc" "Abc"
-      "ada" "Ada" "adb" "Ada" "ads" "Ada"
-      "ant" "Ant"
-      "asc" "Asciidoc" "adoc" "Asciidoc" "asciidoc" "Asciidoc"
-      "asm" "Asm" "s" "Asm"
-      "asa" "Asp" "asp" "Asp"
-      "ac" "Autoconf" "in" "Autoconf"
-      "au3" "AutoIt"
-      "am" "Automake"
-      "awk" "Awk" "gawk" "Awk" "mawk" "Awk"
-      "bas" "Basic" "bi" "Basic" "bb" "Basic" "pb" "Basic"
-      "bet" "BETA"
-      "bib" "BibTeX"
-      "clj" "Clojure" "cljs" "Clojure" "cljc" "Clojure"
-      "cmake" "CMake" "txt" "CMake"
-      "c" "C"
-      "h" "C++" "c++" "C++" "h++" "C++"
-      "cc" "C++" "hh" "C++" "cp" "C++" "hp" "C++"
-      "cpp" "C++" "hpp" "C++" "tpp" "C++" "cxx" "C++" "hxx" "C++" "inl" "C++"
-      "css" "CSS"
-      "cs" "C#"
-      "ctags" "Ctags"
-      "cbl" "Cobol" "cob" "Cobol"
-      "cu" "CUDA" "cuh" "CUDA"
-      "d" "D" "di" "D"
-      "diff" "Diff" "patch" "Diff"
-      "dtd" "DTD" "mod" "DTD"
-      "dts" "DTS" "dtsi" "DTS"
-      "bat" "DosBatch" "cmd" "DosBatch"
-      "e" "Eiffel"
-      "ex" "Elixir" "exs" "Elixir"
-      "elm" "Elm"
-      "el" "EmacsLisp"
-      "erl" "Erlang" "hrl" "Erlang"
-      "fal" "Falcon" "ftd" "Falcon"
-      "as" "Flex" "mxml" "Flex"
-      "f" "Fortran" "for" "Fortran" "ftn" "Fortran"
-      "f77" "Fortran" "f90" "Fortran" "f95" "Fortran"
-      "f03" "Fortran" "f08" "Fortran" "f15" "Fortran"
-      "fy" "Fypp"
-      "gdbinit" "Gdbinit" "gdb" "Gdbinit"
-      "go" "Go"
-      "hx" "Haxe"
-      "hs" "Haskell"
-      "html" "HTML" "htm" "HTML"
-      "ini" "Iniconf" "conf" "Iniconf"
-      "inko" "Inko"
-      "itcl" "ITcl"
-      "java" "Java"
-      "properties" "JavaProperties"
-      "js" "JavaScript" "jsx" "JavaScript" "mjs" "JavaScript"
-      "json" "JSON"
-      "jl" "Julia"
-      "kt" "Kotlin" "kts" "Kotlin"
-      "lds" "LdScript" "ld" "LdScript" "ldi" "LdScript" "scr" "LdScript"
-      "cl" "Lisp" "clisp" "Lisp" "lisp" "Lisp" "lsp" "Lisp" "l" "Lisp"
-      "lhs" "LiterateHaskell"
-      "lua" "Lua"
-      "m4" "M4" "spt" "M4"
-      "1" "Man" "2" "Man" "3" "Man" "4" "Man" "5" "Man" "6" "Man" "7" "Man"
-      "8" "Man" "9" "Man" "3pm" "Man" "3stap" "Man" "7stap" "Man"
-      "makefile" "Make" "gnumakefile" "Make" "mak" "Make" "mk" "Make"
-      "md" "Markdown" "mkd" "Markdown" "markdown" "Markdown"
-      "m" "Matlab"
-      "myr" "Myrddin"
-      "nsi" "NSIS" "nsh" "NSIS"
-      "mm" "ObjectiveC"
-      "ml" "OCaml" "mli" "OCaml" "aug" "OCaml"
-      "passwd" "Passwd"
-      "p" "Pascal" "pas" "Pascal"
-      "pl" "Perl" "pm" "Perl" "ph" "Perl" "plx" "Perl" "perl" "Perl"
-      "p6" "Perl6" "pm6" "Perl6" "pl6" "Perl6"
-      "php" "PHP" "php3" "PHP" "php4" "PHP" "php5" "PHP"
-      "php7" "PHP" "phtml" "PHP"
-      "pod" "Pod"
-      "ps1" "PowerShell" "psm1" "PowerShell"
-      "proto" "Protobuf"
-      "pp" "PuppetManifest"
-      "py" "Python" "pyx" "Python" "pxd" "Python" "pxi" "Python"
-      "scons" "Python" "wsgi" "Python"
-      "hx" "QemuHX"
-      "r" "R" "q" "R"
-      "rexx" "REXX" "rx" "REXX"
-      "robot" "Robot"
-      "spec" "RpmSpec"
-      "rst" "ReStructuredText" "rest" "ReStructuredText"
-      "rb" "Ruby" "ruby" "Ruby"
-      "rs" "Rust"
-      "scm" "Scheme" "sm" "Scheme" "sch" "Scheme"
-      "scheme" "Scheme" "rkt" "Scheme"
-      "scss" "SCSS"
-      "sh" "Sh" "bsh" "Sh" "bash" "Sh" "ksh" "Sh" "zsh" "Sh" "ash" "Sh"
-      "sl" "SLang"
-      "sml" "SML" "sig" "SML"
-      "sql" "SQL"
-      "service" "SystemdUnit" "socket" "SystemdUnit" "device" "SystemdUnit"
-      "mount" "SystemdUnit" "automount" "SystemdUnit" "swap" "SystemdUnit"
-      "target" "SystemdUnit" "path" "SystemdUnit" "timer" "SystemdUnit"
-      "snapshot" "SystemdUnit" "slice" "SystemdUnit"
-      "stp" "SystemTap"
-      "stpm" "SystemTap"
-      "tcl" "Tcl" "tk" "Tcl" "wish" "Tcl" "exp" "Tcl"
-      "tex" "Tex"
-      "ttcn" "TTCN" "ttcn3" "TTCN"
-      "t2t" "Txt2tags"
-      "ts" "TypeScript"
-      "vr" "Vera" "vri" "Vera" "vrh" "Vera"
-      "v" "Verilog"
-      "sv" "SystemVerilog" "svh" "SystemVerilog" "svi" "SystemVerilog"
-      "vhdl" "VHDL" "vhd" "VHDL"
-      "vimrc" "Vim" "_vimrc" "Vim" "gvimrc" "Vim" "_gvimrc" "Vim"
-      "vim" "Vim" "vba" "Vim"
-      "rc" "WindRes"
-      "y" "YACC"
-      "repo" "YumRepo"
-      "zep" "Zephir"
-      "glade" "Glade"
-      "pom" "Maven2"
-      "plist" "PlistXML"
-      "rng" "RelaxNG"
-      "svg" "SVG"
-      "xml" "XML"
-      "xsl" "XSLT" "xslt" "XSLT"
-      "yml" "Yaml"
-      "varlink" "Varlink"
-      ;; Following extensions are not in the default language map of Universal
-      ;; Ctags.
-      "eex" "Elixir"
-      "vue" "JavaScript"
-      "dpr" "Pascal" "int" "Pascal" "dfm" "Pascal"
-      "erb" "Ruby" "haml" "Ruby" "rake" "Ruby" "slim" "Ruby"
-      "tcsh" "Sh"
-      "tsx" "TypeScript"
-      ;; Following languages are not officially supported by Universal Ctags.
-      "coffee" "CoffeeScript" "litcoffee" "CoffeeScript"
-      "cr" "Crystal" "ecr" "Crystal"
-      "dart" "Dart"
-      "fs" "F#" "fsi" "F#" "fsx" "F#"
-      "dsp" "Faust" "lib" "Faust"
-      "gradle" "Groovy" "groovy" "Groovy" "jenkinsfile" "Groovy"
-      "nim" "Nim"
-      "nix" "Nix"
-      "org" "Org"
-      "scala" "Scala"
-      "swift" "Swift"
-      "vala" "Vala" "vapi" "Vala"))
-  "Hash table of file extensions and the corresponding languages.
-File extension (or the file name, if it doesn't have an
-extension) are downcased first, then used as keys in this
-table.
-
-This is for guessing the language of a tag (the `extra-lang'
-field) based on its file name when the `language' field is not
-presented.")
-
-;; NOTE: The above table is manually created, and the reason is some of the
-;; languages use the same extension, e.g., Matlab and ObjectiveC, so we have to
-;; manually pick one.  Run `ctags --list-map-extensions' and `ctags
-;; --list-map-patterns' to see the built-in map of ctags. When you find
-;; languages in the table marked as "not supported by ctags" are now supported,
-;; update them AND the following tables.
-
 ;;;; language -> extension
 
-(defvar citre-core--lang-extension-table
+(defvar citre-readtags--lang-extension-table
   #s(hash-table
      test equal
      data
@@ -442,13 +273,17 @@ presented.")
       "Varlink"
       ("varlink")))
   "Hash table of languages and their corresponding extensions.
-This is for filter tags in certain languages by their file name
-when the `language' field is not presented. See
-`citre-core-filter-lang'.")
+This is for filtering tags in certain languages by their file
+name when the `language' field is not presented. See
+`citre-readtags-filter-lang'.
 
-;; Run this snippet to generate `citre-core--lang-extension-table'.  The result
-;; will be shown in a *Pp Eval Output* buffer, and it can be directly copied
-;; into the variable definition.  Make sure to indent them!
+Currently this table is not used as we don't want to filter
+languages, see the documentation
+docs/developer-manual/design-principle.md")
+
+;; Run this snippet to generate `citre-readtags--lang-extension-table'.  The
+;; result will be shown in a *Pp Eval Output* buffer, and it can be directly
+;; copied into the variable definition.  Make sure to indent them!
 
 ;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
@@ -475,7 +310,7 @@ when the `language' field is not presented. See
 
 ;;;; language -> single-letter kind -> full-length kind
 
-(defvar citre-core--kind-name-single-to-full-table
+(defvar citre-readtags--kind-name-single-to-full-table
   #s(hash-table
      test equal
      data
@@ -1134,9 +969,10 @@ This is used for guessing the full-length kind (the
 `ext-kind-full' field) when it's not presented, and
 TAG_KIND_DESCRIPTION pseudo tags are not presented too.")
 
-;; Run this snippet to generate `citre-core--kind-name-single-to-full-table'.
-;; The result will be shown in a *Pp Eval Output* buffer, and it can be
-;; directly copied into the variable definition.  Make sure to indent them!
+;; Run this snippet to generate
+;; `citre-readtags--kind-name-single-to-full-table'.  The result will be shown
+;; in a *Pp Eval Output* buffer, and it can be directly copied into the
+;; variable definition.  Make sure to indent them!
 
 ;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
@@ -1166,7 +1002,7 @@ TAG_KIND_DESCRIPTION pseudo tags are not presented too.")
 
 ;;;; full-length kind -> single-letter kind
 
-(defvar citre-core--kind-name-full-to-single-table
+(defvar citre-readtags--kind-name-full-to-single-table
   #s(hash-table
      test equal
      data
@@ -1791,16 +1627,17 @@ TAG_KIND_DESCRIPTION pseudo tags are not presented too.")
   "Hash table of full-length kind -> single-letter kind.
 This is used for filtering the `kind' field of tags with
 single-letter kind by full-length kind.  See
-`citre-core-filter-kind'.")
+`citre-readtags-filter-kind'.")
 
 ;; NOTE: For now there's only one single-letter kind for a full-length kind,
 ;; which is good, but we still use a "string -> list of strings" structure in
 ;; the above table, in case that some day, the same (full-length) kind in 2
 ;; languages have different single-letter versions.
 
-;; Run this snippet to generate `citre-core--kind-name-full-to-single-table'.
-;; The result will be shown in a *Pp Eval Output* buffer, and it can be
-;; directly copied into the variable definition.  Make sure to indent them!
+;; Run this snippet to generate
+;; `citre-readtags--kind-name-full-to-single-table'.  The result will be shown
+;; in a *Pp Eval Output* buffer, and it can be directly copied into the
+;; variable definition.  Make sure to indent them!
 
 ;; (let* ((ctags-program (or citre-ctags-program "ctags"))
 ;;        (output (shell-command-to-string
@@ -1828,7 +1665,7 @@ single-letter kind by full-length kind.  See
 ;;   (indent-region (point-min) (point-max))
 ;;   (goto-char (point-min)))
 
-(provide 'citre-core-tables)
+(provide 'citre-readtags-tables)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -1838,4 +1675,4 @@ single-letter kind by full-length kind.  See
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre-core-tables.el ends here
+;;; citre-readtags-tables.el ends here

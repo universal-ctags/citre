@@ -6,9 +6,10 @@
 . "./scripts/common.sh"
 ITEM="test"
 
-PRELOAD="citre-common.el citre-tag.el citre-core-tables.el citre-core.el
-citre-util.el citre-ctags.el citre-basic-tools.el citre-peek.el citre-global.el
-citre-lang-c.el citre-lang-fileref.el citre.el citre-config.el"
+PRELOAD="citre-common.el citre-tag.el citre-readtags-tables.el
+citre-readtags.el citre-util.el citre-ctags.el citre-basic-tools.el
+citre-peek.el citre-global.el citre-lang-c.el citre-lang-fileref.el citre.el
+citre-config.el"
 
 d=$(pwd)
 preload_options=

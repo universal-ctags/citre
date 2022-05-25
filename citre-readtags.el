@@ -1,4 +1,4 @@
-;;; citre-core.el --- A readtags abstraction layer -*- lexical-binding: t -*-
+;;; citre-readtags.el --- A readtags abstraction layer -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2020 Hao Wang
 
@@ -41,19 +41,12 @@
 ;;;; Libraries
 
 (require 'citre-common)
-(require 'citre-core-tables)
 (require 'citre-tag)
+(require 'citre-readtags-tables)
 (require 'cl-lib)
 (require 'subr-x)
 
 ;;;; User options
-
-(defgroup citre nil
-  "Code editing & reading solution based on Universal Ctags."
-  :group 'convenience
-  :group 'tools
-  :prefix "citre-"
-  :link '(url-link "https://github.com/universal-ctags/citre"))
 
 (defcustom citre-readtags-program nil
   "The name or path of the readtags program.
@@ -61,25 +54,26 @@ Set this if readtags is not in your PATH, or its name is not
 \"readtags\".
 
 Citre requires the readtags program provided by Universal Ctags."
-  :type '(set file (const nil)))
+  :type '(set file (const nil))
+  :group 'citre)
 
 ;;;; Internals: Basic Helpers
 
-(defun citre-core--string-non-empty-p (string)
+(defun citre-readtags--string-non-empty-p (string)
   "Test if STRING is an non-empty string."
   (and (stringp string)
        (not (string-empty-p string))))
 
-(defun citre-core--strip-text-property-in-list (object)
+(defun citre-readtags--strip-text-property-in-list (object)
   "Recursively traverse OBJECT and strip properties in strings."
   (pcase object
     ((and (pred stringp) val) (substring-no-properties val))
     ((and (pred consp) val)
-     (cons (citre-core--strip-text-property-in-list (car val))
-           (citre-core--strip-text-property-in-list (cdr val))))
+     (cons (citre-readtags--strip-text-property-in-list (car val))
+           (citre-readtags--strip-text-property-in-list (cdr val))))
     (val val)))
 
-(defmacro citre-core--error-on-arg (arg test)
+(defmacro citre-readtags--error-on-arg (arg test)
   "Test ARG using TEST, and throw an error if it fails.
 When calling the APIs, some arguments are likely to be calculated
 based on information fetched from the environment, and they may
@@ -92,7 +86,7 @@ being nil.  This should be used to test them."
 
 ;;;; Internals: Additional information handling
 
-(defvar citre-core--tags-file-info-alist nil
+(defvar citre-readtags--tags-file-info-alist nil
   "Alist for storing additional info about tags files.
 Since tags files can offer ambiguous info, we use this variable
 to store additional info to ascertain them.
@@ -118,12 +112,13 @@ Info fields and their corresponding values are:
   *local* system type.
 - `kind-table': A hash table for getting full-length kinds from
   single-letter kinds, like
-  `citre-core--kind-name-single-to-full-table', or nil if the
+  `citre-readtags--kind-name-single-to-full-table', or nil if the
   TAG_KIND_DESCRIPTION pseudo tags are not presented.")
 
-(defvar citre-core--tags-file-cwd-guess-table (make-hash-table :test #'equal)
+(defvar citre-readtags--tags-file-cwd-guess-table
+  (make-hash-table :test #'equal)
   "A hash table for guessed cwd for tags files.
-This is used in `citre-core--get-dir'.  See its docstring for
+This is used in `citre-readtags--get-dir'.  See its docstring for
 details.  This is intended for upper components to set since it's
 easier for them to infer the cwd.
 
@@ -131,27 +126,27 @@ Its keys are canonical paths of tags files, values are their
 cwds (absolute path, can be remote or local when the tags file is
 a remote file).")
 
-(defvar citre-core--dont-prompt-for-cwd nil
-  "In `citre-core--get-dir', don't ask the user for the cwd.
+(defvar citre-readtags--dont-prompt-for-cwd nil
+  "In `citre-readtags--get-dir', don't ask the user for the cwd.
 When non-nil, it uses the directory of the tags file as the cwd
 instead.  This is for running unit tests only, as tags files in
 them don't have TAG_PROC_CWD ptag.")
 
-(defun citre-core--get-dir-os (ptag-cwd tagsfile)
+(defun citre-readtags--get-dir-os (ptag-cwd tagsfile)
   "Get the `dir' and `os' info of TAGSFILE.
 PTAG-CWD is the value of TAG_PROC_CWD pseudo tag, and is used
 when non-nil.  If it's nil, we have fallbacks:
 
 - Get the guessed cwd from
-  `citre-core--tags-file-cwd-guess-table'.  This table is
+  `citre-readtags--tags-file-cwd-guess-table'.  This table is
   intended fo upper components to set because they better
   understanding of the project structure.
 - Prompt the user to choose a dir.
 
 This returns a cons pair like (dir . os)."
   (let* ((dir (or ptag-cwd
-                  (gethash tagsfile citre-core--tags-file-cwd-guess-table)
-                  (if citre-core--dont-prompt-for-cwd
+                  (gethash tagsfile citre-readtags--tags-file-cwd-guess-table)
+                  (if citre-readtags--dont-prompt-for-cwd
                       (file-name-directory tagsfile)
                     (read-directory-name
                      (format "Root dir of tags file %s: " tagsfile)))))
@@ -172,7 +167,7 @@ This returns a cons pair like (dir . os)."
        (?/ 'unix)
        (_ 'nt)))))
 
-(defun citre-core--get-kind-table (kind-descs)
+(defun citre-readtags--get-kind-table (kind-descs)
   "Get the `kind-table' info.
 KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
   (when kind-descs
@@ -188,28 +183,28 @@ KIND-DESCS is the values of TAG_KIND_DESCRIPTION pseudo tags."
           (puthash kind kind-full (gethash lang table))))
       table)))
 
-(defun citre-core--fetch-tags-file-info (tagsfile)
-  "Write the additional info of TAGSFILE to `citre--tags-file-info-alist'.
+(defun citre-readtags--fetch-tags-file-info (tagsfile)
+  "Write the additional info of TAGSFILE to `citre-readtags--tags-file-info-alist'.
 TAGSFILE is the canonical path of the tags file.  The info is
 returned."
   (let* ((recent-mod (file-attribute-modification-time
                       (file-attributes tagsfile)))
          (info (make-hash-table :test #'eq))
-         (ptag-cwd (nth 1 (car (citre-core-get-pseudo-tags
+         (ptag-cwd (nth 1 (car (citre-readtags-get-pseudo-tags
                                 "TAG_PROC_CWD" tagsfile))))
-         (kind-descs (citre-core-get-pseudo-tags
+         (kind-descs (citre-readtags-get-pseudo-tags
                       "TAG_KIND_DESCRIPTION" tagsfile 'prefix)))
     ;; time
     (puthash 'time recent-mod info)
     ;; remotep
     (puthash 'remotep (file-remote-p tagsfile) info)
     ;; dir
-    (pcase-let ((`(,dir . ,os) (citre-core--get-dir-os ptag-cwd tagsfile)))
+    (pcase-let ((`(,dir . ,os) (citre-readtags--get-dir-os ptag-cwd tagsfile)))
       (puthash 'dir dir info)
       (puthash 'os os info))
     ;; kind-table
     (puthash 'kind-table
-             (citre-core--get-kind-table kind-descs)
+             (citre-readtags--get-kind-table kind-descs)
              info)
     info))
 
@@ -217,10 +212,10 @@ returned."
 
 ;;;;; Get lines
 
-(defun citre-core--get-lines
+(defun citre-readtags--get-lines
     (tagsfile &optional name match case-fold filter sorter action)
   "Get lines in TAGSFILE using readtags.
-See `citre-core-get-tags' to know about NAME, MATCH, CASE-FOLD,
+See `citre-readtags-get-tags' to know about NAME, MATCH, CASE-FOLD,
 FILTER, and SORTER.  ACTION can be nil, to get regular tags, or
 any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
   (let* ((match (or match 'exact))
@@ -233,8 +228,8 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
                   (if case-fold "i" "")))
          (tagsfile (substring-no-properties tagsfile))
          (name (when name (substring-no-properties name)))
-         (filter (citre-core--strip-text-property-in-list filter))
-         (sorter (citre-core--strip-text-property-in-list sorter))
+         (filter (citre-readtags--strip-text-property-in-list filter))
+         (sorter (citre-readtags--strip-text-property-in-list sorter))
          inhibit-message
          cmd)
     ;; Program name
@@ -257,7 +252,7 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
 
 ;;;;; Parse tagline
 
-(defun citre-core--read-field-value (value)
+(defun citre-readtags--read-field-value (value)
   "Translate escaped sequences in VALUE.
 See tags(5) manpage to know about the escaped sequences.  VALUE
 should be a field value in a tags file."
@@ -287,7 +282,7 @@ should be a field value in a tags file."
         (apply #'concat (nreverse parts)))
     value))
 
-(defun citre-core--forward-pattern (line pos)
+(defun citre-readtags--forward-pattern (line pos)
   "Jump over the pattern field.
 LINE is a tagline, POS is the start position of the pattern field
 in it.  This returns its end position."
@@ -319,7 +314,7 @@ in it.  This returns its end position."
                       (match-end 0)))
          (+ 2 pos)))))
 
-(defun citre-core--lexer-forward-field-name (line length lexer)
+(defun citre-readtags--lexer-forward-field-name (line length lexer)
   "Move the lexer forward the following field name.
 LINE is a tagline.  LENGTH is its length.  LEXER is a vector like
 [POS N], where POS is the beginning position of a field, and it's
@@ -355,7 +350,7 @@ this returns nil, and the caller should stop parsing."
                     field-name))))
               (t (error "Invalid LINE")))))))))
 
-(defun citre-core--lexer-forward-field-value
+(defun citre-readtags--lexer-forward-field-value
     (line length lexer &optional parse-value)
   "Move the lexer forward the following field value.
 LINE is a tagline.  LENGTH is its length.  LEXER is a vector like
@@ -368,30 +363,31 @@ If PARSE-VALUE is non-nil, returns the field value."
         (nfield (aref lexer 1))
         tab value)
     (pcase nfield
-      (2 (setq tab (citre-core--forward-pattern line pos))
+      (2 (setq tab (citre-readtags--forward-pattern line pos))
          (when parse-value
            (setq value (substring line pos tab))))
       (_ (setq tab (or (string-match "\t" line pos)
                        length))
          (when parse-value
            (setq value
-                 (citre-core--read-field-value (substring line pos tab))))))
+                 (citre-readtags--read-field-value
+                  (substring line pos tab))))))
     (setf (aref lexer 0) (1+ tab))
     (setf (aref lexer 1) (1+ nfield))
     value))
 
-(defun citre-core--parse-line (line &optional tagsfile-info
-                                    require optional exclude
-                                    require-ext optional-ext ext-dep
-                                    parse-all-fields)
+(defun citre-readtags--parse-line (line &optional tagsfile-info
+                                        require optional exclude
+                                        require-ext optional-ext ext-dep
+                                        parse-all-fields)
   "Parse a tagline LINE.
 This returns a hash table called \"tag\" by Citre.  Its keys are
 the fields, values are their values.  It can be utilized by
-`citre-get-field'.
+`citre-get-tag-field'.
 
 Optional arguments can be used to specify the fields wanted in
 the returned tag. REQUIRE, OPTIONAL, EXCLUDE and PARSE-ALL-FIELDS
-are similar to `citre-core-get-tags', but extension fields can't
+are similar to `citre-readtags-get-tags', but extension fields can't
 appear in them.  Use these for extension fields:
 
 - REQUIRE-EXT: A list containing extension fields that must be
@@ -407,10 +403,10 @@ OPTIONAL or EXT-DEP to make sure they are captured.
 TAGSFILE-INFO is needed to offer additional information for these
 extension fields.  It is the additional info of the tags file
 containing LINE.  Such TAGSFILE-INFO should be get using
-`citre-core-tags-file-info'.
+`citre-readtags-tags-file-info'.
 
 The arguments must satisfy certain conditions, which the caller
-should take care of.  `citre-core--parse-line' doesn't check them
+should take care of.  `citre-readtags--parse-line' doesn't check them
 for the sake of performance.  Other than those mentioned above,
 we still have:
 
@@ -434,10 +430,11 @@ we still have:
          (write (lambda (field)
                   (citre-set-tag-field
                    field
-                   (citre-core--lexer-forward-field-value line len lexer t)
+                   (citre-readtags--lexer-forward-field-value line len lexer t)
                    tag))))
     (cl-block nil
-      (while (setq field (citre-core--lexer-forward-field-name line len lexer))
+      (while (setq field (citre-readtags--lexer-forward-field-name
+                          line len lexer))
         (cond
          ((memq field require)
           (funcall write field)
@@ -453,7 +450,7 @@ we still have:
              (when (and parse-all-fields (null (memq field exclude)))
                (funcall write field)
                t)
-             (citre-core--lexer-forward-field-value line len lexer nil))))
+             (citre-readtags--lexer-forward-field-value line len lexer nil))))
         (when (and (null parse-all-fields)
                    (eq require-counter require-num)
                    (eq optional-counter optional-num)
@@ -467,10 +464,10 @@ we still have:
                                          (hash-table-keys tag)))
               ", ")))
     (dolist (field require-ext)
-      (citre-core--write-ext-field tag field tagsfile-info))
+      (citre-readtags--write-ext-field tag field tagsfile-info))
     (dolist (field optional-ext)
       (ignore-errors
-        (citre-core--write-ext-field tag field tagsfile-info)))
+        (citre-readtags--write-ext-field tag field tagsfile-info)))
     (if parse-all-fields
         ;; Excluded field may be written because it's in `ext-dep'.
         (dolist (field exclude)
@@ -481,21 +478,21 @@ we still have:
 
 ;;;;; Extension fields
 
-(defvar citre-core--ext-fields-dependency-alist
+(defvar citre-readtags--ext-fields-dependency-alist
   '((ext-abspath   . (input))
     (ext-kind-full . (kind language input)))
   "Alist of extension fields and their dependencies.
 Its keys are extension fields offered by Citre, values are lists
 of (normal) fields the the extension field depends on.")
 
-(defvar citre-core--ext-fields-method-table
+(defvar citre-readtags--ext-fields-method-table
   #s(hash-table
      test eq
      data
      (ext-abspath
-      citre-core--get-ext-abspath
+      citre-readtags--get-ext-abspath
       ext-kind-full
-      citre-core--get-ext-kind-full))
+      citre-readtags--get-ext-kind-full))
   "Hash table of extension fields and the methods to get them.
 Its keys are extension fields offered by Citre, and values are
 functions that return the value of the extension field.  The
@@ -504,31 +501,31 @@ arguments of the functions are:
 - TAG: A hash table containing the fields that the extension
   field depends on.
 - TAGSFILE-INFO: The additional info of the tags file.  See
-  `citre-core--tags-file-info' to know how to make use of it.
+  `citre-readtags--tags-file-info' to know how to make use of it.
 
 If the extension field can't be calculated, the functions should
 signal an error, rather than return nil.
 
 The needed TAG and TAGSFILE-INFO are specified by
-`citre-core--ext-fields-dependency-alist'.
-`citre-core--write-ext-field' takes care to pass the needed
+`citre-readtags--ext-fields-dependency-alist'.
+`citre-readtags--write-ext-field' takes care to pass the needed
 arguments to the functions.
 
 If the function only needs TAG, consider make it an extra
-extension field (see `citre-core-extra-ext-fields-table').")
+extension field (see `citre-readtags-extra-ext-fields-table').")
 
-(defun citre-core--write-ext-field
+(defun citre-readtags--write-ext-field
     (tag field tagsfile-info)
   "Write the value of extension field FIELD to TAG.
 TAG should contain the fields that FIELD depends on.
 TAGSFILE-INFO is the additional info that FIELD depends on."
-  (if-let ((method (gethash field citre-core--ext-fields-method-table)))
+  (if-let ((method (gethash field citre-readtags--ext-fields-method-table)))
       (citre-set-tag-field field (funcall method tag tagsfile-info) tag)
     (error "Invalid FIELD")))
 
 ;;;;;; ext-abspath
 
-(defun citre-core--get-ext-abspath (tag tagsfile-info)
+(defun citre-readtags--get-ext-abspath (tag tagsfile-info)
   "Return the full path of the input file.
 This needs the `input' field to be presented in TAG, and if its
 value is a relative path, `dir' info in TAGSFILE-INFO is used.
@@ -551,7 +548,7 @@ This returns a remote path when the tagsfile is remote."
 
 ;;;;;; ext-kind-full
 
-(defun citre-core--get-ext-kind-full (tag tagsfile-info)
+(defun citre-readtags--get-ext-kind-full (tag tagsfile-info)
   "Return full-length kind name.
 This needs the `kind' field to be presented in TAG.  If the tags
 file uses full-length kind name (told by TAGSFILE-INFO), it's
@@ -560,7 +557,7 @@ returned directly.  If not, then:
 - The language is guessed first.
 - The single-letter kind is converted to full-length, based on
   the TAG_KIND_DESCRIPTION pseudo tags, or
-  `citre-core--kind-name-single-to-full-table' if it's not
+  `citre-readtags--kind-name-single-to-full-table' if it's not
   presented.
 
 If this fails, the single-letter kind is returned directly."
@@ -569,7 +566,7 @@ If this fails, the single-letter kind is returned directly."
             (single-letter-p (eq (length kind) 1))
             (lang (citre-get-tag-field 'extra-lang tag))
             (table (or (gethash 'kind-table tagsfile-info)
-                       citre-core--kind-name-single-to-full-table))
+                       citre-readtags--kind-name-single-to-full-table))
             (table (gethash lang table))
             (kind-full (gethash kind table)))
       kind-full
@@ -577,12 +574,12 @@ If this fails, the single-letter kind is returned directly."
 
 ;;;;; Get tags from tags files
 
-(cl-defun citre-core--get-tags
+(cl-defun citre-readtags--get-tags
     (tagsfile &optional name match case-fold
               &key filter sorter
               require optional exclude parse-all-fields)
   "Get tags in TAGSFILE.
-This is like `citre-core-get-tags', which actually calls this
+This is like `citre-readtags-get-tags', which actually calls this
 function internally.  The difference is this is a interface
 that's closer to actual readtags command line calls.  The
 differences are:
@@ -593,12 +590,12 @@ differences are:
   to arguments controlling the NAME action.
 - CASE-FOLD: Only controls the NAME action.
 
-Notice when calling `citre-core-get-tags' with NAME being
+Notice when calling `citre-readtags-get-tags' with NAME being
 `substr' or `regexp', it generates a filter expression to do
 that, and is merged with FILTER by a logical `and'.
 
 For SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
-`citre-core-get-tags'."
+`citre-readtags-get-tags'."
   (when (and optional exclude)
     (error "OPTIONAL and EXCLUDE can't be used together"))
   (when (cl-intersection require exclude)
@@ -608,8 +605,9 @@ For SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
   (let* ((optional (cl-set-difference optional require))
          (find-field-depends
           (lambda (field)
-            (alist-get field citre-core--ext-fields-dependency-alist)))
-         (ext-fields (mapcar #'car citre-core--ext-fields-dependency-alist))
+            (alist-get field citre-readtags--ext-fields-dependency-alist)))
+         (ext-fields (mapcar #'car
+                             citre-readtags--ext-fields-dependency-alist))
          (require-ext (cl-intersection require ext-fields))
          (optional-ext (cl-intersection optional ext-fields))
          (ext-dep (cl-delete-duplicates
@@ -625,16 +623,16 @@ For SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
                     (cl-set-difference optional ext-fields)))
          (exclude (cl-delete-duplicates exclude))
          (info (when (or require-ext optional-ext)
-                 (citre-core-tags-file-info tagsfile))))
+                 (citre-readtags-tags-file-info tagsfile))))
     (when (cl-intersection exclude ext-fields)
       (error "EXCLUDE shouldn't contain extension fields"))
     (mapcar (lambda (line)
-              (citre-core--parse-line
+              (citre-readtags--parse-line
                line info
                require optional exclude
                require-ext optional-ext ext-dep
                parse-all-fields))
-            (citre-core--get-lines
+            (citre-readtags--get-lines
              tagsfile name match case-fold
              filter sorter nil))))
 
@@ -642,13 +640,13 @@ For SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
 
 ;;;;; Tags file info
 
-(defun citre-core-tags-file-info (tagsfile)
+(defun citre-readtags-tags-file-info (tagsfile)
   "Return the additional info of tags file TAGSFILE.
 TAGSFILE is the absolute path of the tags file.  The return
-value is a valid value in `citre-core--tags-file-info-alist'.
+value is a valid value in `citre-readtags--tags-file-info-alist'.
 
 This function caches the info, and uses the cache when possible."
-  (citre-core--error-on-arg tagsfile #'stringp)
+  (citre-readtags--error-on-arg tagsfile #'stringp)
   (unless (and (file-exists-p tagsfile)
                (not (file-directory-p tagsfile)))
     (error "%s doesn't exist" tagsfile))
@@ -656,14 +654,14 @@ This function caches the info, and uses the cache when possible."
         (recent-mod (file-attribute-modification-time
                      (file-attributes tagsfile)))
         (info (alist-get tagsfile
-                         citre-core--tags-file-info-alist
+                         citre-readtags--tags-file-info-alist
                          nil nil #'equal)))
     (if (and info (equal (gethash 'time info) recent-mod))
         info
-      (let ((info (citre-core--fetch-tags-file-info tagsfile)))
+      (let ((info (citre-readtags--fetch-tags-file-info tagsfile)))
         ;; Seems `setf' in Emacs 26 doesn't return the last VAL.
         (setf (alist-get tagsfile
-                         citre-core--tags-file-info-alist
+                         citre-readtags--tags-file-info-alist
                          nil nil #'equal)
               info)
         info))))
@@ -672,7 +670,7 @@ This function caches the info, and uses the cache when possible."
 
 ;;;;;; Internals
 
-(defun citre-core--filter-regexp-builder (str1 str2 case-fold)
+(defun citre-readtags--filter-regexp-builder (str1 str2 case-fold)
   "Build filter expression that matches STR1 by STR2.
 STR1 can be a string or a symbol representing a field.  STR2 must
 be a string.  When CASE-FOLD is non-nil, do case-insensitive
@@ -686,7 +684,7 @@ matching."
                        (_ 'true)))
     ,str1))
 
-(defun citre-core--csv-contain-regexp-builder (str)
+(defun citre-readtags--csv-contain-regexp-builder (str)
   "Build a regexp that matches a CSV string that contains STR.
 STR can also be a list of strings, then the regexp matches a CSV
 string that contains any element in STR.
@@ -696,14 +694,14 @@ This is for use in readtags filter."
          (lambda (str)
            (or (stringp str)
                (and str (null (cl-position nil (mapcar #'stringp str))))))))
-    (citre-core--error-on-arg str string-or-list-of-string-p))
+    (citre-readtags--error-on-arg str string-or-list-of-string-p))
   (when (stringp str)
     (setq str (list str)))
   (concat "(^|,) ?("
-          (mapconcat #'citre-core-regexp-quote str "|")
+          (mapconcat #'citre-readtags-regexp-quote str "|")
           ")(,|$)"))
 
-(defun citre-core--filter-case-fold-string-builder (str case-fold)
+(defun citre-readtags--filter-case-fold-string-builder (str case-fold)
   "Convert STR by CASE-FOLD.
 STR can be a string or a symbol representing a field.  When
 case-fold is non-nil, its downcased version is returned.
@@ -716,15 +714,15 @@ Otherwise it's directly returned."
 
 ;;;;;; APIs
 
-(defun citre-core-regexp-quote (str)
+(defun citre-readtags-regexp-quote (str)
   "Return a regexp that matches STR in readtags filter expressions.
 Readtags uses POSIX extended regular expressions (ERE), which is
 different from regexp in Emacs."
   ;; (rx (or "(" ")" "[" "]" "{" "}" "." "*" "+" "^" "$" "|" "?" "\\"))
   (replace-regexp-in-string "[]$(-+.?[\\{|}^]" "\\\\\\&" str))
 
-(defun citre-core-filter (str1 str2 match
-                               &optional case-fold invert keep-missing)
+(defun citre-readtags-filter (str1 str2 match
+                                   &optional case-fold invert keep-missing)
   "Return a filter expression that matches STR1 and STR2.
 Both STRs can be a string, or a symbol of the field name.  STR2
 can also be a list of strings if MATCH is `csv-contain', see
@@ -766,15 +764,16 @@ are missing, otherwise only keep lines that have those fields."
           (if (memq match '(regexp csv-contain))
               (let ((str2 (if (eq match 'regexp)
                               str2
-                            (citre-core--csv-contain-regexp-builder str2))))
-                (citre-core--filter-regexp-builder str1 str2 case-fold))
+                            (citre-readtags--csv-contain-regexp-builder
+                             str2))))
+                (citre-readtags--filter-regexp-builder str1 str2 case-fold))
             (let ((symbol-or-string-p (lambda (str)
                                         (or (symbolp str) (stringp str)))))
-              (citre-core--error-on-arg str1 symbol-or-string-p)
-              (citre-core--error-on-arg str2 symbol-or-string-p))
-            (let* ((str1 (citre-core--filter-case-fold-string-builder
+              (citre-readtags--error-on-arg str1 symbol-or-string-p)
+              (citre-readtags--error-on-arg str2 symbol-or-string-p))
+            (let* ((str1 (citre-readtags--filter-case-fold-string-builder
                           str1 case-fold))
-                   (str2 (citre-core--filter-case-fold-string-builder
+                   (str2 (citre-readtags--filter-case-fold-string-builder
                           str2 case-fold)))
               `(,(intern (concat (symbol-name match) "?")) ,str1 ,str2))))
     (when invert
@@ -787,7 +786,7 @@ are missing, otherwise only keep lines that have those fields."
     (push filter final-filter)
     (nreverse final-filter)))
 
-(defun citre-core-filter-field-exist (field &optional invert)
+(defun citre-readtags-filter-field-exist (field &optional invert)
   "Return a filter expression that requires FIELD to exist.
 FIELD is a symbol of the field name.  When INVERT is non-nil,
 require FIELDS to be missing."
@@ -796,7 +795,7 @@ require FIELDS to be missing."
         `(not ,field)
       field)))
 
-(defun citre-core-filter-lang (lang)
+(defun citre-readtags-filter-lang (lang)
   "Return a filter expression that requires the language to be LANG.
 If the `language' field exists, this uses that field, otherwise
 filter based on the extension of the `input' field, which may not
@@ -804,18 +803,19 @@ be accurate.
 
 Run \"ctags --list-languages\" to see valid values of LANG.  Be
 careful about the capitalization!"
-  (let* ((ext (gethash lang citre-core--lang-extension-table)))
-    `(or ,(citre-core-filter 'language lang 'eq)
+  (let* ((ext (gethash lang citre-readtags--lang-extension-table)))
+    `(or ,(citre-readtags-filter 'language lang 'eq)
          ,(if ext
-              (citre-core-filter
+              (citre-readtags-filter
                'input
                (concat "\\.("
-                       (string-join (mapcar #'citre-core-regexp-quote ext) "|")
+                       (string-join (mapcar #'citre-readtags-regexp-quote ext)
+                                    "|")
                        ")$")
                'regexp)
             'true))))
 
-(defun citre-core-filter-kind (kind &optional ignore-missing)
+(defun citre-readtags-filter-kind (kind &optional ignore-missing)
   "Return a filter expression that matches the kind field by KIND.
 KIND should be a full-length kind.  The generated filter works on
 tags file using single-letter `kind' field, but it will match
@@ -826,16 +826,16 @@ When TAGSFILE is non-nil, it detects if the tags file uses
 single-letter kind, and generate simpler (and presumably faster)
 filter based on that.  When IGNORE-MISSING is non-nil, also keep
 tags that don't have `kind' field."
-  (let ((kinds (gethash kind citre-core--kind-name-full-to-single-table)))
+  (let ((kinds (gethash kind citre-readtags--kind-name-full-to-single-table)))
     (push kind kinds)
-    (citre-core-filter
+    (citre-readtags-filter
      'kind
      (concat "^("
-             (string-join (mapcar #'citre-core-regexp-quote kinds) "|")
+             (string-join (mapcar #'citre-readtags-regexp-quote kinds) "|")
              ")$")
      'regexp nil nil ignore-missing)))
 
-(defun citre-core-filter-input (filename tagsfile)
+(defun citre-readtags-filter-input (filename tagsfile)
   "Return a filter expression that matches the input field by FILENAME.
 TAGSFILE is the absolute path of the tags file.  FILENAME should
 be absolute.  The generated filter can work no matter the tag
@@ -866,33 +866,34 @@ uses relative or absolute path."
          (implied-relative-path-regex
           (lambda (file-non-dir-part)
             (concat "(^|/)..?/"
-                    (citre-core-regexp-quote file-non-dir-part)
+                    (citre-readtags-regexp-quote file-non-dir-part)
                     "$")))
          (filter (list 'or))
-         (info (citre-core-tags-file-info tagsfile))
+         (info (citre-readtags-tags-file-info tagsfile))
          (cwd (file-local-name (gethash 'dir info)))
          (os (gethash 'os info)))
     ;; Ctags on windows generates directory symbol in capital letter, while
     ;; `buffer-file-name' returns it in small letter.  We don't use
     ;; `system-type' to detect since we may work on a remote Unix machine on
     ;; Windows.  We don't need the same treatment for cwd as it uses capital
-    ;; disk symbols on Windows, see `citre-core--get-dir'.
+    ;; disk symbols on Windows, see `citre-readtags--get-dir'.
     (when (eq os 'nt)
       (setq local-name (citre-upcase-first-letter local-name))
       (when truename
         (setq truename (citre-upcase-first-letter truename))))
     (dolist (f (list local-name truename))
       (when f
-        (push (citre-core-filter 'input f 'eq) filter)
+        (push (citre-readtags-filter 'input f 'eq) filter)
         (when (and (string-prefix-p cwd f))
           ;; We don't use `file-relative-name' due to the same reason.  Its
           ;; behavior depends on the platform.
-          (push (citre-core-filter 'input (substring f (length cwd)) 'eq)
+          (push (citre-readtags-filter 'input (substring f (length cwd)) 'eq)
                 filter))))
     (dolist (f (list local-name-nondir truename-nondir))
       (when f
-        (push (citre-core-filter 'input (funcall implied-relative-path-regex f)
-                                 'regexp)
+        (push (citre-readtags-filter 'input
+                                     (funcall implied-relative-path-regex f)
+                                     'regexp)
               filter)))
     (nreverse filter)))
 
@@ -900,19 +901,19 @@ uses relative or absolute path."
 
 ;;;;;; Internals
 
-(defun citre-core--readtags-expr-replace-$-by-& (expr)
+(defun citre-readtags--readtags-expr-replace-$-by-& (expr)
   "Replace $-entry by &-entry in EXPR.
 EXPR is a filter expression."
   (if (consp expr)
-      (cons (citre-core--readtags-expr-replace-$-by-& (car expr))
-            (citre-core--readtags-expr-replace-$-by-& (cdr expr)))
+      (cons (citre-readtags--readtags-expr-replace-$-by-& (car expr))
+            (citre-readtags--readtags-expr-replace-$-by-& (cdr expr)))
     (if (and (symbolp expr) (eq (aref (symbol-name expr) 0) ?$))
         (intern (concat "&" (substring (symbol-name expr) 1)))
       expr)))
 
-(defun citre-core--simple-sorter (elt)
+(defun citre-readtags--simple-sorter (elt)
   "Build a sorter based on ELT.
-ELT is an element of the FIELDS arg in `citre-core-sorter', and
+ELT is an element of the FIELDS arg in `citre-readtags-sorter', and
 is one of the \"OPERATOR\" or \"field\" variant."
   (let* ((variant (car elt))
          (field (nth 1 elt))
@@ -934,12 +935,12 @@ is one of the \"OPERATOR\" or \"field\" variant."
        ;; For tags without the specified field, the order is uncertain.
        0)))
 
-(defun citre-core--filter-sorter (elt)
+(defun citre-readtags--filter-sorter (elt)
   "Build a sorter based on ELT.
-ELT is an element of the FIELDS arg in `citre-core-sorter', and
+ELT is an element of the FIELDS arg in `citre-readtags-sorter', and
 is the \"filter\" variant."
   (let* (($-filter (nth 1 elt))
-         (&-filter (citre-core--readtags-expr-replace-$-by-& $-filter))
+         (&-filter (citre-readtags--readtags-expr-replace-$-by-& $-filter))
          (vals (pcase (nth 2 elt)
                  ('+ '(-1 1))
                  ('- '(1 -1))
@@ -949,10 +950,10 @@ is the \"filter\" variant."
 
 ;;;;;; The API
 
-(defun citre-core-sorter (&rest args)
+(defun citre-readtags-sorter (&rest args)
   "Return a sorter expression based on ARGS.
 The return value can be used as the :sorter argument in
-`citre-core-get-tags'.
+`citre-readtags-get-tags'.
 
 Each element of FIELDS can be:
 
@@ -1000,12 +1001,12 @@ happen, and the order of tags involving missing fields is
 uncertain.  For \"filter\" variant, it's recommended to build the
 filter expression using Citre APIs to make sure it can be evaled
 on each tag.  You can think that tags that are keeped by
-`citre-core-filter' are put above/below others.
+`citre-readtags-filter' are put above/below others.
 
 When multiple elements are presented in FIELDS, they are tried in
 order, until the order is decided.  For example,
 
-  (citre-core-build-sorter input \\='(line -))
+  (citre-readtags-build-sorter input \\='(line -))
 
 means sort by the file name, then the line number (in descending
 order) if they are in the same file."
@@ -1015,16 +1016,16 @@ order) if they are in the same file."
         (setq arg `(field ,arg +)))
       (push
        (pcase (car arg)
-         ('field (citre-core--simple-sorter arg))
-         ('filter (citre-core--filter-sorter arg))
+         ('field (citre-readtags--simple-sorter arg))
+         ('filter (citre-readtags--filter-sorter arg))
          ('expr (cadr arg))
-         (_ (citre-core--simple-sorter arg)))
+         (_ (citre-readtags--simple-sorter arg)))
        sorter))
     (nreverse sorter)))
 
 ;;;;; Get tags from tags files
 
-(defun citre-core-get-pseudo-tags (name tagsfile &optional prefix)
+(defun citre-readtags-get-pseudo-tags (name tagsfile &optional prefix)
   "Read pseudo tags matching NAME in tags file TAGSFILE.
 TAGSFILE is the absolute path of the tags file.  When PREFIX is
 non-nil, match NAME by prefix.
@@ -1036,19 +1037,19 @@ NAME should not start with \"!_\".  Run
 to know the valid NAMEs.  The return value is a list, and each
 element of it is another list consists of the fields separated by
 tabs in a pseudo tagline."
-  (citre-core--error-on-arg name #'citre-core--string-non-empty-p)
-  (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
+  (citre-readtags--error-on-arg name #'citre-readtags--string-non-empty-p)
+  (citre-readtags--error-on-arg tagsfile #'citre-readtags--string-non-empty-p)
   (let* ((tagsfile (expand-file-name tagsfile))
          (name (concat "!_" name))
-         (result (citre-core--get-lines
+         (result (citre-readtags--get-lines
                   tagsfile nil nil nil
-                  (citre-core-filter 'name name (if prefix 'prefix 'eq))
+                  (citre-readtags-filter 'name name (if prefix 'prefix 'eq))
                   nil "-D")))
     (mapcar (lambda (line)
               (split-string line "\t" t))
             result)))
 
-(cl-defun citre-core-get-tags
+(cl-defun citre-readtags-get-tags
     (tagsfile &optional name match case-fold
               &key filter sorter
               require optional exclude parse-all-fields)
@@ -1144,25 +1145,26 @@ them, Citre offers its own extension fields:
   When this fails, the single-letter kind is used.
 
 For more on extension fields, see
-`citre-core--ext-fields-dependency-alist' and
-`citre-core--ext-fields-method-table'.  To use an extension
+`citre-readtags--ext-fields-dependency-alist' and
+`citre-readtags--ext-fields-method-table'.  To use an extension
 field, it must appear in REQUIRE or OPTIONAL."
   (let ((nil-or-string-p (lambda (x) (or (null x) (stringp x)))))
-    (citre-core--error-on-arg tagsfile #'citre-core--string-non-empty-p)
-    (citre-core--error-on-arg name nil-or-string-p))
+    (citre-readtags--error-on-arg tagsfile
+                                  #'citre-readtags--string-non-empty-p)
+    (citre-readtags--error-on-arg name nil-or-string-p))
   (let* ((tagsfile (expand-file-name tagsfile))
          (name- (when (memq match '(nil exact prefix)) name))
          (match- (when (memq match '(nil exact prefix)) match))
          (filter- (when (and name (memq match '(suffix substr regexp)))
-                    (citre-core-filter 'name name match case-fold)))
+                    (citre-readtags-filter 'name name match case-fold)))
          (filter- (if (and filter- filter)
                       `(and ,filter- ,filter)
                     (or filter- filter))))
-    (citre-core--get-tags tagsfile name- match- case-fold
-                          :filter filter- :sorter sorter
-                          :require require :optional optional
-                          :exclude exclude
-                          :parse-all-fields parse-all-fields)))
+    (citre-readtags--get-tags tagsfile name- match- case-fold
+                              :filter filter- :sorter sorter
+                              :require require :optional optional
+                              :exclude exclude
+                              :parse-all-fields parse-all-fields)))
 
 ;;;;; Edit pseudo tags
 
@@ -1170,14 +1172,14 @@ field, it must appear in REQUIRE or OPTIONAL."
 ;; Universal Ctags in the future.  After that, we should reimplement this as an
 ;; edittags abstraction layer.
 
-;; NOTE: I suspect `write-region' will return befure it finishes the writing.
-;; If you pack `citre-core-write-pseudo-tag' and any operation that calls
-;; readtags (like `citre-core-get-tags') into a `progn' form, there are chances
-;; that readtags process freezes.  For now upper components uses `sit-for'
-;; between them to workaround this bug.  I think it can be solved after we
-;; switch to edittags.
+;; NOTE: I suspect `write-region' will return before it finishes the writing.
+;; If you pack `citre-readtags-write-pseudo-tag' and any operation that calls
+;; readtags (like `citre-readtags-get-tags') into a `progn' form, there are
+;; chances that readtags process freezes.  For now upper components uses
+;; `sit-for' between them to workaround this bug.  I think it can be solved
+;; after we switch to edittags.
 
-(defun citre-core-write-pseudo-tag (tagsfile name value comment)
+(defun citre-readtags-write-pseudo-tag (tagsfile name value comment)
   "Write a pseudo tag to TAGSFILE.
 TAGSFILE is the absolute path of the tags file.  NAME is the name
 of the pseudo tags, without the beginning \"!_\".  VALUE is its
@@ -1206,7 +1208,7 @@ will not overwrite the original comment."
         (goto-char 0))
       (insert "!_" name "\t" value "\t" comment "\n"))))
 
-(provide 'citre-core)
+(provide 'citre-readtags)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -1216,4 +1218,4 @@ will not overwrite the original comment."
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre-core.el ends here
+;;; citre-readtags.el ends here

@@ -7,7 +7,7 @@ This is for situations where the search pattern is presented."
                      "backward-pattern-tags"
                      "combined-backward-pattern-tags"
                      "backward-pattern-with-line-tags"))
-    (let* ((tags (citre-core-get-tags
+    (let* ((tags (citre-readtags-get-tags
                   (expand-test-file tagfile)
                   "temp" 'exact nil
                   :require '(name pattern)
@@ -47,7 +47,7 @@ This is for situations where the search pattern is not provided,
 so we locate the tag by line number and name."
   (dolist (tags '("number-pattern-tags"
                   "number-pattern-with-line-tags"))
-    (let* ((tags (citre-core-get-tags
+    (let* ((tags (citre-readtags-get-tags
                   (expand-test-file tags)
                   "temp" 'exact nil
                   :require '(name pattern)
@@ -72,7 +72,7 @@ so we locate the tag by line number and name."
 
 (ert-deftest test-goto-tag ()
   "Test `citre-goto-tag'."
-  (let* ((tags (citre-core-get-tags
+  (let* ((tags (citre-readtags-get-tags
                 (expand-test-file "forward-pattern-tags")
                 "temp" 'exact nil
                 :require '(name pattern ext-abspath)

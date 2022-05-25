@@ -167,7 +167,7 @@ all major modes."
 (declare-function xref-make-file-location "xref" (file line column))
 
 (defvar citre-xref--filter
-  `(not ,(citre-core-filter 'extras "anonymous" 'csv-contain))
+  `(not ,(citre-readtags-filter 'extras "anonymous" 'csv-contain))
   "Filter for finding definitions when the symbol is inputted by user.")
 
 (defvar citre-xref--completion-table-cache
@@ -265,7 +265,8 @@ simple tag name matching.  This function is for it."
     (let* ((tagsfile (with-selected-window (or (minibuffer-selected-window)
                                                (selected-window))
                        (citre-tags-file-path)))
-           (update-time (gethash 'time (citre-core-tags-file-info tagsfile)))
+           (update-time (gethash 'time (citre-readtags-tags-file-info
+                                        tagsfile)))
            (collection
             (if (and (equal tagsfile
                             (plist-get citre-xref--completion-table-cache
@@ -284,7 +285,7 @@ simple tag name matching.  This function is for it."
                         ;; may not do a prefix completion.
                         tagsfile nil nil
                         :filter citre-xref--filter
-                        :sorter (citre-core-sorter '(length name +) 'name)
+                        :sorter (citre-readtags-sorter '(length name +) 'name)
                         :require '(name)))
                       :test #'equal)))
                 (plist-put citre-xref--completion-table-cache
@@ -589,13 +590,14 @@ This also works on a remote machine."
   (citre-get-tags
    nil nil nil
    :filter
-   `(and ,(citre-core-filter-input (buffer-file-name) (citre-tags-file-path))
-         (not (or ,(citre-core-filter
+   `(and ,(citre-readtags-filter-input (buffer-file-name)
+                                       (citre-tags-file-path))
+         (not (or ,(citre-readtags-filter
                     'extras
                     '("anonymous" "inputFile")
                     'csv-contain)
-                  ,(citre-core-filter-kind "file"))))
-   :sorter (citre-core-sorter 'line)
+                  ,(citre-readtags-filter-kind "file"))))
+   :sorter (citre-readtags-sorter 'line)
    :require '(name pattern)
    :optional '(ext-kind-full line typeref scope extras)))
 
@@ -614,12 +616,12 @@ This also works on a remote machine."
   (citre-get-tags
    (citre-imenu--temp-tags-file-path) nil nil
    :filter
-   `(not (or ,(citre-core-filter
+   `(not (or ,(citre-readtags-filter
                'extras
                '("anonymous" "inputFile")
                'csv-contain)
-             ,(citre-core-filter-kind "file")))
-   :sorter (citre-core-sorter 'line)
+             ,(citre-readtags-filter-kind "file")))
+   :sorter (citre-readtags-sorter 'line)
    :require '(name pattern)
    :optional '(ext-kind-full line typeref scope extras)))
 
