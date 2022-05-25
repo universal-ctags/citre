@@ -36,8 +36,8 @@
 
 ;;;; Libraries
 
-(require 'citre-common-basic)
 (require 'citre-common-tag)
+(require 'citre-common-util)
 (require 'ring)
 
 ;;;; User Options

@@ -136,7 +136,7 @@
 
 ;;;; Libraries
 
-(require 'citre-common-basic)
+(require 'citre-common-util)
 (require 'cl-lib)
 (require 'rx)
 
