@@ -10,7 +10,7 @@
 ITEM="style, longline"
 
 for f in *.el tests/common.el tests/*/test.el; do
-    if [ $f != "citre-core-tables.el" ]; then
+    if [ $f != "citre-readtags-tables.el" ]; then
         info "$f"
         # Allow long lines that are the first lines of the file, contains web
         # links, or are the first lines of docstrings.

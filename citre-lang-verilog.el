@@ -65,7 +65,7 @@
   "Sorter for finding definitions of SYMBOL in (System) Verilog."
   (pcase (citre-get-property 'syntax symbol)
     ('macro
-     (citre-core-sorter
+     (citre-readtags-sorter
       citre-sorter-arg-put-references-below
       (citre-sorter-arg-put-kinds-above '("constant"))
       'input '(length name +) 'name))
@@ -78,7 +78,8 @@
   `(<or>
     ,(pcase (citre-get-property 'syntax symbol)
        ('macro
-        (citre-core-sorter (citre-sorter-arg-put-kinds-above '("constant"))))
+        (citre-readtags-sorter (citre-sorter-arg-put-kinds-above
+                                '("constant"))))
        (_ 0))
     ,citre-completion-default-sorter))
 

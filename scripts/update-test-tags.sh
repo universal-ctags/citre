@@ -15,7 +15,8 @@ for t in tests/*/; do
              info $t$f
              # We don't want TAG_PROC_CWD since it will be different on
              # different machines. Citre can guess the cwd (see
-             # `citre-core--get-dir`) and it works for our directory structure.
+             # `citre-readtags--get-dir`) and it works for our directory
+             # structure.
              if ! $CTAGS_PROG --quiet --options=NONE --options=$f \
                   --pseudo-tags=-{TAG_PROGRAM_VERSION}{TAG_PROC_CWD}; then
                  error "Can't generate tags file for $d."

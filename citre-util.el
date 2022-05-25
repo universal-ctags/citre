@@ -39,7 +39,7 @@
 
 ;;;; Libraries
 
-(require 'citre-core)
+(require 'citre-readtags)
 (require 'cl-lib)
 (require 'rx)
 (require 'subr-x)
@@ -128,7 +128,7 @@ auto-completion."
                &key filter sorter
                require optional exclude parse-all-fields)
   "Get tags in tags file TAGSFILE that match NAME.
-This is like `citre-core-get-tags', except that:
+This is like `citre-readtags-get-tags', except that:
 
 - TAGSFILE could be nil, and it will be find automatically.
 - When MATCH is nil or `exact', CASE-FOLD is always nil,
@@ -136,20 +136,20 @@ This is like `citre-core-get-tags', except that:
 
 TAGSFILE is the absolute path of the tags file.  For FILTER,
 SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
-`citre-core-get-tags'.
+`citre-readtags-get-tags'.
 
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-tag-field'."
-  (citre-core-get-tags (or tagsfile (citre-tags-file-path)
-                           (user-error "Can't find a tags file"))
-                       name match
-                       (unless (or (null match) (eq match 'exact))
-                         (not citre-completion-case-sensitive))
-                       :filter filter :sorter sorter
-                       :require require :optional optional
-                       :exclude exclude
-                       :parse-all-fields parse-all-fields))
+  (citre-readtags-get-tags (or tagsfile (citre-tags-file-path)
+                               (user-error "Can't find a tags file"))
+                           name match
+                           (unless (or (null match) (eq match 'exact))
+                             (not citre-completion-case-sensitive))
+                           :filter filter :sorter sorter
+                           :require require :optional optional
+                           :exclude exclude
+                           :parse-all-fields parse-all-fields))
 
 (defun citre-get-pseudo-tag-value (name &optional tagsfile)
   "Get the value field of pseudo tag NAME in TAGSFILE.
@@ -157,7 +157,7 @@ NAME should not start with \"!_\".
 
 When TAGSFILE is nil, find it automatically."
   (when-let ((tagsfile (or tagsfile (citre-tags-file-path)))
-             (ptag (citre-core-get-pseudo-tags name tagsfile)))
+             (ptag (citre-readtags-get-pseudo-tags name tagsfile)))
     (nth 1 (car ptag))))
 
 ;;;; APIs
@@ -284,7 +284,7 @@ directory, it tries the following methods in turn:
 - Find in `citre-tags-file-cache-dirs'.
 - See if one name in `citre-tags-files' exists in this dir.
 
-It also sets `citre-core--tags-file-cwd-guess-table', so for tags
+It also sets `citre-readtags--tags-file-cwd-guess-table', so for tags
 file without the TAG_PROC_CWD pseudo tag, we can better guess its
 root dir."
   (if (and citre--tags-file (citre-non-dir-file-exists-p citre--tags-file))
@@ -311,7 +311,7 @@ root dir."
       (when tagsfile
         (setq tagsfile (file-truename tagsfile))
         (puthash tagsfile current-dir
-                 citre-core--tags-file-cwd-guess-table)
+                 citre-readtags--tags-file-cwd-guess-table)
         ;; Only cache the result for file buffers, since non-file buffers may
         ;; change their own default directories, e.g., when cd to another
         ;; project.
@@ -342,21 +342,21 @@ Use this when a new tags file is created."
 
 (defun citre-filter-extra-tags (extras)
   "Filter that matches extra tags in list EXTRAS."
-  (citre-core-filter 'extras extras 'csv-contain))
+  (citre-readtags-filter 'extras extras 'csv-contain))
 
 (defvar citre-filter-file-tags
   `(or
-    ,(citre-core-filter 'extras '("inputFile") 'csv-contain)
-    ,(citre-core-filter-kind "file"))
+    ,(citre-readtags-filter 'extras '("inputFile") 'csv-contain)
+    ,(citre-readtags-filter-kind "file"))
   "Filter that matches file tags.")
 
 (defun citre-filter-local-symbol-in-other-file (file tagsfile)
   "Filter that matches tags with \"file\" scope, but not in FILE.
 TAGSFILE is the absolute path of the tags file to use this filter
 on."
-  `(and (not ,(citre-core-filter-input file tagsfile))
-        (or ,(citre-core-filter-field-exist 'file)
-            ,(citre-core-filter 'extras "fileScope" 'csv-contain))))
+  `(and (not ,(citre-readtags-filter-input file tagsfile))
+        (or ,(citre-readtags-filter-field-exist 'file)
+            ,(citre-readtags-filter 'extras "fileScope" 'csv-contain))))
 
 (defvar citre-sorter-arg-size-order
   '(expr (if (and $line $end &line &end)
@@ -367,17 +367,17 @@ The \"size\" is the difference between its `end' and `line'
 field.  A \"smaller\" definition may be a prototype or forward
 declaration, while the \"bigger\" one is the actual definition.
 
-This can be used as an arg for `citre-core-sorter'.")
+This can be used as an arg for `citre-readtags-sorter'.")
 
 (defvar citre-sorter-arg-put-references-below
-  `(filter ,(citre-core-filter 'extras "reference" 'csv-contain) -)
+  `(filter ,(citre-readtags-filter 'extras "reference" 'csv-contain) -)
   "Put reference tags below others.
-This can be used as an arg for `citre-core-sorter'.")
+This can be used as an arg for `citre-readtags-sorter'.")
 
 (defun citre-sorter-arg-put-kinds-above (kinds)
   "Put tags with kind field in list KINDS above others.
-This can be used as an arg for `citre-core-sorter'."
-  (let ((filters (mapcar (lambda (k) (citre-core-filter-kind k))
+This can be used as an arg for `citre-readtags-sorter'."
+  (let ((filters (mapcar (lambda (k) (citre-readtags-filter-kind k))
                          kinds)))
     (if (eq (length filters) 1)
         (setq filters `(filter ,(car filters) +))
@@ -520,7 +520,7 @@ tags file."
           'false)))))
 
 (defvar citre-completion-default-sorter
-  (citre-core-sorter
+  (citre-readtags-sorter
    '(length name +) 'name)
   "The default sorter expression for auto-completion.
 This sorts the candidates by their length, then the alphabetical
@@ -567,7 +567,7 @@ completion can't be done."
           'false)))))
 
 (defvar citre-definition-default-sorter
-  (citre-core-sorter
+  (citre-readtags-sorter
    citre-sorter-arg-put-references-below
    'input '(length name +) 'name
    citre-sorter-arg-size-order)

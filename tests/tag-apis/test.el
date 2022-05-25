@@ -1,6 +1,6 @@
 ;;; Getter & Setter
 
-(ert-deftest test-tag-core-apis ()
+(ert-deftest test-tag-readtags-apis ()
   "Test the constructor, getter and setter of tag."
   (let ((tag (citre-make-tag 'field1 "value1" 'field2 "value2")))
     (should (equal (citre-get-tag-field-primitive 'field1 tag)

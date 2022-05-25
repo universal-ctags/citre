@@ -96,7 +96,8 @@ these.")
 ARGS is the arguments passed to the program.
 
 This is designed to allow local quit to terminate the process."
-  ;; The implementation of this function is similar to `citre-core--get-lines'.
+  ;; The implementation of this function is similar to
+  ;; `citre-readtags--get-lines'.
   (let* ((output-buf (get-buffer-create " *citre-global*"))
          inhibit-message
          proc exit-msg)

@@ -276,14 +276,14 @@ generated command should work for most projects"
   "Write recipe to TAGSFILE.
 CMD-PTAG is the value of CITRE_CMD ptag, CWD is the working
 directory of Ctags.  It's expanded and convert to a local path."
-  (citre-core-write-pseudo-tag
+  (citre-readtags-write-pseudo-tag
    tagsfile "CITRE_CMD" cmd-ptag
    "command line to generate this tags file")
   (setq cwd (file-local-name (expand-file-name cwd)))
   ;; Ctags on windows generates disk symbol in capital letter.
   (when (<= ?a (aref cwd 0) ?z)
     (setq cwd (citre-upcase-first-letter cwd)))
-  (citre-core-write-pseudo-tag
+  (citre-readtags-write-pseudo-tag
    tagsfile "TAG_PROC_CWD" (file-local-name cwd)
    "dir in which ctags runs"))
 
@@ -498,7 +498,7 @@ definitions\"."
 Update the tags file and search again? "))
           (citre-update-tags-file tagsfile 'sync)
           ;; WORKAROUND: If we don't sit for a while, the readtags process will
-          ;; freeze.  See the comment above `citre-core-write-pseudo-tag'.
+          ;; freeze.  See the comment above `citre-readtags-write-pseudo-tag'.
           (sit-for 0.01)
           (citre-get-definitions symbol tagsfile)))))
 
@@ -652,15 +652,15 @@ the tags file now (update it directly instead)."
                     (when (or noconfirm
                               (y-or-n-p (format "Update %s now? " tagsfile)))
                       ;; WORKAROUND: When `noconfirm' is non-nil, what we do
-                      ;; here is `citre-core-write-pseudo-tag' to a tagsfile,
-                      ;; then `citre-update-tags-file' it.  It seems there's
-                      ;; some race conditions happening.  If you eval a `progn'
-                      ;; form to do these two things, the readtags process may
-                      ;; freeze.  Strangely this only happens to certain tags
-                      ;; file paths (even if they are actually the same), and
-                      ;; seems to have something to do with its path depth.
-                      ;; Here we just return and schedule the update 0.15 secs
-                      ;; later, so the user won't feel it.
+                      ;; here is `citre-readtags-write-pseudo-tag' to a
+                      ;; tagsfile, then `citre-update-tags-file' it.  It seems
+                      ;; there's some race conditions happening.  If you eval a
+                      ;; `progn' form to do these two things, the readtags
+                      ;; process may freeze.  Strangely this only happens to
+                      ;; certain tags file paths (even if they are actually the
+                      ;; same), and seems to have something to do with its path
+                      ;; depth.  Here we just return and schedule the update
+                      ;; 0.15 secs later, so the user won't feel it.
                       (run-at-time 0.15 nil
                                    #'citre-update-tags-file tagsfile)))))
     (if cmd-ptag
