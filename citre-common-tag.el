@@ -1,4 +1,4 @@
-;;; citre-tag.el --- Data structure of source code index -*- lexical-binding: t -*-
+;;; citre-common-tag.el --- Data structure of source code index items -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Hao Wang
 
@@ -136,7 +136,7 @@
 
 ;;;; Libraries
 
-(require 'citre-common)
+(require 'citre-common-basic)
 (require 'cl-lib)
 (require 'rx)
 
@@ -891,7 +891,7 @@ used when it's nil."
     (string-join (cl-remove nil (nreverse parts) :test #'eq)
                  (or separator " "))))
 
-(provide 'citre-tag)
+(provide 'citre-common-tag)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -901,4 +901,4 @@ used when it's nil."
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre-tag.el ends here
+;;; citre-common-tag.el ends here
