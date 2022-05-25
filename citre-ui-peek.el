@@ -1,4 +1,4 @@
-;;; citre-peek.el --- Go down the rabbit hole without leaving current buffer -*- lexical-binding: t -*-
+;;; citre-ui-peek.el --- Go down the rabbit hole without leaving current buffer -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2020 Hao Wang
 
@@ -27,10 +27,10 @@
 
 ;;; Commentary:
 
-;; citre-peek is a powerful code reading tool.  Whether you just want to
-;; quickly peek the implementation of a function, or need to understand a long
-;; and branched call chain to solve a complex problem, citre-peek is the best
-;; tool for you.
+;; This is the UI library for `citre-peek' UI.  `citre-peek' is a powerful code
+;; reading tool.  Whether you just want to quickly peek the implementation of a
+;; function, or need to understand a long and branched call chain to solve a
+;; complex problem, citre-peek is the best tool for you.
 
 ;; Read the following docs to know how to use citre-peek:
 ;;
@@ -49,29 +49,14 @@
 
 ;;;; Libraries
 
-(require 'citre-ctags)
-(require 'citre-util)
+(require 'citre-common-tag)
 (require 'color)
 (require 'fringe)
-
-;; Suppress compiler warning
-
-(eval-when-compile (require 'xref))
-
-;; We use these functions only in xref buffer, and they will be avaliable at
-;; that time.
-(declare-function xref--item-at-point "xref" ())
-(declare-function xref-item-location "xref" (arg &rest args))
-(declare-function xref-location-group "xref" (location))
-(declare-function xref-location-line "xref" (location))
 
 ;; We use this function for integration with the package "clue".  We don't
 ;; require it as it's not necessary for citre-peek to work.
 (declare-function clue-copy-location "clue" (file line &optional project))
 (declare-function clue-paste-location "clue" (file line &optional project))
-
-(declare-function citre-get-definitions-maybe-update-tags-file
-                  "citre-basic-tools" (&optional symbol tagsfile))
 
 ;;;; User options
 
@@ -84,8 +69,8 @@
 
 (defcustom citre-peek-backward-in-chain-after-jump nil
   "Non-nil means move backward in the chain after `citre-peek-jump'.
-This means after you jump to a definition location, the peek
-window will show where it's used/called/referenced.
+This means after you jump to a tag, the peek window will show
+where it's used/called/referenced.
 
 This only works when `citre-peek-auto-restore-after-jump' is
 non-nil."
@@ -99,10 +84,14 @@ non-nil."
   :type 'integer
   :group 'citre)
 
-(defcustom citre-peek-definitions-height 3
-  "Number of definitions displayed in the peek window."
+(defcustom citre-peek-tag-list-height 3
+  "Number of tags displayed in the peek window."
   :type 'integer
   :group 'citre)
+
+(defalias 'citre-peek-definitions-height 'citre-peek-tag-list-height)
+(make-obsolete 'citre-peek-definitions-height 'citre-peek-tag-list-height
+               "0.3")
 
 ;;;;; Keybindings
 
@@ -126,9 +115,9 @@ non-nil."
     ;; Browse file
     (define-key map (kbd "M-n") 'citre-peek-next-line)
     (define-key map (kbd "M-p") 'citre-peek-prev-line)
-    ;; Browse in the definition list
-    (define-key map (kbd "M-N") 'citre-peek-next-definition)
-    (define-key map (kbd "M-P") 'citre-peek-prev-definition)
+    ;; Browse in the tag list
+    (define-key map (kbd "M-N") 'citre-peek-next-tag)
+    (define-key map (kbd "M-P") 'citre-peek-prev-tag)
     ;; Browse in the history
     (define-key map (kbd "<right>") 'citre-peek-chain-forward)
     (define-key map (kbd "<left>") 'citre-peek-chain-backward)
@@ -138,10 +127,10 @@ non-nil."
     (define-key map (kbd "M-l p") 'citre-peek-through)
     (define-key map (kbd "M-l d") 'citre-peek-delete-branch)
     (define-key map (kbd "M-l D") 'citre-peek-delete-branches)
-    ;; Rearrange definition list
-    (define-key map (kbd "S-<up>") 'citre-peek-move-current-def-up)
-    (define-key map (kbd "S-<down>") 'citre-peek-move-current-def-down)
-    (define-key map (kbd "M-l f") 'citre-peek-make-current-def-first)
+    ;; Rearrange tag list
+    (define-key map (kbd "S-<up>") 'citre-peek-move-current-tag-up)
+    (define-key map (kbd "S-<down>") 'citre-peek-move-current-tag-down)
+    (define-key map (kbd "M-l f") 'citre-peek-make-current-tag-first)
     ;; Jump
     (define-key map (kbd "M-l j") 'citre-peek-jump)
     ;; Abort
@@ -190,11 +179,17 @@ of the dashes."
   :type 'string
   :group 'citre)
 
-(defcustom citre-peek-peeked-through-definition-prefix
+(defcustom citre-peek-peeked-through-tag-prefix
   (propertize "* " 'face 'warning)
-  "The prefix for definitions where you peeked through."
+  "The prefix for tag nodes in which you peeked through."
   :type 'string
   :group 'citre)
+
+(defalias 'citre-peek-peeked-through-definition-prefix
+  'citre-peek-peeked-through-tag-prefix)
+(make-obsolete 'citre-peek-peeked-through-definition-prefix
+               'citre-peek-peeked-through-tag-prefix
+               "0.3")
 
 (defcustom citre-peek-root-symbol-str
   "·"
@@ -208,7 +203,7 @@ of the dashes."
   ;; but the display update of the terminal itself.  Put a `redraw-frame' call
   ;; in `citre-peek--update-display' solves the problem, but it creates a
   ;; visual flick.  I believe unicode chars in the middle of a line cause the
-  ;; problem, so this may also happen to the file content and definition list.
+  ;; problem, so this may also happen to the file content and tag list.
   (propertize (if (display-graphic-p) " → " " - ")
               'face 'font-lock-function-name-face)
   "The separator in the chain where it doesn't branch."
@@ -245,7 +240,7 @@ of the dashes."
 
 ;;;; Helpers
 
-;;;;; List functions
+;;;;; Lists
 
 (defun citre--delete-nth (n list)
   "Delete Nth element in LIST and return the modified list."
@@ -257,33 +252,6 @@ of the dashes."
 The modified list is returned."
   (setf (nthcdr n list) (push newelt (nthcdr n list)))
   list)
-
-;;;;; Create "fake" tags
-
-(defun citre--make-tag-of-current-location (name)
-  "Make a tag of the current line, with the name field being NAME.
-This is for generating the \"entry\" point of the symbol chain."
-  (let ((pat (string-trim
-              (buffer-substring-no-properties
-               (line-beginning-position)
-               (line-end-position)))))
-    (setq pat (replace-regexp-in-string "\\\\\\|/\\|\\$$" "\\\\\\&" pat))
-    (setq pat (concat "/" pat "/;\""))
-    (citre-make-tag 'name name
-                    'ext-abspath (buffer-file-name)
-                    'pattern pat
-                    'line (number-to-string (line-number-at-pos)))))
-
-(defun citre--make-tag-of-current-xref-item ()
-  "Make a tag for current item in xref buffer.
-This is for peeking the location of the item."
-  (let* ((item (or (xref--item-at-point)
-                   (user-error "No reference at point")))
-         (location (xref-item-location item))
-         (file (xref-location-group location))
-         (line (xref-location-line location)))
-    (citre-make-tag 'ext-abspath (expand-file-name file)
-                    'line (number-to-string line))))
 
 ;;;;; Ace jump
 
@@ -511,26 +479,25 @@ not affected by its surroundings."
 ;; These are data structures that handles code reading history in citre-peek.
 ;; Let's have a brief description of the basic concepts first:
 
-;; When you peek a symbol, you create a *def list* ("def" stands for
-;; "definition") of its definition locations.  Each element in a def list is
-;; called a *def entry*, which has 2 important slots: one for the tag of that
-;; definition, and another is a list called *branches*, which we'll soon
-;; explain.
+;; When you peek a symbol, you create a *tag list* of tags related to it (they
+;; may be its definitions/references/etc.).  Each element in a tag list is
+;; called a *tag node*, which has 2 important slots: one is the tag itself, and
+;; another is a list called *branches*, which we'll soon explain.
 
-;; In a *peek session*, you are always browsing a def entry.  When you peek
-;; through a symbol, a new def list is created.  To keep a complete history of
-;; your code reading session, this def list is pushed into the branches of the
-;; current browsed def entry.
+;; In a *peek session*, you are always browsing a tag node.  When you peek
+;; through a symbol, a new tag list is created.  To keep a complete history of
+;; your code reading session, this tag list is pushed into the branches of the
+;; current browsed tag node.
 
 ;; The history of a peek session is a tree like this:
 
-;; - def list
-;;   - def entry 1
-;;     - def list A
-;;     - def list B
-;;   - def entry 2
-;;     - def list C
-;;   - def entry 3
+;; - tag list
+;;   - tag node 1
+;;     - tag list A
+;;     - tag list B
+;;   - tag node 2
+;;     - tag list C
+;;   - tag node 3
 ;;   ...
 
 (cl-defstruct (citre-peek--session
@@ -545,12 +512,12 @@ not affected by its surroundings."
   (root-list
    nil
    :documentation
-   "The root def list in this peek session."
-   :type "citre-peek--def-list")
+   "The root tag list in this peek session."
+   :type "citre-peek--tag-list")
   (depth
    nil
    :documentation
-   "The depth of currently browsed def list in this session."
+   "The depth of currently browsed tag list in this session."
    :type "integer")
   (name
    nil
@@ -558,24 +525,24 @@ not affected by its surroundings."
    "The name of this session."
    :type "nil or string"))
 
-(cl-defstruct (citre-peek--def-entry
+(cl-defstruct (citre-peek--tag-node
                (:constructor nil)
-               (:constructor citre-peek--def-entry-create
+               (:constructor citre-peek--tag-node-create
                              (tag))
                (:copier nil))
-  "Definition entry in code reading history in citre-peek."
+  "Tag node in code reading history in citre-peek."
   (tag
    nil
    :documentation
-   "The tag of this entry."
+   "The tag of this node."
    :type "tag (a hash table)")
   (branches
    nil
    :documentation
-   "A list of tag lists under this entry.
+   "A list of tag lists under this node.
 We don't keep a record of current branch because we make sure
 it's always the first one, by scrolling this list."
-   :type "list of citre-peek-def-list")
+   :type "list of citre-peek-tag-list")
   (base-marker
    nil
    :documentation
@@ -590,41 +557,32 @@ position.)"
    "The offset of current peeked position to base-marker."
    :type "integer"))
 
-(cl-defstruct (citre-peek--def-list
+(cl-defstruct (citre-peek--tag-list
                (:constructor nil)
                (:constructor
-                citre-peek--def-list-create
+                citre-peek--tag-list-create
                 (tags
-                 &optional symbol
-                 &aux (entries (mapcar #'citre-peek--def-entry-create tags))))
+                 &aux (nodes (mapcar #'citre-peek--tag-node-create tags))))
                (:copier nil))
-  "List of definitions used in citre-peek."
+  "List of tags used in citre-peek."
   (index
    0
    :documentation
-   "The index of current browsed def entry in this list."
+   "The index of current browsed tag node in this list."
    :type "integer")
-  (symbol
+  (nodes
    nil
    :documentation
-   "The symbol whose definitions are this def list.
-Can be nil for the root def list of a session, since it only has
-one entry to keep where we start, and that's not a definition of
-any symbol."
-   :type "nil or string")
-  (entries
-   nil
-   :documentation
-   "A list of def entries in this def list."
-   :type "list of citre-peek--def-entry"))
+   "A list of tag nodes in this tag list."
+   :type "list of citre-peek--tag-node"))
 
 ;;;;; State variables
 
 ;; NOTE: Here's a list of when should each state variable be changed.  Keep
 ;; these in mind when you are developing citre-peek related commands.
 ;;
-;; - `citre-peek--displayed-defs-interval': Set this for a new peek session,
-;;   when browsing the def list, and when moving in the chain.
+;; - `citre-peek--displayed-tags-interval': Set this for a new peek session,
+;;   when browsing the tag list, and when moving in the chain.
 ;;
 ;; - `citre-peek--symbol-bounds', `citre-peek--ace-seqs': Set these for ace
 ;;   jump, and clean it up afterwards.
@@ -633,7 +591,7 @@ any symbol."
 ;;   window is updated.  This variable is for preventing recalculate the
 ;;   content after every command.
 ;;
-;; We know our currently browsed def list in a session by the `depth' slot in
+;; We know our currently browsed tag list in a session by the `depth' slot in
 ;; the `citre-peek--session'.  It can be modified by
 ;; `citre-peek--session-depth-add':
 ;;
@@ -666,10 +624,10 @@ any symbol."
 (defvar citre-peek--saved-sessions nil
   "Saved peek sessions.")
 
-(defvar citre-peek--displayed-defs-interval nil
-  "The interval of displayed def entries in currently browsed def list.
+(defvar citre-peek--displayed-tags-interval nil
+  "The interval of displayed tags in currently browsed tag list.
 This is a cons pair, its car is the index of the first displayed
-entry, and cdr the index of the last one.")
+tag, and cdr the index of the last one.")
 
 (defvar citre-peek--temp-buffer-alist nil
   "Files and their temporary buffers that don't exist before peeking.
@@ -695,17 +653,17 @@ bounds as returned by `citre--search-symbols'.")
   "Background color used for file contents when peeking.")
 
 (defvar citre-peek--bg-alt nil
-  "Background color for unselected definitions when peeking.")
+  "Background color for unselected tags when peeking.")
 
 (defvar citre-peek--bg-selected nil
-  "Background color for selected definitions when peeking.")
+  "Background color for selected tags when peeking.")
 
 (defvar-local citre-peek--buffer-file-name nil
   "File name in non-file buffers.
 `citre-peek' needs to open files in non-file temporary buffers,
 where the function `buffer-file-name' doesn't work.  `citre-peek'
-uses hacks to make it work when getting the symbol and finding
-its definitions inside such buffers.  For this to work,
+uses hacks to make it work when peeking through symbols inside
+such buffers, which may need the file name.  For this to work,
 `citre-peek--buffer-file-name' must be set in these buffers.")
 
 (define-minor-mode citre-peek--mode
@@ -755,7 +713,7 @@ which take care of setting up other things."
     (setq citre-peek--symbol-bounds nil)
     ;; We don't clean up `citre-peek--session-root-list',
     ;; `citre-peek--depth-in-root-list' and
-    ;; `citre-peek--displayed-defs-interval', so we can restore a session
+    ;; `citre-peek--displayed-tags-interval', so we can restore a session
     ;; later.
     (remove-hook 'post-command-hook #'citre-peek--update-display 'local))))
 
@@ -816,22 +774,22 @@ When PATH doesn't exist, this returns nil."
           (push (cons path buf) citre-peek--temp-buffer-alist)
           buf))))
 
-;;;;; Methods for `citre-peek--def-entry'
+;;;;; Methods for `citre-peek--tag-node'
 
-(defun citre-peek--get-base-marker (entry)
-  "Return the base marker of ENTRY.
-ENTRY is an instance of `citre-peek--def-entry'.  The value of
+(defun citre-peek--get-base-marker (node)
+  "Return the base marker of NODE.
+NODE is an instance of `citre-peek--tag-node'.  The value of
 the `base-marker' slot is returned, or if it doesn't exist,
 calculate the mark using the tag, write it to the `base-marker'
 slot, then return it.
 
 Nil is returned when the file in the tag doesn't exist."
-  (or (let ((marker (citre-peek--def-entry-base-marker entry)))
+  (or (let ((marker (citre-peek--tag-node-base-marker node)))
         ;; When the buffer of the file is killed, `marker' could point to
         ;; nowhere, so we check it by `marker-position'.
         (when (and marker (marker-position marker))
           marker))
-      (let* ((tag (citre-peek--def-entry-tag entry))
+      (let* ((tag (citre-peek--tag-node-tag node))
              (buf (citre-peek--find-file-buffer
                    (citre-get-tag-field 'ext-abspath tag)))
              (marker (when buf
@@ -840,12 +798,12 @@ Nil is returned when the file in the tag doesn't exist."
                            (goto-char (citre-locate-tag tag))
                            (point-marker))))))
         (when marker
-          (setf (citre-peek--def-entry-base-marker entry) marker)
+          (setf (citre-peek--tag-node-base-marker node) marker)
           marker))))
 
-(defun citre-peek--get-buf-and-pos (entry)
-  "Get the buffer and position from ENTRY.
-ENTRY is an instance of `citre-peek--def-entry'.  Its
+(defun citre-peek--get-buf-and-pos (node)
+  "Get the buffer and position from NODE.
+NODE is an instance of `citre-peek--tag-node'.  Its
 `base-marker' and `line-offset' slots are used, or initialized if
 they are unset.  `line-offset' is limited so it doesn't go beyond
 the beginning/end of buffer.
@@ -853,9 +811,9 @@ the beginning/end of buffer.
 A cons pair (BUF . POINT) is returned.  If the file in the tag
 doesn't exist, these 2 fields are all nil."
   (let* ((path (citre-get-tag-field 'ext-abspath
-                                    (citre-peek--def-entry-tag entry)))
-         (base-marker (citre-peek--get-base-marker entry))
-         (line-offset (citre-peek--def-entry-line-offset entry))
+                                    (citre-peek--tag-node-tag node)))
+         (base-marker (citre-peek--get-base-marker node))
+         (line-offset (citre-peek--tag-node-line-offset node))
          (buf (citre-peek--find-file-buffer path))
          offset-overflow
          point)
@@ -877,20 +835,20 @@ doesn't exist, these 2 fields are all nil."
               (beginning-of-line)
               (cl-incf offset-overflow))
             (when (not (eq offset-overflow 0))
-              (setf (citre-peek--def-entry-line-offset entry)
+              (setf (citre-peek--tag-node-line-offset node)
                     (+ line-offset (- offset-overflow))))
             (setq point (point))))))
     (cons buf point)))
 
-(defun citre-peek--get-content (entry)
-  "Get file contents for peeking from ENTRY.
-ENTRY is an instance of `citre-peek--def-entry'.
+(defun citre-peek--get-content (node)
+  "Get file contents for peeking from NODE.
+NODE is an instance of `citre-peek--tag-node'.
 `citre-peek-file-content-height' specifies the number of lines to
 get.
 
-This also modifies the `line-offset' slot of ENTRY for letting it
+This also modifies the `line-offset' slot of NODE for letting it
 not go beyond the start/end of the file."
-  (pcase-let ((`(,buf . ,pos) (citre-peek--get-buf-and-pos entry)))
+  (pcase-let ((`(,buf . ,pos) (citre-peek--get-buf-and-pos node)))
     (if buf
         (with-current-buffer buf
           (save-excursion
@@ -907,42 +865,49 @@ not go beyond the start/end of the file."
                 (concat (buffer-substring beg end) "\n")))))
       (propertize "This file doesn't exist.\n" 'face 'error))))
 
-(defun citre-peek--line-forward (n &optional entry)
-  "Scroll the current browsed position in ENTRY N lines forward.
-ENTRY is an instance of `citre-peek--def-entry', N can be
-negative.  When ENTRY is nil, the currently browsed entry is
+(defun citre-peek--line-forward (n &optional node)
+  "Scroll the current browsed position in NODE N lines forward.
+NODE is an instance of `citre-peek--tag-node', N can be
+negative.  When NODE is nil, the currently browsed node is
 used.
 
 Note: `citre-peek--get-buf-and-pos' could further modify the
 `citre-line-offset' property of current location.  That function
 is responsible for not letting it get beyond the start/end of the
 file."
-  (let* ((entry (or entry (citre-peek--current-def-entry)))
-         (line-offset (citre-peek--def-entry-line-offset entry)))
-    (setf (citre-peek--def-entry-line-offset entry)
+  (let* ((node (or node (citre-peek--current-tag-node)))
+         (line-offset (citre-peek--tag-node-line-offset node)))
+    (setf (citre-peek--tag-node-line-offset node)
           (+ line-offset n))
     (setq citre-peek--content-update t)))
 
-;;;;; Methods for `citre-peek--def-list'
+;;;;; Methods for `citre-peek--tag-list'
 
-(defun citre-peek--def-list-length (deflist)
-  "Return the number of entries in DEFLIST.
-DEFLIST is an instance of `citre-peek--def-list'."
-  (length (citre-peek--def-list-entries deflist)))
+(defun citre-peek--tag-list-length (taglist)
+  "Return the number of nodes in TAGLIST.
+TAGLIST is an instance of `citre-peek--tag-list'."
+  (length (citre-peek--tag-list-nodes taglist)))
 
-(defun citre-peek--current-entry-in-def-list (deflist)
-  "Return the currently browsed def entry in DEFLIST.
-DEFLIST is an instance of `citre-peek--def-list'."
-  (nth (citre-peek--def-list-index deflist)
-       (citre-peek--def-list-entries deflist)))
+(defun citre-peek--current-node-in-tag-list (taglist)
+  "Return the currently browsed tag node in TAGLIST.
+TAGLIST is an instance of `citre-peek--tag-list'."
+  (nth (citre-peek--tag-list-index taglist)
+       (citre-peek--tag-list-nodes taglist)))
 
-(defun citre-peek--push-branch-in-current-entry-in-def-list
-    (deflist branch)
-  "Push BRANCH into the `branches' slot of current browsed entry in DEFLIST.
-DEFLIST and BRANCH are instances of `citre-peek--def-list'."
+(defun citre-peek--current-symbol-in-tag-list (taglist)
+  "Return the name field of currently browsed tag node in TAGLIST.
+TAGLIST is an instance of `citre-peek--tag-list'."
+  (citre-get-tag-field 'name
+                       (citre-peek--tag-node-tag
+                        (citre-peek--current-node-in-tag-list taglist))))
+
+(defun citre-peek--push-branch-in-current-node-in-tag-list
+    (taglist branch)
+  "Push BRANCH into the `branches' slot of current browsed node in TAGLIST.
+TAGLIST and BRANCH are instances of `citre-peek--tag-list'."
   (push branch
-        (citre-peek--def-entry-branches
-         (citre-peek--current-entry-in-def-list deflist))))
+        (citre-peek--tag-node-branches
+         (citre-peek--current-node-in-tag-list taglist))))
 
 ;;;;; Methods for `citre-peek--session'
 
@@ -964,162 +929,115 @@ If SESSION is nil, use the currently active session."
   (let* ((session (or session citre-peek--current-session)))
     (citre-peek--session-root-list session)))
 
-(defun citre-peek--current-def-list (&optional session)
-  "Return the currently browsed def list in a peek session SESSION.
+(defun citre-peek--current-tag-list (&optional session)
+  "Return the currently browsed tag list in a peek session SESSION.
 If SESSION is nil, use the currently active session."
   (let* ((session (or session citre-peek--current-session))
-         (deflist (citre-peek--session-root-list session))
+         (taglist (citre-peek--session-root-list session))
          (depth (citre-peek--session-depth session)))
     (dotimes (_ depth)
-      (let* ((entry (citre-peek--current-entry-in-def-list deflist))
-             (branches (citre-peek--def-entry-branches entry)))
-        (setq deflist (car branches))))
-    deflist))
+      (let* ((node (citre-peek--current-node-in-tag-list taglist))
+             (branches (citre-peek--tag-node-branches node)))
+        (setq taglist (car branches))))
+    taglist))
 
-(defun citre-peek--current-def-entry ()
-  "Return the currently browsed def entry."
-  (citre-peek--current-entry-in-def-list
-   (citre-peek--current-def-list)))
+(defun citre-peek--current-tag-node ()
+  "Return the currently browsed tag node."
+  (citre-peek--current-node-in-tag-list
+   (citre-peek--current-tag-list)))
 
-(defun citre-peek--current-tagsfile ()
-  "Return the tagsfile for currently peeked file."
-  (with-current-buffer
-      (car (citre-peek--get-buf-and-pos
-            (citre-peek--current-def-entry)))
-    (citre-peek--hack-buffer-file-name
-      (citre-tags-file-path))))
+;;;;; Create tag lists & sessions
 
-(defun citre-peek--set-current-tagsfile (tagsfile &optional maybe)
-  "Set the tagsfile for currently peeked file to TAGSFILE.
-When MAYBE is non-nil, don't do anything if the tags file of
-currently peeked file can be detected.  Otherwise, always set
-it."
-  (with-current-buffer
-      (car (citre-peek--get-buf-and-pos
-            (citre-peek--current-def-entry)))
-    (when (or (not maybe)
-              (null (citre-peek--hack-buffer-file-name
-                      (citre-tags-file-path))))
-      (setq citre--tags-file tagsfile))))
-
-;;;;; Find definitions
-
-(defun citre-peek--get-symbol-and-definitions ()
-  "Return the symbol under point and definitions of it.
-This works for temporary buffer created by `citre-peek'.
-
-The return value is a cons cell.  When in an Xref buffer, return
-`citre-peek-root-symbol-str' and a list of the tag of the
-definition under point."
-  (citre-peek--hack-buffer-file-name
-    (if-let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
-                          citre-peek-root-symbol-str
-                        (citre-get-symbol)))
-              (definitions (if (derived-mode-p 'xref--xref-buffer-mode)
-                               (list (citre--make-tag-of-current-xref-item))
-                             (citre-get-definitions-maybe-update-tags-file
-                              symbol))))
-        (cons symbol definitions)
-      (if symbol
-          (user-error "Can't find definitions for %s" symbol)
-        (user-error "No symbol at point")))))
-
-;;;;; Create def lists & sessions
-
-(defun citre-peek--make-def-list-of-current-location (name)
-  "Return a def list of current location.
-The def list is an instance of `citre-peek--def-list', with its
-`entries' slot only contains one def entry pointing to the
+(defun citre-peek--make-tag-list-of-current-location (name)
+  "Return a tag list of current location.
+The tag list is an instance of `citre-peek--tag-list', with its
+`nodes' slot only contains one def node pointing to the
 current line, and NAME being the name field of the tag.
 
-The returned def list can be used as the root def list of the
+The returned tag list can be used as the root tag list of the
 peek session."
-  (let* ((tag (citre--make-tag-of-current-location name))
-         (deflist (citre-peek--def-list-create (list tag) nil)))
-    deflist))
+  (let* ((tag (citre-make-tag-of-current-location name))
+         (taglist (citre-peek--tag-list-create (list tag))))
+    taglist))
 
-(defun citre-peek--make-branch (symbol tags)
-  "Create a new branch in the history.
-It treats TAGS as the definitions of SYMBOL, and make these a
-branch of current def entry."
+(defun citre-peek--make-branch (tags)
+  "Create a new branch in the peek history.
+This maked TAGS a branch of the current tag node."
   (unless tags (error "TAGS is nil"))
-  (let ((branch (citre-peek--def-list-create tags symbol)))
-    (citre-peek--push-branch-in-current-entry-in-def-list
-     (citre-peek--current-def-list) branch)
+  (let ((branch (citre-peek--tag-list-create tags)))
+    (citre-peek--push-branch-in-current-node-in-tag-list
+     (citre-peek--current-tag-list) branch)
     (citre-peek--session-depth-add 1)
-    (citre-peek--setup-displayed-defs-interval branch)))
+    (citre-peek--setup-displayed-tags-interval branch)))
 
-(defun citre-peek--make-session (symbol tags &optional marker)
-  "Create a peek session.
-It treats TAGS as the definition of SYMBOL, and creates a peek
-session for them.
-
-When MARKER is non-nil, and it's in a file buffer, make a tag for
-it and make it the root def list, also using SYMBOL as the
-symbol.  Make SYMBOL and TAGS the child of it."
-  (let ((deflist (citre-peek--def-list-create tags symbol)))
+(defun citre-peek--make-session (tags &optional marker)
+  "Create a peek session from TAGS.
+When MARKER is non-nil, and is in a file buffer, make a tag for
+it using the name `citre-peek-root-symbol-str', and make it the
+root tag list, then make TAGS a branch of it."
+  (let ((taglist (citre-peek--tag-list-create tags)))
     (if (and marker (buffer-local-value 'buffer-file-name
                                         (marker-buffer marker)))
         (save-excursion
           (goto-char marker)
-          (let ((root-list (citre-peek--make-def-list-of-current-location
-                            (citre-peek--def-list-symbol deflist))))
-            (if deflist
+          (let ((root-list (citre-peek--make-tag-list-of-current-location
+                            citre-peek-root-symbol-str)))
+            (if taglist
                 (progn
-                  (citre-peek--push-branch-in-current-entry-in-def-list
-                   root-list deflist)
+                  (citre-peek--push-branch-in-current-node-in-tag-list
+                   root-list taglist)
                   (citre-peek--session-create root-list 1))
               (citre-peek--session-create root-list 0))))
-      (if deflist (citre-peek--session-create deflist 0)
+      (if taglist (citre-peek--session-create taglist 0)
         (error "TAGS is nil")))))
 
 ;;;;; Manage session state
 
-(defun citre-peek--setup-displayed-defs-interval (&optional deflist)
-  "Set `citre-peek--displayed-defs-interval' based on DEFLIST.
-DEFLIST is an instance of `citre-peek--def-list'.  The interval
+(defun citre-peek--setup-displayed-tags-interval (&optional taglist)
+  "Set `citre-peek--displayed-tags-interval' based on TAGLIST.
+TAGLIST is an instance of `citre-peek--tag-list'.  The interval
 is set so that it doesn't exceeds
 `citre-peek-definitions-height', and also fits the number of
-entries in DEFLIST.
+nodes in TAGLIST.
 
-When DEFLIST is nil, the currently browsed deflist is used."
-  (let* ((deflist (or deflist (citre-peek--current-def-list)))
-         (len (citre-peek--def-list-length deflist))
-         (idx (citre-peek--def-list-index deflist))
+When TAGLIST is nil, the currently browsed taglist is used."
+  (let* ((taglist (or taglist (citre-peek--current-tag-list)))
+         (len (citre-peek--tag-list-length taglist))
+         (idx (citre-peek--tag-list-index taglist))
          start end lines overflow)
-    (setq lines (min citre-peek-definitions-height len))
+    (setq lines (min citre-peek-tag-list-height len))
     (setq start idx)
     (setq end (+ idx (1- lines)))
     (setq overflow (max 0 (- end (1- len))))
     (cl-incf start (- overflow))
     (cl-incf end (- overflow))
-    (setq citre-peek--displayed-defs-interval
+    (setq citre-peek--displayed-tags-interval
           (cons start end))))
 
 (defun citre-peek--setup-session (session)
   "Set up state variables for browsing a peek session SESSION."
   (setq citre-peek--current-session session)
-  (citre-peek--setup-displayed-defs-interval
-   (citre-peek--current-def-list session))
+  (citre-peek--setup-displayed-tags-interval
+   (citre-peek--current-tag-list session))
   (setq citre-peek--content-update t))
 
 (defun citre-peek--def-index-forward (n)
   "In a peek window, move N steps forward in the definition list.
 N can be negative."
-  (let* ((deflist (citre-peek--current-def-list))
-         (start (car citre-peek--displayed-defs-interval))
-         (end (cdr citre-peek--displayed-defs-interval))
-         (idx (citre-peek--def-list-index deflist))
-         (len (citre-peek--def-list-length deflist)))
+  (let* ((taglist (citre-peek--current-tag-list))
+         (start (car citre-peek--displayed-tags-interval))
+         (end (cdr citre-peek--displayed-tags-interval))
+         (idx (citre-peek--tag-list-index taglist))
+         (len (citre-peek--tag-list-length taglist)))
     (setq idx (mod (+ n idx) len))
-    (setf (citre-peek--def-list-index deflist) idx)
+    (setf (citre-peek--tag-list-index taglist) idx)
     (unless (<= start idx end)
       (let ((offset (if (> start idx)
                         (- idx start)
                       (- idx end))))
-        (setcar citre-peek--displayed-defs-interval
+        (setcar citre-peek--displayed-tags-interval
                 (+ offset start))
-        (setcdr citre-peek--displayed-defs-interval
+        (setcdr citre-peek--displayed-tags-interval
                 (+ offset end))))
     (setq citre-peek--content-update t)))
 
@@ -1143,12 +1061,12 @@ ROOT is the project root."
                  (face-attribute 'citre-peek-border-face
                                  :background)))))
 
-(defun citre-peek--file-content (deflist)
+(defun citre-peek--file-content (taglist)
   "Return a string for displaying file content.
-DEFLIST is the currently browsed def list."
-  (let* ((entry (citre-peek--current-entry-in-def-list deflist))
+TAGLIST is the currently browsed tag list."
+  (let* ((node (citre-peek--current-node-in-tag-list taglist))
          (file-content
-          (citre-peek--get-content entry)))
+          (citre-peek--get-content node)))
     (citre--add-face file-content
                      (list :background citre-peek--bg
                            :extend t))
@@ -1160,22 +1078,22 @@ DEFLIST is the currently browsed def list."
                                    citre-peek--ace-seqs)))
     file-content))
 
-(defun citre-peek--displayed-defs-str (deflist)
+(defun citre-peek--displayed-tags-str (taglist)
   "Return a string for displaying definitions.
-DEFLIST is the currently browsed def list."
-  (let* ((idx (citre-peek--def-list-index deflist))
-         (defs (citre-peek--def-list-entries deflist))
+TAGLIST is the currently browsed tag list."
+  (let* ((idx (citre-peek--tag-list-index taglist))
+         (defs (citre-peek--tag-list-nodes taglist))
          (root (funcall citre-project-root-function))
          (displayed-defs
           (cl-subseq defs
-                     (car citre-peek--displayed-defs-interval)
-                     (1+ (cdr citre-peek--displayed-defs-interval))))
+                     (car citre-peek--displayed-tags-interval)
+                     (1+ (cdr citre-peek--displayed-tags-interval))))
          (displayed-tags
-          (mapcar #'citre-peek--def-entry-tag displayed-defs))
-         (displayed-defs-strlist
+          (mapcar #'citre-peek--tag-node-tag displayed-defs))
+         (displayed-tags-strlist
           (make-list (length displayed-tags) nil))
          (displayed-idx
-          (- idx (car citre-peek--displayed-defs-interval)))
+          (- idx (car citre-peek--displayed-tags-interval)))
          (bg-selected (if (< (display-color-cells) 88)
                           (list :inverse-video t :extend t)
                         (list :background citre-peek--bg-selected :extend t)))
@@ -1185,36 +1103,36 @@ DEFLIST is the currently browsed def list."
     (dotimes (n (length displayed-defs))
       (let ((line (citre-peek--make-definition-str
                    (nth n displayed-tags) root)))
-        (when (citre-peek--def-entry-branches (nth n displayed-defs))
-          (setq line (concat citre-peek-peeked-through-definition-prefix
+        (when (citre-peek--tag-node-branches (nth n displayed-defs))
+          (setq line (concat citre-peek-peeked-through-tag-prefix
                              line)))
         (setq line (concat (citre--fit-line line) "\n"))
         (if (eq n displayed-idx)
-            (setf (nth n displayed-defs-strlist)
+            (setf (nth n displayed-tags-strlist)
                   (citre--add-face line bg-selected))
-          (setf (nth n displayed-defs-strlist)
+          (setf (nth n displayed-tags-strlist)
                 (citre--add-face line bg-alt)))))
-    (string-join displayed-defs-strlist)))
+    (string-join displayed-tags-strlist)))
 
-(defun citre-peek--session-info (deflist)
+(defun citre-peek--session-info (taglist)
   "Return a string for displaying session info.
-DEFLIST is the currently browsed def list.  Session info means
+TAGLIST is the currently browsed tag list.  Session info means
 the index of currently browsed definition, the total number of
 definitions, and the current chain in the code reading history."
-  (let* ((idx (citre-peek--def-list-index deflist))
-         (len (citre-peek--def-list-length deflist))
+  (let* ((idx (citre-peek--tag-list-index taglist))
+         (len (citre-peek--tag-list-length taglist))
          ;; We need to traverse the tree from the beginning to create the
          ;; chain.
-         (deflist (citre-peek--current-root-list))
+         (taglist (citre-peek--current-root-list))
          (depth 0)
          (current-depth (citre-peek--session-depth
                          citre-peek--current-session))
          chain
          session-info)
-    (while deflist
-      (let* ((entry (citre-peek--current-entry-in-def-list deflist))
-             (symbol (citre-peek--def-list-symbol deflist))
-             (branches (citre-peek--def-entry-branches entry)))
+    (while taglist
+      (let* ((node (citre-peek--current-node-in-tag-list taglist))
+             (symbol (citre-peek--current-symbol-in-tag-list taglist))
+             (branches (citre-peek--tag-node-branches node)))
         (unless symbol
           (setq symbol citre-peek-root-symbol-str))
         (if (eq depth current-depth)
@@ -1229,7 +1147,7 @@ definitions, and the current chain in the code reading history."
           (0 nil)
           (1 (push citre-peek-chain-separator chain))
           (_ (push citre-peek-branch-separator chain)))
-        (setq deflist (car branches)))
+        (setq taglist (car branches)))
       (cl-incf depth))
     (setq session-info
           (concat (format "(%s/%s) " (1+ idx) len)
@@ -1274,7 +1192,7 @@ recalculated."
     (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
       (move-overlay citre-peek--ov overlay-pos overlay-pos))
     (when (or citre-peek--content-update force)
-      (let* ((deflist (citre-peek--current-def-list))
+      (let* ((taglist (citre-peek--current-tag-list))
              (initial-newline (if (eq (line-end-position) (point-max))
                                   "\n" ""))
              (border (citre-peek--make-border)))
@@ -1283,9 +1201,9 @@ recalculated."
                              border
                              (citre-peek--maybe-decorate-fringes
                               (concat
-                               (citre-peek--file-content deflist)
-                               (citre-peek--displayed-defs-str deflist)
-                               (citre-peek--session-info deflist)))
+                               (citre-peek--file-content taglist)
+                               (citre-peek--displayed-tags-str taglist)
+                               (citre-peek--session-info taglist)))
                              border)))
       (setq citre-peek--content-update nil))))
 
@@ -1325,7 +1243,7 @@ pressed, the current point is returned."
 The buffer and the point is returned in a cons cell."
   (citre-peek--error-if-not-peeking)
   (pcase-let ((`(,buf . ,pos) (citre-peek--get-buf-and-pos
-                               (citre-peek--current-def-entry)))
+                               (citre-peek--current-tag-node)))
               (key nil))
     (unless buf
       (user-error "The file doesn't exist"))
@@ -1356,51 +1274,20 @@ The buffer and the point is returned in a cons cell."
 
 ;;;; APIs
 
-(defun citre-peek-show (symbol tags &optional marker)
-  "Show TAGS as the definitions of SYMBOL using `citre-peek' UI.
-SYMBOL is a string, TAGS is a list of tags.
+(defun citre-peek-show (tags &optional marker)
+  "Show TAGS using `citre-peek' UI.
 
-When MARKER is non-nil, and it's in a file buffer, record it as
-the root of the peek history so we can browse and jump to it
-later."
+When MARKER is non-nil, and is in a file buffer, record it as the
+root of the peek history so we can go back to it after
+`citre-peek-jump'."
   (when citre-peek--mode
     (citre-peek-abort))
-  (citre-peek--setup-session (citre-peek--make-session symbol tags marker))
+  (citre-peek--setup-session (citre-peek--make-session tags marker))
   (citre-peek--mode))
 
 ;;;; Commands
 
 ;;;;; Create/end/restore peek sessions
-
-;;;###autoload
-(defun citre-peek (&optional buf point)
-  "Peek the definition of the symbol in BUF at POINT.
-When BUF or POINT is nil, it's set to the current buffer and
-point."
-  (interactive)
-  (let* ((buf (or buf (current-buffer)))
-         (point (or point (point)))
-         (symbol-defs (save-excursion
-                        (with-current-buffer buf
-                          (goto-char point)
-                          (citre-peek--get-symbol-and-definitions))))
-         (tagsfile (with-current-buffer buf
-                     (citre-tags-file-path)))
-         (marker (if (buffer-file-name) (point-marker))))
-    (citre-peek-show (car symbol-defs) (cdr symbol-defs) marker)
-    (citre-peek--set-current-tagsfile tagsfile 'maybe)))
-
-;;;###autoload
-(defun citre-ace-peek ()
-  "Peek the definition of a symbol on screen using ace jump.
-Press a key in `citre-peek-ace-pick-symbol-at-point-keys' to pick
-the symbol under point.
-
-This command is useful when you want to see the definition of a
-function while filling its arglist."
-  (interactive)
-  (when-let ((pt (citre-ace-pick-point)))
-    (citre-peek (current-buffer) pt)))
 
 (defun citre-peek-abort ()
   "Abort peeking."
@@ -1429,19 +1316,25 @@ function while filling its arglist."
   (citre-peek--error-if-not-peeking)
   (citre-peek--line-forward -1))
 
-;;;;; Browse in def list
+;;;;; Browse in tag list
 
-(defun citre-peek-next-definition ()
-  "Peek the next definition in list."
+(defun citre-peek-next-tag ()
+  "Peek the next tag in tag list."
   (interactive)
   (citre-peek--error-if-not-peeking)
   (citre-peek--def-index-forward 1))
 
-(defun citre-peek-prev-definition ()
-  "Peek the previous definition in list."
+(define-obsolete-function-alias 'citre-peek-next-definition
+  'citre-peek-next-tag "0.3")
+
+(defun citre-peek-prev-tag ()
+  "Peek the previous tag in tag list."
   (interactive)
   (citre-peek--error-if-not-peeking)
   (citre-peek--def-index-forward -1))
+
+(define-obsolete-function-alias 'citre-peek-prev-definition
+  'citre-peek-prev-tag "0.3")
 
 ;;;;; Browse in the tree history
 
@@ -1451,11 +1344,11 @@ This adds 1 to the currently browsed depth.  It's ensured that
 the depth is not greater than the maximum depth."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let ((max-depth-p (null (citre-peek--def-entry-branches
-                            (citre-peek--current-def-entry)))))
+  (let ((max-depth-p (null (citre-peek--tag-node-branches
+                            (citre-peek--current-tag-node)))))
     (unless max-depth-p
       (citre-peek--session-depth-add 1 citre-peek--current-session)
-      (citre-peek--setup-displayed-defs-interval)
+      (citre-peek--setup-displayed-tags-interval)
       (setq citre-peek--content-update t))))
 
 (defun citre-peek-chain-backward ()
@@ -1466,7 +1359,7 @@ that the depth is not less than 0."
   (citre-peek--error-if-not-peeking)
   (unless (eq (citre-peek--session-depth citre-peek--current-session) 0)
     (citre-peek--session-depth-add -1 citre-peek--current-session)
-    (citre-peek--setup-displayed-defs-interval)
+    (citre-peek--setup-displayed-tags-interval)
     (setq citre-peek--content-update t)))
 
 ;; NOTE: The direction of branch switching commands are decided so that when
@@ -1477,10 +1370,10 @@ that the depth is not less than 0."
   "Switch to the next branch under current symbol."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((entry (citre-peek--current-def-entry))
-         (branches (citre-peek--def-entry-branches entry)))
+  (let* ((node (citre-peek--current-tag-node))
+         (branches (citre-peek--tag-node-branches node)))
     (when branches
-      (setf (citre-peek--def-entry-branches entry)
+      (setf (citre-peek--tag-node-branches node)
             (nconc (last branches) (butlast branches)))
       (setq citre-peek--content-update t))))
 
@@ -1488,83 +1381,89 @@ that the depth is not less than 0."
   "Switch to the previous branch under current symbol."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((entry (citre-peek--current-def-entry))
-         (branches (citre-peek--def-entry-branches entry)))
+  (let* ((node (citre-peek--current-tag-node))
+         (branches (citre-peek--tag-node-branches node)))
     (when branches
-      (setf (citre-peek--def-entry-branches entry)
+      (setf (citre-peek--tag-node-branches node)
             (nconc (cdr branches) (list (car branches))))
       (setq citre-peek--content-update t))))
 
 ;;;;; Edit definition list
 
 (defun citre-peek-make-current-def-first ()
-  "Put the current def entry in the first position."
+  "Put the current def node in the first position."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((deflist (citre-peek--current-def-list))
-         (idx (citre-peek--def-list-index deflist))
-         (entries (citre-peek--def-list-entries deflist))
-         (entry (nth idx entries)))
-    (setf (citre-peek--def-list-entries deflist)
-          (nconc (list entry) (citre--delete-nth idx entries)))
+  (let* ((taglist (citre-peek--current-tag-list))
+         (idx (citre-peek--tag-list-index taglist))
+         (nodes (citre-peek--tag-list-nodes taglist))
+         (node (nth idx nodes)))
+    (setf (citre-peek--tag-list-nodes taglist)
+          (nconc (list node) (citre--delete-nth idx nodes)))
     (citre-peek--def-index-forward (- idx))))
 
-(defun citre-peek-move-current-def-up ()
-  "Move the current def entry up."
+(defun citre-peek-move-current-tag-up ()
+  "Move the current tag up."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((deflist (citre-peek--current-def-list))
-         (idx (citre-peek--def-list-index deflist))
-         (entries (citre-peek--def-list-entries deflist))
-         (entry (nth idx entries)))
+  (let* ((taglist (citre-peek--current-tag-list))
+         (idx (citre-peek--tag-list-index taglist))
+         (nodes (citre-peek--tag-list-nodes taglist))
+         (node (nth idx nodes)))
     (if (> idx 0)
-        (setf (citre-peek--def-list-entries deflist)
-              (citre--insert-nth entry (1- idx)
-                                 (citre--delete-nth idx entries)))
-      (setf (citre-peek--def-list-entries deflist)
-            (nconc (cdr entries) (list entry))))
+        (setf (citre-peek--tag-list-nodes taglist)
+              (citre--insert-nth node (1- idx)
+                                 (citre--delete-nth idx nodes)))
+      (setf (citre-peek--tag-list-nodes taglist)
+            (nconc (cdr nodes) (list node))))
     (citre-peek--def-index-forward -1)))
 
-(defun citre-peek-move-current-def-down ()
-  "Move the current def entry down."
+(define-obsolete-function-alias 'citre-peek-move-current-def-up
+  'citre-peek-move-current-tag-up "0.3")
+
+(defun citre-peek-move-current-tag-down ()
+  "Move the current tag down."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((deflist (citre-peek--current-def-list))
-         (idx (citre-peek--def-list-index deflist))
-         (entries (citre-peek--def-list-entries deflist))
-         (entry (nth idx entries)))
-    (if (< idx (1- (length entries)))
-        (setf (citre-peek--def-list-entries deflist)
-              (citre--insert-nth entry (1+ idx)
-                                 (citre--delete-nth idx entries)))
-      (setf (citre-peek--def-list-entries deflist)
-            (nconc (list entry) (butlast entries))))
+  (let* ((taglist (citre-peek--current-tag-list))
+         (idx (citre-peek--tag-list-index taglist))
+         (nodes (citre-peek--tag-list-nodes taglist))
+         (node (nth idx nodes)))
+    (if (< idx (1- (length nodes)))
+        (setf (citre-peek--tag-list-nodes taglist)
+              (citre--insert-nth node (1+ idx)
+                                 (citre--delete-nth idx nodes)))
+      (setf (citre-peek--tag-list-nodes taglist)
+            (nconc (list node) (butlast nodes))))
     (citre-peek--def-index-forward 1)))
+
+(define-obsolete-function-alias 'citre-peek-move-current-def-down
+  'citre-peek-move-current-tag-down "0.3")
 
 ;;;;; Edit history
 
 (defun citre-peek-delete-branch ()
-  "Delete the first branch in currently browsed def entry."
+  "Delete the first branch in currently browsed def node."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((entry (citre-peek--current-def-entry))
-         (branches (citre-peek--def-entry-branches entry)))
+  (let* ((node (citre-peek--current-tag-node))
+         (branches (citre-peek--tag-node-branches node)))
     (when (and branches
                (y-or-n-p
                 "Deleting the current branch under this symbol.  Continue? "))
-      (pop (citre-peek--def-entry-branches entry))
+      (pop (citre-peek--tag-node-branches node))
       (setq citre-peek--content-update t))))
 
 (defun citre-peek-delete-branches ()
-  "Delete all branchs in currently browsed def entry."
+  "Delete all branchs in currently browsed def node."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let* ((entry (citre-peek--current-def-entry))
-         (branches (citre-peek--def-entry-branches entry)))
+  (let* ((node (citre-peek--current-tag-node))
+         (branches (citre-peek--tag-node-branches node)))
     (when (and branches
                (y-or-n-p
                 "Deleting all branches under this symbol.  Continue? "))
-      (setf (citre-peek--def-entry-branches entry) nil)
+      (setf (citre-peek--tag-node-branches node) nil)
       (setq citre-peek--content-update t))))
 
 ;;;;; Save/load peek session
@@ -1605,37 +1504,6 @@ A Saved session can be loaded by `citre-peek-load-session'."
                 nil nil #'equal))
     (citre-peek--mode)))
 
-;;;;; Others
-
-(defun citre-peek-through ()
-  "Peek through a symbol in current peek window."
-  (interactive)
-  (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window))
-              (symbol-defs (save-excursion
-                             (with-current-buffer (car buffer-point)
-                               (goto-char (cdr buffer-point))
-                               (citre-peek--get-symbol-and-definitions))))
-              (tagsfile (citre-peek--current-tagsfile)))
-    (citre-peek-make-current-def-first)
-    (citre-peek--make-branch (car symbol-defs) (cdr symbol-defs))
-    (citre-peek--set-current-tagsfile tagsfile 'maybe)))
-
-(defun citre-peek-jump ()
-  "Jump to the definition that is currently peeked."
-  (interactive)
-  (citre-peek--error-if-not-peeking)
-  (let ((tagsfile (citre-peek--current-tagsfile)))
-    (citre-peek-abort)
-    (citre-goto-tag
-     (citre-peek--def-entry-tag
-      (citre-peek--current-def-entry)))
-    (unless (citre-tags-file-path)
-      (setq citre--tags-file tagsfile)))
-  (when citre-peek-auto-restore-after-jump
-    (citre-peek-restore)
-    (when citre-peek-backward-in-chain-after-jump
-      (citre-peek-chain-backward))))
-
 ;;;;; Clue integration
 
 (defun citre-peek--current-line-clue-location ()
@@ -1643,9 +1511,9 @@ A Saved session can be loaded by `citre-peek-load-session'."
 This location is for using in Clue API calls."
   (unless citre-peek--current-session
     (user-error "No active peek session"))
-  (pcase-let* ((entry (citre-peek--current-def-entry))
-               (tag (citre-peek--def-entry-tag entry))
-               (`(,buf . ,pos) (citre-peek--get-buf-and-pos entry))
+  (pcase-let* ((node (citre-peek--current-tag-node))
+               (tag (citre-peek--tag-node-tag node))
+               (`(,buf . ,pos) (citre-peek--get-buf-and-pos node))
                (file (citre-get-tag-field 'ext-abspath tag))
                (line) (project))
     (if buf
@@ -1678,7 +1546,7 @@ This depends on the package
                 (citre-peek--current-line-clue-location)))
     (clue-paste-location file line project)))
 
-(provide 'citre-peek)
+(provide 'citre-ui-peek)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
@@ -1688,4 +1556,4 @@ This depends on the package
 ;; sentence-end-double-space: t
 ;; End:
 
-;;; citre-peek.el ends here
+;;; citre-ui-peek.el ends here

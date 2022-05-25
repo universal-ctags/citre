@@ -49,8 +49,8 @@
 ;;;; Libraries
 
 (require 'citre-basic-tools)
-(require 'citre-peek)
 (require 'citre-ui-jump)
+(require 'citre-ui-peek)
 (require 'citre-util)
 
 (defcustom citre-gtags-program nil
@@ -303,16 +303,15 @@ This uses the `citre-jump' UI."
 
 ;;;;; Internals
 
-(defun citre-global--peek-get-symbol-and-references ()
-  "Return the symbol under point and references of it.
-This is similar to `citre-peek--get-symbol-and-definitions'."
+(defun citre-global--peek-get-references ()
+  "Return the references of symbol at point.
+This is similar to `citre-peek--get-definitions'."
   (citre-peek--hack-buffer-file-name
     (let* ((symbol (or (citre-get-symbol)
-                       (user-error "No symbol at point")))
-           (references (or (citre-global-get-references symbol)
-                           (user-error "Can't find references for %s"
-                                       symbol))))
-      (cons symbol references))))
+                       (user-error "No symbol at point"))))
+      (or (citre-global-get-references symbol)
+          (user-error "Can't find references for %s"
+                      symbol)))))
 
 ;;;;; Commands
 
@@ -324,12 +323,12 @@ point."
   (interactive)
   (let* ((buf (or buf (current-buffer)))
          (point (or point (point)))
-         (symbol-refs (save-excursion
-                        (with-current-buffer buf
-                          (goto-char point)
-                          (citre-global--peek-get-symbol-and-references))))
+         (refs (save-excursion
+                 (with-current-buffer buf
+                   (goto-char point)
+                   (citre-global--peek-get-references))))
          (marker (if (buffer-file-name) (point-marker))))
-    (citre-peek-show (car symbol-refs) (cdr symbol-refs) marker)))
+    (citre-peek-show refs marker)))
 
 ;;;###autoload
 (defun citre-ace-peek-references ()
@@ -344,13 +343,13 @@ This is similar to `citre-ace-peek'."
   "Peek through a symbol in current peek window for its references."
   (interactive)
   (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window))
-              (symbol-defs
+              (refs
                (save-excursion
                  (with-current-buffer (car buffer-point)
                    (goto-char (cdr buffer-point))
-                   (citre-global--peek-get-symbol-and-references)))))
+                   (citre-global--peek-get-references)))))
     (citre-peek-make-current-def-first)
-    (citre-peek--make-branch (car symbol-defs) (cdr symbol-defs))))
+    (citre-peek--make-branch refs)))
 
 ;;;; `xref-find-references' integration
 
