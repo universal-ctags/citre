@@ -43,14 +43,14 @@
 
 ;;;; Libraries
 
-(require 'citre-util)
+(require 'citre-tags)
 
 ;;;; Get symbol at point
 
 (defun citre-lang-verilog-get-symbol ()
   "Get symbol function for (System) Verilog."
-  (or (citre-get-marked-symbol)
-      (when-let* ((sym (citre-get-symbol-at-point))
+  (or (citre-tags-get-marked-symbol)
+      (when-let* ((sym (citre-tags-get-symbol-at-point))
                   (bounds (citre-get-property 'bounds sym)))
         (let (syntax)
           (when (eq (aref sym 0) ?`)
@@ -69,7 +69,7 @@
       citre-sorter-arg-put-references-below
       (citre-sorter-arg-put-kinds-above '("constant"))
       'input '(length name +) 'name))
-    (_ citre-definition-default-sorter)))
+    (_ citre-tags-definition-default-sorter)))
 
 ;;;; Auto-completion
 
@@ -81,7 +81,7 @@
         (citre-readtags-sorter (citre-sorter-arg-put-kinds-above
                                 '("constant"))))
        (_ 0))
-    ,citre-completion-default-sorter))
+    ,citre-tags-completion-default-sorter))
 
 ;;;; Plugging into the language support framework
 
@@ -94,8 +94,7 @@
     citre-lang-verilog-completion-sorter)
   "(System) Verilog support for Citre.")
 
-(setf (alist-get 'verilog-mode citre-language-support-alist)
-      citre-lang-verilog-plist)
+(citre-tags-register-language-support 'verilog-mode citre-lang-verilog-plist)
 
 (provide 'citre-lang-verilog)
 

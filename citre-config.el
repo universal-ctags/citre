@@ -35,7 +35,7 @@
 
 ;;;; Auto enabling `citre-mode'
 
-(add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
+(add-hook 'find-file-hook #'citre-auto-enable-citre-mode-by-tags-file)
 
 ;;;; Language supports
 
@@ -45,32 +45,28 @@
 
 ;;;; Autoload
 
-;; These functions are set to autoload from "citre-peek.el" and
-;; "citre-basic-tools.el", and these files don't require `citre'.  So if lazy
-;; load is used, `citre' is never required. This can happen when `:defer t' is
-;; used in `use-package', and the user puts their config in `:config' block.
-;; Those config won't be executed.  So, we manually autoloads them, and ask the
-;; user to put `(require 'citre-config)' in `:init' block, for lazy load to
-;; work.
+;; These functions are defined in files that don't require `citre'.  So,
+;; although they are marked with the magic ;;;###autoload comment, they will
+;; load the files they belong to, and `citre' is not loaded.
 
-;; If you don't use `citre-config' and you write your own config, and:
-;;
-;; - You use simple `require' to load `citre', no `use-package' or other lazy
-;;   load tricks.
-;; - Or you load `citre-peek' and `citre-basic-tools' directly, not using
-;;   `citre'.
-;;
-;; Then you probably don't need these in your config.
+;; So, if lazy load is used, and user config is scheduled after loading `citre'
+;; (e.g., by `with-eval-after-load' or the `:config' block in `use-package'
+;; macro), Those config won't be executed by calling these commands.  So we
+;; manually autoloads them, and ask the user to run (require 'citre-config) in
+;; the init file, before loading citre (e.g., in the `:init' block in
+;; `use-package' macro).
+
+;; If you don't use `citre-config' and you write your own config, and you use
+;; simple `require' to load `citre', no `use-package' or other lazy load
+;; tricks, then you probably don't need these in your config.
 
 (autoload 'citre-update-tags-file "citre" nil t)
 (autoload 'citre-update-this-tags-file "citre" nil t)
 (autoload 'citre-edit-tags-file-recipe "citre" nil t)
 (autoload 'citre-create-tags-file "citre" nil t)
-(autoload 'citre-jump "citre" nil t)
-(autoload 'citre-mode "citre" nil t)
-(autoload 'citre-peek "citre" nil t)
-(autoload 'citre-ace-peek "citre" nil t)
-(autoload 'citre-auto-enable-citre-mode "citre" nil t)
+(autoload 'citre-global-create-database "citre" nil t)
+(autoload 'citre-global-update-database "citre" nil t)
+(autoload 'citre-auto-enable-citre-mode-by-tags-file "citre" nil t)
 
 (provide 'citre-config)
 

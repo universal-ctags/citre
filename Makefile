@@ -4,19 +4,19 @@
 SHELL = /bin/sh
 
 .PHONY: check
-check: test compile style
+check: compile test style
 
 .PHONY: test
 test:
 	$(SHELL) scripts/test.sh
 
-.PHONY: test-tag
-test-tag:
-	$(SHELL) scripts/test.sh tag
+.PHONY: test-common
+test-common:
+	$(SHELL) scripts/test.sh common
 
-.PHONY: test-ctags
-test-ctags:
-	$(SHELL) scripts/test.sh ctags
+.PHONY: test-tags
+test-tags:
+	$(SHELL) scripts/test.sh tags
 
 .PHONY: test-global
 test-global:
@@ -31,7 +31,7 @@ style:
 	$(SHELL) scripts/style.sh
 
 .PHONY: update-test-tags
-test-tags:
+update-test-tags:
 	$(SHELL) scripts/update-test-tags.sh
 
 .PHONY: clean

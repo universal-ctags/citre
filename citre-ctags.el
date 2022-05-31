@@ -40,17 +40,67 @@
 
 ;;;; Libraries
 
+(require 'citre-readtags)
 (require 'cl-lib)
-(require 'citre-util)
 
 ;;;; User options
 
-(defcustom citre-update-tags-file-when-no-definitions t
-  "Non-nil means ask me to update the tags file when no definitions are found.
-When the tags file in use doesn't contain a recipe, this has no
-effect."
-  :type 'string
+;;;;; Find tags file
+
+(defcustom citre-tags-files '(".tags" "tags")
+  "List of tags files.
+These are searched up directory hierarchy from the file of
+current buffer, or from `default-directory' in current buffer, to
+decide which tags file to use.
+
+This list is in descending order of priority (i.e., if we find
+one, then the rest will be ignored)."
+  :type '(repeat string)
   :group 'citre)
+
+(defcustom citre-tags-file-global-cache-dir "~/.cache/tags/"
+  "An absolute directory where you can save all your tags files.
+Tags files in it are named using the path to the directory in
+which you want to use the tags file.
+
+If you work on a remote machine, this points to directory on the
+remote machine."
+  :type 'directory
+  :group 'citre)
+
+(defcustom citre-tags-file-per-project-cache-dir "./.tags/"
+  "A relative directory where you can save all your tags files in the projct.
+This directory is expanded to the project root detected by
+`citre-project-root-function', and when you are visiting files in
+the project, this directory is searched for a tags file.
+
+Tags files in it are named using the relative path to the
+directory in which you want to use the tags file."
+  :type 'directory
+  :group 'citre)
+
+(defcustom citre-tags-file-alist nil
+  "Alist of directory -> tags file.
+If current file in buffer is in one of the directories, the
+corresponding tags file will be used.
+
+This is a buffer-local variable so you can customize it on a
+per-project basis.  Relative paths in it will be expanded against
+the project root, which is detected by
+`citre-project-root-function'.
+
+The global (default) value of this still works as a fallback for
+its buffer-local value.  So you can use `setq-default' to
+customize this for directories where it's inconvenient to have
+dir-local variables."
+  :type '(alist :key-type directory :value-type file)
+  :group 'citre)
+
+;;;###autoload
+(put 'citre-tags-file-alist 'safe-local-variable #'listp)
+(make-variable-buffer-local 'citre-tags-file-alist)
+
+;;;;; Create tags file
 
 (defcustom citre-ctags-program nil
   "The name or path of the ctags program.
@@ -123,7 +173,200 @@ This requires the ctags program provided by Universal Ctags."
   :type 'boolean
   :group 'citre)
 
-;;;; Internals
+;;;; Helper functions
+
+(defun citre-get-pseudo-tag-value (name &optional tagsfile)
+  "Get the value field of pseudo tag NAME in TAGSFILE.
+NAME should not start with \"!_\".
+
+When TAGSFILE is nil, find it automatically."
+  (when-let ((tagsfile (or tagsfile (citre-tags-file-path)))
+             (ptag (citre-readtags-get-pseudo-tags name tagsfile)))
+    (nth 1 (car ptag))))
+
+;;;; Find tags file:  Internals
+
+(defvar-local citre--tags-file nil
+  "Buffer-local cache for tags file path.
+See `citre-tags-file-path' to know how this is used.")
+
+;;;;; By `citre-tags-file-alist'
+
+(defun citre--find-tags-by-tags-file-alist (dir project alist)
+  "Find the tags file of DIR by ALIST.
+ALIST meets the requirements of `citre-tags-file-alist'.  DIR is
+an absolute path.  Relative paths in the alist are expanded
+against PROJECT, an absolute path."
+  (let* ((dir (file-truename dir))
+         (expand-file-name-against-project
+          (lambda (file)
+            (if (file-name-absolute-p file)
+                ;; Convert ~/foo to /home/user/foo
+                (expand-file-name file)
+              (when project
+                (expand-file-name file project))))))
+    (cl-dolist (pair alist)
+      (when-let ((target-dir (funcall expand-file-name-against-project
+                                      (car pair)))
+                 (target-tags (funcall expand-file-name-against-project
+                                       (cdr pair))))
+        (when (and (file-equal-p dir target-dir)
+                   (citre-non-dir-file-exists-p target-tags))
+          (cl-return target-tags))))))
+
+;;;;; By `citre-tags-file-global/per-project-cache-dir'
+
+(defun citre--path-to-cache-tags-file-name (path)
+  "Encode PATH into a tagsfile name and return it.
+PATH is canonical or relative to the project root.  It's where
+you want to use the tags file.  The returned name can be used in
+`citre-tags-file-global-cache-dir' or
+`citre-tags-file-per-project-cache-dir' as tags file names."
+  (when (file-name-absolute-p path)
+    (setq path (expand-file-name path))
+    ;; Check if it's a Windows path.  We don't use `system-type' as the user
+    ;; may work on a remote Windows machine (people really do this?)
+    (when (string-match "^[[:alpha:]]:" (file-local-name path))
+      ;; We remove the colon after the disk symbol, or Emacs will think
+      ;; "d:!project!path" is absolute and refuse to expand it against the
+      ;; cache dir.
+      (setq path (concat (or (file-remote-p path) "")
+                         (char-to-string (aref path 0))
+                         (substring path 2)))))
+  ;; Escape backslashes
+  (setq path (replace-regexp-in-string "\\\\" "\\\\\\&" path))
+  ;; Escape exclamation marks
+  (setq path (replace-regexp-in-string "!" "\\\\\\&" path))
+  (concat (replace-regexp-in-string "/" "!" path) ".tags"))
+
+(defun citre-tags-file-in-global-cache (dir)
+  "Return the tags file name of DIR in global cache dir.
+DIR is absolute.  The full path of the tags file is returned."
+  (expand-file-name
+   (citre--path-to-cache-tags-file-name (file-local-name (file-truename dir)))
+   ;; TODO: We may want to put this in a function.
+   (concat (or (file-remote-p default-directory) "")
+           citre-tags-file-global-cache-dir)))
+
+(defun citre-tags-file-in-per-project-cache (dir &optional project)
+  "Return the tags file name of DIR in per-project cache dir.
+DIR is absolute.  PROJECT is the absolute project root.  If it's
+nil, it's detected by `citre-project-root-function'.  The full
+path of the tags file is returned."
+  (let ((project (or project (funcall citre-project-root-function)))
+        (dir (file-truename dir)))
+    (if project
+        (progn
+          (setq project (file-truename project))
+          (expand-file-name
+           (citre--path-to-cache-tags-file-name
+            (file-relative-name dir project))
+           (expand-file-name citre-tags-file-per-project-cache-dir project)))
+      (error "Can't detect project root"))))
+
+(defun citre--find-tags-in-cache-dirs (dir &optional project)
+  "Find the tags file of DIR in cache dirs.
+DIR is absolute.  PROJECT is the project root.  If it's nil, it's
+detected by `citre-project-root-function'.
+
+The full path of the tags file is returned."
+  (let ((project (or project (funcall citre-project-root-function))))
+    (cl-block nil
+      ;; First search in per project cache dir.
+      (when (and project citre-tags-file-per-project-cache-dir)
+        (let ((tagsfile (citre-tags-file-in-per-project-cache dir project)))
+          (when (citre-non-dir-file-exists-p tagsfile)
+            (cl-return tagsfile))))
+      ;; Then search in global cache dir.
+      (when citre-tags-file-global-cache-dir
+        (let ((tagsfile (citre-tags-file-in-global-cache dir)))
+          (when (citre-non-dir-file-exists-p tagsfile)
+            (cl-return tagsfile)))))))
+
+;;;;; By `citre-tags-files'
+
+(defun citre--find-tags-in-dir (dir)
+  "Find the tags file of DIR by `citre-tags-files' in DIR.
+DIR is an absolute path."
+  (cl-dolist (file citre-tags-files)
+    (let ((tags (expand-file-name file dir)))
+      (when (and (citre-non-dir-file-exists-p tags)
+                 (not (file-directory-p tags)))
+        (cl-return tags)))))
+
+;;;; Find tags file: APIs
+
+(defun citre-tags-file-path ()
+  "Return the canonical path of tags file for current buffer.
+This finds the tags file up directory hierarchy, and for each
+directory, it tries the following methods in turn:
+
+- Use `citre-tags-file-alist'.
+- Find in `citre-tags-file-cache-dirs'.
+- See if one name in `citre-tags-files' exists in this dir.
+
+The result is cached, and can be cleared by
+`citre-clear-tags-file-cache'.  It also sets
+`citre-readtags--tags-file-cwd-guess-table', so for tags file
+without the TAG_PROC_CWD pseudo tag, we can better guess its root
+dir."
+  (pcase citre--tags-file
+    ('none nil)
+    ((and val (pred stringp) (pred citre-non-dir-file-exists-p)) val)
+    (_ (let* ((current-dir (file-truename (citre-current-dir)))
+              (project (funcall citre-project-root-function))
+              (tagsfile nil))
+         (while (and current-dir (null tagsfile))
+           (setq tagsfile
+                 (or (and (local-variable-p 'citre-tags-file-alist)
+                          (citre--find-tags-by-tags-file-alist
+                           current-dir project citre-tags-file-alist))
+                     (and (default-value 'citre-tags-file-alist)
+                          (citre--find-tags-by-tags-file-alist
+                           current-dir nil (default-value
+                                             'citre-tags-file-alist)))
+                     (and (or citre-tags-file-global-cache-dir
+                              citre-tags-file-per-project-cache-dir)
+                          (citre--find-tags-in-cache-dirs current-dir project))
+                     (and citre-tags-files
+                          (citre--find-tags-in-dir current-dir))))
+           (unless tagsfile
+             (setq current-dir (citre-directory-of current-dir))))
+         (if tagsfile
+             (progn
+               (setq tagsfile (file-truename tagsfile))
+               (puthash tagsfile current-dir
+                        citre-readtags--tags-file-cwd-guess-table)
+               ;; Only cache the result for file buffers, since non-file
+               ;; buffers may change their own default directories, e.g., when
+               ;; cd to another project.
+               (when buffer-file-name
+                 (setq citre--tags-file tagsfile))
+               tagsfile)
+           (when buffer-file-name
+             (setq citre--tags-file 'none)
+             nil))))))
+
+(defun citre-read-tags-file-name ()
+  "Prompt the user for an existing file.
+This should be used for selecting a tags file.  When the current
+buffer has a related tags file, it's used as the initial input."
+  (let* ((current-tags-file (citre-tags-file-path))
+         (dir (when current-tags-file
+                (file-name-directory current-tags-file)))
+         (initial (when current-tags-file
+                    (file-name-nondirectory
+                     current-tags-file))))
+    (read-file-name "Tags file: " dir nil t initial)))
+
+(defun citre-clear-tags-file-cache ()
+  "Clear the cache of buffer -> tagsfile.
+Use this when a new tags file is created."
+  (dolist (b (buffer-list))
+    (with-current-buffer b
+      (kill-local-variable 'citre--tags-file))))
+
+;;;; Create tags file: Internals
 
 (defun citre--escape-cmd-exec-to-file (cmd)
   "Escape cmd arg CMD.
@@ -421,7 +664,7 @@ This command requires the ctags program from Universal Ctags."
                    '(display-buffer-same-window))
     (kill-buffer buf)))
 
-;;;; APIs
+;;;; Create tags file: APIs
 
 ;;;;; Tags file updating
 
@@ -480,27 +723,6 @@ See *citre-ctags* buffer" s))))
          :file-handler t)
         (message "Updating %s..." tagsfile))
       t)))
-
-(defun citre-get-definitions-maybe-update-tags-file (&optional symbol tagsfile)
-  "Get definitions of SYMBOL from TAGSFILE.
-When the definitions are not found, and
-`citre-update-tags-file-when-no-definitions' is non-nil, update
-TAGSFILE if it contains recipe for updating, and try again.  If
-still no definitions found, return nil.
-
-See `citre-get-definitions' to know the behavior of \"getting
-definitions\"."
-  (let ((tagsfile (or tagsfile (citre-tags-file-path))))
-    (or (citre-get-definitions symbol tagsfile)
-        (when (and citre-update-tags-file-when-no-definitions
-                   (citre-tags-file-updatable-p tagsfile)
-                   (y-or-n-p "Can't find definition.  \
-Update the tags file and search again? "))
-          (citre-update-tags-file tagsfile 'sync)
-          ;; WORKAROUND: If we don't sit for a while, the readtags process will
-          ;; freeze.  See the comment above `citre-readtags-write-pseudo-tag'.
-          (sit-for 0.01)
-          (citre-get-definitions symbol tagsfile)))))
 
 ;;;;; Get & manipulate update recipe
 

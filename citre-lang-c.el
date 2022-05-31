@@ -47,7 +47,7 @@
 
 ;;;; Libraries
 
-(require 'citre-util)
+(require 'citre-tags)
 (require 'rx)
 
 ;;;; Get symbol at point
@@ -89,7 +89,7 @@
 
 (defun citre-lang-c--get-normal-symbol ()
   "Get non-header symbol at point."
-  (when-let ((symbol (citre-get-symbol-default)))
+  (when-let ((symbol (citre-tags-get-symbol-default)))
     (let* ((bounds (citre-get-property 'bounds symbol))
            syntax)
       (save-excursion
@@ -127,7 +127,7 @@
        ,(citre-readtags-filter-kind "file")
        ;; The references to the header.
        ,(citre-readtags-filter-kind "header")))
-    (_ (citre-definition-default-filter symbol))))
+    (_ (citre-tags-definition-default-filter symbol))))
 
 (defun citre-lang-c-definition-sorter (symbol)
   "Sorter for finding definitions of SYMBOL in C."
@@ -222,7 +222,7 @@
     ('header
      citre-filter-file-tags)
     (_
-     (citre-completion-default-filter symbol))))
+     (citre-tags-completion-default-filter symbol))))
 
 (defun citre-lang-c-completion-sorter (symbol)
   "Sorter for auto-completing SYMBOL in C."
@@ -246,7 +246,7 @@
         (citre-readtags-sorter
          (citre-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
        (_ 0))
-    ,citre-completion-default-sorter))
+    ,citre-tags-completion-default-sorter))
 
 ;;;; Plugging into the language support framework
 
@@ -263,8 +263,7 @@
     citre-lang-c-completion-sorter)
   "C language support for Citre.")
 
-(setf (alist-get 'c-mode citre-language-support-alist)
-      citre-lang-c-plist)
+(citre-tags-register-language-support 'c-mode citre-lang-c-plist)
 
 (provide 'citre-lang-c)
 

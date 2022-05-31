@@ -418,8 +418,7 @@ for your callback function."
                              ""))))
                      (s (funcall callback s nil)))
                  (when (buffer-live-p stderr-buffer)
-                   (citre-kill-process-buffer stderr-buffer)))))))
-         inhibit-message)
+                   (citre-kill-process-buffer stderr-buffer))))))))
     (setf (citre-process-proc proc-data) proc)
     proc-data))
 

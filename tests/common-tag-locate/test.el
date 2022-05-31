@@ -1,5 +1,3 @@
-;; TODO: Get rid of tags files for these tests.
-
 (ert-deftest test-locate-tag-by-pattern ()
   "Test `citre-locate-tag'.
 This is for situations where the search pattern is presented."
