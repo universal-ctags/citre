@@ -38,118 +38,617 @@
 
 ;;;; Libraries
 
+(require 'citre-backend-interface)
 (require 'citre-ctags)
-(require 'citre-ui-peek)
-(require 'citre-util)
+(require 'citre-readtags)
+(require 'cl-lib)
+(require 'rx)
+(require 'subr-x)
 
-(defun citre-peek--current-tagsfile ()
-  "Return the tagsfile for currently peeked file."
-  (with-current-buffer
-      (car (citre-peek--get-buf-and-pos
-            (citre-peek--current-tag-node)))
-    (citre-peek--hack-buffer-file-name
-      (citre-tags-file-path))))
+;;;; User Options
 
-(defun citre-peek--set-current-tagsfile (tagsfile &optional maybe)
-  "Set the tagsfile for currently peeked file to TAGSFILE.
-When MAYBE is non-nil, don't do anything if the tags file of
-currently peeked file can be detected.  Otherwise, always set
-it."
-  (with-current-buffer
-      (car (citre-peek--get-buf-and-pos
-            (citre-peek--current-tag-node)))
-    (when (or (not maybe)
-              (null (citre-peek--hack-buffer-file-name
-                      (citre-tags-file-path))))
-      (setq citre--tags-file tagsfile))))
+;;;;; Auto-completion
 
-;;;;; Find definitions
+(defcustom citre-tags-substr-completion nil
+  "Whether do substring completion for the tags backend.
+Non-nil means to match tags *containing* the symbol to be
+completed, Otherwise match tags *start with* the symbol to be
+completed.
 
-(defun citre-peek--get-definitions ()
-  "Return definitions of symbol under point.
-This works for temporary buffer created by `citre-peek'.
+Notice that when listing the candidates, Emacs itself will
+further filter the completions we supply, and its behavior is
+controlled by `completion-styles'.  If you want substring
+completion, you need to set `citre-tags-substr-completion' to
+non-nil, *and* add `substring' to `completion-styles' (for Emacs
+27, there is also a `flex' style that will work)."
+  :type 'boolean
+  :group 'citre)
 
-When in an xref buffer, return a single-element list of the tag
-of the xref item under point, with the `name' field being
-`citre-peek-root-symbol-str'."
-  (citre-peek--hack-buffer-file-name
-    (if-let* ((symbol (if (derived-mode-p 'xref--xref-buffer-mode)
-                          (symbol-at-point)
-                        (citre-get-symbol)))
-              (definitions
-                (if (derived-mode-p 'xref--xref-buffer-mode)
-                    (when-let ((tag (citre-make-tag-of-current-xref-item
-                                     citre-peek-root-symbol-str)))
-                      (list tag))
-                  (citre-get-definitions-maybe-update-tags-file
-                   symbol))))
-        definitions
-      (if symbol
-          (user-error "Can't find definitions for %s" symbol)
-        (user-error "No symbol at point")))))
+(make-obsolete 'citre-capf-substr-completion
+               'citre-tags-substr-completion
+               "0.3")
 
-;;;; Commands
+(defcustom citre-tags-completion-case-sensitive t
+  "Case sensitivity of auto-completion.
 
-;;;###autoload
-(defun citre-peek (&optional buf point)
-  "Peek the definition of the symbol in BUF at POINT.
-When BUF or POINT is nil, it's set to the current buffer and
-point."
-  (interactive)
-  (let* ((buf (or buf (current-buffer)))
-         (point (or point (point)))
-         (defs (save-excursion
-                 (with-current-buffer buf
-                   (goto-char point)
-                   (citre-peek--get-definitions))))
-         (tagsfile (with-current-buffer buf
+Note for developers: Actually this doesn't affect auto-completion
+directly.  This option controls the behavior of `citre-get-tags'
+when its argument MATCH is not nil or `exact', and when this is
+the case, it's likely that the user is getting tags for
+auto-completion."
+  :type 'boolean
+  :group 'citre)
+
+(make-obsolete 'citre-capf-completion-case-sensitive
+               'citre-tags-completion-case-sensitive
+               "0.3")
+
+;;;;; Imenu
+
+(defcustom citre-tags-imenu-create-tags-file-threshold (* 50 1024 1024)
+  "The threshold (in bytes) to create a tags file for imenu.
+When the tags file used is bigger than this threshold, searching
+for tags in current file in it could be slow.  So, Citre let
+Ctags scan the current file, and create a temporary tags file (in
+variable `temporary-file-directory'), which is faster.
+
+When the tags file in use contains a recipe, the command line in
+it is used, just the dir/files to scan are substituted by the
+current file.  If not, a command for Universal Ctags is used.
+
+When this is nil, always use the existing tags file and never
+create one for imenu.  When this is 0, always create a new tags
+file for imenu."
+  :type '(set integer (const nil))
+  :group 'citre)
+
+(make-obsolete 'citre-imenu-create-tags-file-threshold
+               'citre-tags-imenu-create-tags-file-threshold
+               "0.3")
+
+;;;;; Misc
+
+(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
+  "Hook to run after jumping to a location."
+  :type 'hook
+  :group 'citre)
+
+(defcustom citre-auto-enable-citre-mode-modes 'all
+  "The major modes where `citre-auto-enable-citre-mode' works.
+If you requires `citre-config' in your configuration, then these
+are the major modes where `citre-mode' is automatically enabled
+if a tags file can be found.
+
+This should be a list of major modes, or `all' for it to work in
+all major modes."
+  :type '(choice (repeat symbol)
+                 (const :tag "All major modes" all))
+  :group 'citre)
+
+;;;; APIs
+
+;;;;; Readtags API wrapper
+
+(cl-defun citre-get-tags
+    (&optional tagsfile name match
+               &key filter sorter
+               require optional exclude parse-all-fields)
+  "Get tags in tags file TAGSFILE that match NAME.
+This is like `citre-readtags-get-tags', except that:
+
+- TAGSFILE could be nil, and it will be find automatically.
+- When MATCH is nil or `exact', CASE-FOLD is always nil,
+  otherwise it's decided by `citre-tags-completion-case-sensitive'.
+
+TAGSFILE is the absolute path of the tags file.  For FILTER,
+SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
+`citre-readtags-get-tags'.
+
+Each element in the returned value is a list containing the tag
+and some of its fields, which can be utilized by
+`citre-get-tag-field'."
+  (citre-readtags-get-tags (or tagsfile (citre-tags-file-path)
+                               (user-error "Can't find a tags file"))
+                           name match
+                           (unless (or (null match) (eq match 'exact))
+                             (not citre-tags-completion-case-sensitive))
+                           :filter filter :sorter sorter
+                           :require require :optional optional
+                           :exclude exclude
+                           :parse-all-fields parse-all-fields))
+
+;;;;; Common filter/sorter snippets
+
+(defun citre-filter-extra-tags (extras)
+  "Filter that matches extra tags in list EXTRAS."
+  (citre-readtags-filter 'extras extras 'csv-contain))
+
+(defvar citre-filter-file-tags
+  `(or
+    ,(citre-readtags-filter 'extras '("inputFile") 'csv-contain)
+    ,(citre-readtags-filter-kind "file"))
+  "Filter that matches file tags.")
+
+(defun citre-filter-local-symbol-in-other-file (file tagsfile)
+  "Filter that matches tags with \"file\" scope, but not in FILE.
+TAGSFILE is the absolute path of the tags file to use this filter
+on."
+  `(and (not ,(citre-readtags-filter-input file tagsfile))
+        (or ,(citre-readtags-filter-field-exist 'file)
+            ,(citre-readtags-filter 'extras "fileScope" 'csv-contain))))
+
+(defvar citre-sorter-arg-size-order
+  '(expr (if (and $line $end &line &end)
+             (<> (- &end &line) (- $end $line))
+           0))
+  "For tags with `line' and `end' field, sort them by size.
+The \"size\" is the difference between its `end' and `line'
+field.  A \"smaller\" definition may be a prototype or forward
+declaration, while the \"bigger\" one is the actual definition.
+
+This can be used as an arg for `citre-readtags-sorter'.")
+
+(defvar citre-sorter-arg-put-references-below
+  `(filter ,(citre-readtags-filter 'extras "reference" 'csv-contain) -)
+  "Put reference tags below others.
+This can be used as an arg for `citre-readtags-sorter'.")
+
+(defun citre-sorter-arg-put-kinds-above (kinds)
+  "Put tags with kind field in list KINDS above others.
+This can be used as an arg for `citre-readtags-sorter'."
+  (let ((filters (mapcar (lambda (k) (citre-readtags-filter-kind k))
+                         kinds)))
+    (if (eq (length filters) 1)
+        (setq filters `(filter ,(car filters) +))
+      (setq filters `(filter (or ,@filters) +)))))
+
+;;;;; Language support framework
+
+;;;;;; The lookup table
+
+(defvar citre-tags-language-support-alist nil
+  "The lookup table for language-specific support of tags backend.
+
+A key of it is the language's major mode (a symbol).
+
+A value of it is a plist.  Its props and values are:
+
+- `:get-symbol': The function to get the symbol at point.
+
+  It's a function with no arguments.  The returned value is a
+  string of the symbol name.  To support auto-completion, Citre
+  requires a `citre-bounds' property, which is a cons pair of the
+  beginning/end positions of the symbol.
+
+  You can use other properties to record the information you need
+  for filtering/sorting the tags, see the props below.  Citre
+  automatically attach 2 more props to the returned value:
+  `citre-file-path' for the full path of current file (when in a
+  file buffer), and `citre-tags-file' for the canonical path of
+  tags file, so filters/sorters can make use of them.
+
+  If you don't specify this prop, `citre-tags-get-symbol-default' is
+  used as fallback.  You can also use it internally, and add more
+  properties you need.
+
+  When there's an active region, it's recommended to get the text
+  in it as a symbol, so when your function doesn't work well for
+  the user, they can manually specify which part to get.
+  `citre-get-marked-symbol' implements this, and is also used by
+  `citre-tags-get-symbol-default'.
+
+- `:completion-filter': The filter for auto-completion.
+
+  It can be a filter expression, a symbol whose value is a filter
+  expression, or a function that takes the string returned by the
+  `:get-symbol' function, and returns the filter expression.  The
+  fallback is `citre-tags-completion-default-filter'.
+
+- `:completion-sorter': The sorter for auto-completion.
+
+  It can be a sorter expression, a symbol whose value is a sorter
+  expression, or a function that takes the string returned by the
+  `:get-symbol' function, and returns the sorter expression.The
+  fallback is `citre-tags-completion-default-sorter'.
+
+- `:definition-filter' and `:definition-sorter': The same as
+  `:completion-filter' and `:completion-sorter', but used for
+  finding definitions.  Their fallback values are
+  `citre-tags-definition-default-filter' and
+  `citre-tags-definition-default-sorter'.
+
+The filter/sorter functions should be pure, i.e., should only use
+information provided by the symbol, and not fetch information
+from the environment.")
+
+(defun citre-tags--get-value-in-language-alist (prop &optional symbol)
+  "A helper for lookup PROP in `citre-tags-language-support-alist'.
+Returns the value in it for the language in current buffer, and
+PROP.
+
+If SYMBOL is non-nil, and the value we get is a function, call
+the function on SYMBOL and return its value."
+  (when-let ((value (plist-get (alist-get major-mode
+                                          citre-tags-language-support-alist)
+                               prop)))
+    (cond
+     ((and (symbolp value) (boundp value))
+      (symbol-value value))
+     ((and symbol (functionp value))
+      (funcall value symbol))
+     (t value))))
+
+;;;;;; APIs
+
+(defun citre-tags-get-marked-symbol ()
+  "Get the text in activate region as a symbol."
+  (when (use-region-p)
+    (let ((bounds (cons (region-beginning) (region-end))))
+      (citre-put-property
+       (buffer-substring-no-properties (car bounds) (cdr bounds))
+       'bounds bounds))))
+
+(defun citre-tags-get-symbol-at-point ()
+  "Get the symbol at point."
+  (when-let ((bounds (bounds-of-thing-at-point 'symbol)))
+    (citre-put-property
+     (buffer-substring-no-properties (car bounds) (cdr bounds))
+     'bounds bounds)))
+
+(defun citre-tags-get-symbol-default ()
+  "Get the symbol at point.
+If there's an active region, the text in it is returned as a
+symbol.  Otherwise, the symbol at point is returned.  If both
+fails, nil is returned.
+
+The returned symbol is a string with a `citre-bounds' property,
+recording the beginning/end positions of the symbol."
+  (or (citre-tags-get-marked-symbol)
+      (citre-tags-get-symbol-at-point)))
+
+(defun citre-tags-get-symbol (&optional tagsfile)
+  "Get the symbol at point.
+Set `citre-tags-language-support-alist' to control the behavior
+of this function for different languages.  `citre-file-path' and
+`citre-tags-file' properties are attached to the symbol string so
+filters/sorters can make use of them.
+
+When TAGSFILE is non-nil, write it (rather than the tags file
+associated with current buffer) to the `citre-tags-file' property
+in the returned string.  This is needed when getting
+definitions/completions of the returned symbol from a specified
+tags file."
+  (let ((sym (funcall (or (citre-tags--get-value-in-language-alist :get-symbol)
+                          #'citre-tags-get-symbol-default))))
+    (citre-put-property sym 'file-path (buffer-file-name))
+    (citre-put-property sym 'tags-file (or tagsfile (citre-tags-file-path)))
+    sym))
+
+(defun citre-tags-register-language-support (mode plist)
+  "Register language support for the tags backend.
+MODE is a symbol of the major mode, PLIST is a plist described in
+`citre-tags-language-support-alist'."
+  (setf (alist-get mode citre-tags-language-support-alist)
+        plist))
+
+;;;;; Auto-completion related
+
+(defun citre-tags-completion-default-filter (symbol)
+  "Default completion filter for SYMBOL."
+  (let ((tags-file (citre-get-property 'tags-file symbol))
+        (file-path (citre-get-property 'file-path symbol)))
+    `(not
+      (or
+       ,(citre-filter-extra-tags '("anonymous" "reference"))
+       ,citre-filter-file-tags
+       ,(if file-path
+            (citre-filter-local-symbol-in-other-file file-path tags-file)
+          'false)))))
+
+(defvar citre-tags-completion-default-sorter
+  (citre-readtags-sorter
+   '(length name +) 'name)
+  "The default sorter expression for auto-completion.
+This sorts the candidates by their length, then the alphabetical
+order of their name.")
+
+(defun citre-tags-get-completions (&optional symbol tagsfile substr-completion)
+  "Get completions from TAGSFILE of symbol at point.
+TAGSFILE is the absolute path of the tags file.  If SYMBOL is
+non-nil, use that symbol instead.  If TAGSFILE is not specified,
+fint it automatically.  If SUBSTR-COMPLETION is non-nil, get tags
+that contains SYMBOL, or get tags that starts with SYMBOL.  The
+case sensitivity is controlled by
+`citre-tags-completion-case-sensitive'.
+
+The returned value is a list of tags.  Nil is returned when the
+completion can't be done."
+  (when-let* ((symbol (or symbol (citre-tags-get-symbol tagsfile)))
+              (tagsfile (or tagsfile (citre-tags-file-path)))
+              (match (if substr-completion 'substr 'prefix)))
+    (citre-get-tags tagsfile symbol match
+                    :filter (or (citre-tags--get-value-in-language-alist
+                                 :completion-filter symbol)
+                                (citre-tags-completion-default-filter symbol))
+                    :sorter (or (citre-tags--get-value-in-language-alist
+                                 :completion-sorter symbol)
+                                citre-tags-completion-default-sorter)
+                    :require '(name)
+                    :optional '(ext-kind-full signature scope typeref))))
+
+;;;;; Finding definitions
+
+(defun citre-tags-definition-default-filter (symbol)
+  "Default definition filter for SYMBOL."
+  (let ((tags-file (citre-get-property 'tags-file symbol))
+        (file-path (citre-get-property 'file-path symbol)))
+    `(not
+      (or
+       ;; Don't excluded "anonymous" here as such symbols can appear in typeref
+       ;; or scope fields of other tags, which may be shown in an xref buffer,
+       ;; so we should be able to find their definitions.
+       ,citre-filter-file-tags
+       ,(if file-path
+            (citre-filter-local-symbol-in-other-file file-path tags-file)
+          'false)))))
+
+(defvar citre-tags-definition-default-sorter
+  (citre-readtags-sorter
+   citre-sorter-arg-put-references-below
+   'input '(length name +) 'name
+   citre-sorter-arg-size-order)
+  "The default sorter expression for finding definitions.
+This sorts the file name by their alphabetical order, then the
+length and alphabetical order of the tag names.")
+
+(defun citre-tags-get-definitions (&optional symbol tagsfile)
+  "Get definitions of symbol at point.
+If SYMBOL is non-nil, use that symbol instead.  Notice it should
+be returned by `citre-tags-get-symbol'.  If TAGSFILE is non-nil,
+find definitions from that tags file, otherwise get the tagsfile
+from SYMBOL.
+
+The result is a list of tags.  Nil is returned when no definition
+is found."
+  (let* ((symbol (or symbol (citre-tags-get-symbol tagsfile)))
+         (tagsfile (or tagsfile (citre-get-property 'tags-file symbol))))
+    (unless symbol
+      (user-error "No symbol at point"))
+    (citre-get-tags tagsfile symbol 'exact
+                    :filter (or (citre-tags--get-value-in-language-alist
+                                 :definition-filter symbol)
+                                (citre-tags-definition-default-filter symbol))
+                    :sorter (or (citre-tags--get-value-in-language-alist
+                                 :definition-sorter symbol)
+                                citre-tags-definition-default-sorter)
+                    :require '(name ext-abspath pattern)
+                    :optional '(ext-kind-full line typeref scope extras))))
+
+;;;; Completion backend
+
+(defvar citre-tags--completion-cache
+  '(:file nil :symbol nil :bounds nil :substr nil :cands nil)
+  "A plist for completion cache of the tags backend.
+Its props are:
+
+- `:file': The file where the completion happens.
+- `:symbol': The symbol that's been completed.
+- `:bounds': The bound positions of `:symbol'.
+- `:substr': Whether substring completion is used.  This is
+  needed since in the same position, user may use popup
+  completion that does prefix completion, and use their own
+  command that let binds `citre-tags-substr-completion' to t and
+  call `completion-at-point'.
+- `:cands': The tags of completions.")
+
+(defun citre-tags-get-completions-at-point ()
+  "Get completions of symbol at point.
+The result is a list (BEG END TAGS), see
+`citre-register-completion-backend'."
+  ;; Just to make sure the tags file exists.
+  (when-let ((tagsfile (citre-tags-file-path))
+             (symbol (citre-tags-get-symbol)))
+    (if citre-capf-optimize-for-popup
+        (let* ((cache citre-tags--completion-cache)
+               (file (buffer-file-name))
+               (bounds (citre-get-property 'bounds symbol)))
+          (if (and (equal (plist-get cache :file) file)
+                   (string-prefix-p (plist-get cache :symbol) symbol)
+                   ;; We also need to make sure we are in the process of
+                   ;; completing the same whole symbol, since same symbol in
+                   ;; different positions can produce different results,
+                   ;; depending on the language support implementation.
+                   (eq (car (plist-get cache :bounds)) (car bounds))
+                   ;; Just in case the user set `citre-tags-substr-completion'
+                   ;; to something can't compare by `eq', we use `null' to make
+                   ;; sure we are comparing t or nil.
+                   (eq (null (plist-get cache :substr))
+                       (null citre-tags-substr-completion)))
+              (list (car bounds) (cdr bounds) (plist-get cache :cands))
+            ;; Make sure we get a non-nil collection first, then setup the
+            ;; cache, since the calculation can be interrupted by user input,
+            ;; and we get nil, which aren't the actual completions.
+            (when-let ((cands (citre-tags-get-completions
+                               symbol nil citre-tags-substr-completion)))
+              ;; Prevent keyboard quit when building cache.
+              (let ((inhibit-quit t))
+                (plist-put cache :file file)
+                (plist-put cache :symbol (substring-no-properties symbol))
+                (plist-put cache :bounds bounds)
+                (plist-put cache :substr citre-tags-substr-completion)
+                (plist-put cache :cands cands))
+              (list (car bounds) (cdr bounds) cands))))
+      (let ((bounds (citre-get-property 'bounds symbol)))
+        (list (car bounds) (cdr bounds)
+              (citre-tags-get-completions
+               symbol nil citre-tags-substr-completion))))))
+
+(citre-register-completion-backend 'tags #'citre-tags-get-completions-at-point)
+
+;;;; Find definition backend
+
+(defun citre-tags-get-definitions-at-point ()
+  "Get definitions of symbol at point."
+  (when-let ((tagsfile (citre-tags-file-path))
+             (symbol (citre-tags-get-symbol)))
+    (citre-tags-get-definitions symbol )))
+
+(defun citre--set-tags-file-by-buffer (buf)
+  "If no tags file can be found for current buffer, use the one in BUF.
+This does nothing if no tags file can be found for BUF."
+  (let (tags-file)
+    (when (and (null (citre-tags-file-path))
+               (setq tags-file (with-current-buffer buf
+                                 (citre-tags-file-path))))
+      (setq citre--tags-file tags-file))))
+
+(defvar citre-tags--find-definition-for-id-filter
+  `(not ,(citre-readtags-filter 'extras "anonymous" 'csv-contain))
+  "Filter for finding definitions when the symbol is inputted by user.")
+
+(defvar citre-tags--id-list-cache
+  '(:tags-file nil :time nil :tags nil)
+  "Plist for caching identifier list for tags backend.
+Its props and vals are:
+
+- `:tags-file': Canonical path of tags file.
+- `:time': Last modified time of tags file.
+- `:tags': The tags.")
+
+(defun citre-tags--get-definition-for-id (symbol)
+  "Get definition for SYMBOL without text property.
+When xref prompts for user input for the symbol, we can't get
+information from the environment of the symbol at point, so we
+have to bypass the whole filter/sort mechanism of Citre and use
+simple tag name matching.  This function is for it."
+  (citre-get-tags nil symbol 'exact
+                  :filter citre-tags--find-definition-for-id-filter
+                  :sorter citre-tags-definition-default-sorter
+                  :require '(name ext-abspath pattern)
+                  :optional '(ext-kind-full line typeref scope extras)))
+
+(defun citre-tags-get-identifiers ()
+  "Get a list of identifiers in current project."
+  ;; We need this since Xref calls this function in minibuffer.
+  (let* ((tagsfile (with-selected-window (or (minibuffer-selected-window)
+                                             (selected-window))
                      (citre-tags-file-path)))
-         (marker (if (buffer-file-name) (point-marker))))
-    (citre-peek-show defs marker)
-    (citre-peek--set-current-tagsfile tagsfile 'maybe)))
+         (update-time (gethash 'time (citre-readtags-tags-file-info
+                                      tagsfile))))
+    (if (and (equal tagsfile
+                    (plist-get citre-tags--id-list-cache
+                               :tags-file))
+             (equal update-time
+                    (plist-get citre-tags--id-list-cache
+                               :time)))
+        (plist-get citre-tags--id-list-cache :tags)
+      (let ((tags
+             (cl-remove-duplicates
+              (mapcar
+               (lambda (tag) (citre-get-tag-field 'name tag))
+               (citre-get-tags
+                ;; We don't use STR here, but return all tag names,
+                ;; since we need to work with completion styles that
+                ;; may not do a prefix completion.
+                tagsfile nil nil
+                :filter citre-tags--find-definition-for-id-filter
+                :sorter (citre-readtags-sorter '(length name +) 'name)
+                :require '(name)))
+              :test #'equal)))
+        (plist-put citre-tags--id-list-cache
+                   :tags-file tagsfile)
+        (plist-put citre-tags--id-list-cache
+                   :time update-time)
+        (plist-put citre-tags--id-list-cache
+                   :tags tags)
+        tags))))
 
-;;;###autoload
-(defun citre-ace-peek ()
-  "Peek the definition of a symbol on screen using ace jump.
-Press a key in `citre-peek-ace-pick-symbol-at-point-keys' to pick
-the symbol under point.
+(citre-register-find-definition-backend
+ 'tags #'citre-tags-get-definitions-at-point
+ :identifier-list-func #'citre-tags-get-identifiers
+ :get-definitions-for-id-func #'citre-tags--get-definition-for-id)
 
-This command is useful when you want to see the definition of a
-function while filling its arglist."
-  (interactive)
-  (when-let ((pt (citre-ace-pick-point)))
-    (citre-peek (current-buffer) pt)))
+;;;; Tags in buffer backend
 
-(defun citre-peek-through ()
-  "Peek through a symbol in current peek window."
-  (interactive)
-  (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window))
-              (defs (save-excursion
-                      (with-current-buffer (car buffer-point)
-                        (goto-char (cdr buffer-point))
-                        (citre-peek--get-definitions))))
-              (tagsfile (citre-peek--current-tagsfile)))
-    (citre-peek-make-current-def-first)
-    (citre-peek--make-branch defs)
-    (citre-peek--set-current-tagsfile tagsfile 'maybe)))
+(declare-function tramp-get-remote-tmpdir "tramp" (vec))
+(declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
 
-;; TODO: This should be in citre-ui-peek.el.  For now we keep it here as it
-;; uses `citre--tags-file' (in citre-util.el)
-(defun citre-peek-jump ()
-  "Jump to the definition that is currently peeked."
-  (interactive)
-  (citre-peek--error-if-not-peeking)
-  (let ((tagsfile (citre-peek--current-tagsfile)))
-    (citre-peek-abort)
-    (citre-goto-tag
-     (citre-peek--tag-node-tag
-      (citre-peek--current-tag-node)))
-    (unless (citre-tags-file-path)
-      (setq citre--tags-file tagsfile)))
-  (when citre-peek-auto-restore-after-jump
-    (citre-peek-restore)
-    (when citre-peek-backward-in-chain-after-jump
-      (citre-peek-chain-backward))))
+(defun citre-imenu--temp-tags-file-path ()
+  "Return the temporary tags file path for imenu.
+This also works on a remote machine."
+  (if (file-remote-p default-directory)
+      (expand-file-name "citre-imenu.tags"
+                        (tramp-get-remote-tmpdir
+                         (tramp-dissect-file-name default-directory)))
+    (expand-file-name "citre-imenu.tags" temporary-file-directory)))
+
+(defun citre-imenu--ctags-command-cwd ()
+  "Return ctags command and its cwd for tags file for imenu."
+  (if-let* ((tagsfile (citre-tags-file-path))
+            (scan-files (list (file-local-name (buffer-file-name))))
+            (target (citre-imenu--temp-tags-file-path))
+            (cmd-and-cwd (citre-get-recipe-and-replace-parts
+                          tagsfile scan-files target))
+            (cmd (car cmd-and-cwd))
+            (cwd (cdr cmd-and-cwd)))
+      (cons cmd cwd)
+    (cons `(,(or citre-ctags-program "ctags") "-o"
+            ,(citre-imenu--temp-tags-file-path)
+            "--kinds-all=*" "--fields=*" "--extras=*"
+            ,(file-local-name (buffer-file-name)))
+          default-directory)))
+
+(defun citre-imenu--tags-from-tags-file ()
+  "Get tags for imenu from the tags file being used."
+  (citre-get-tags
+   nil nil nil
+   :filter
+   `(and ,(citre-readtags-filter-input (buffer-file-name)
+                                       (citre-tags-file-path))
+         (not (or ,(citre-readtags-filter
+                    'extras
+                    '("anonymous" "inputFile")
+                    'csv-contain)
+                  ,(citre-readtags-filter-kind "file"))))
+   :sorter (citre-readtags-sorter 'line)
+   :require '(name pattern)
+   :optional '(ext-kind-full line typeref scope extras)))
+
+(defun citre-imenu--tags-from-temp-tags-file ()
+  "Get tags for imenu from a new temporary tags file."
+  (pcase-let ((`(,cmd . ,cwd) (citre-imenu--ctags-command-cwd)))
+    (make-directory (file-name-directory (citre-imenu--temp-tags-file-path))
+                    'parents)
+    (let ((default-directory cwd))
+      (apply #'process-file (car cmd)
+             nil (get-buffer-create "*ctags*") nil
+             (cdr cmd))))
+  ;; WORKAROUND: If we don't sit for a while, the readtags process will freeze.
+  ;; TOOD: Fix this when uctags offers "edittags" command.
+  (sit-for 0.001)
+  (citre-get-tags
+   (citre-imenu--temp-tags-file-path) nil nil
+   :filter
+   `(not (or ,(citre-readtags-filter
+               'extras
+               '("anonymous" "inputFile")
+               'csv-contain)
+             ,(citre-readtags-filter-kind "file")))
+   :sorter (citre-readtags-sorter 'line)
+   :require '(name pattern)
+   :optional '(ext-kind-full line typeref scope extras)))
+
+(defun citre-tags-get-tags-in-buffer ()
+  "Get tags in buffer."
+  (let* ((tagsfile (citre-tags-file-path)))
+    (if (and tagsfile
+             (or (null citre-tags-imenu-create-tags-file-threshold)
+                 (< (file-attribute-size (file-attributes tagsfile))
+                    citre-tags-imenu-create-tags-file-threshold)))
+        (citre-imenu--tags-from-tags-file)
+      (citre-imenu--tags-from-temp-tags-file))))
+
+(citre-register-tags-in-buffer-backend 'tags #'citre-tags-get-tags-in-buffer)
 
 (provide 'citre-tags)
 

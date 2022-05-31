@@ -48,10 +48,13 @@
 
 ;;;; Libraries
 
-(require 'citre-basic-tools)
+(require 'citre-backend-interface)
+;; We only use `citre-get-symbol' in this module.
+(require 'citre-tags)
 (require 'citre-ui-jump)
 (require 'citre-ui-peek)
-(require 'citre-util)
+
+;;;; User Options
 
 (defcustom citre-gtags-program nil
   "The name or path of the gtags program.
@@ -91,53 +94,12 @@ database in the project directory."
 `citre-global--get-reference-lines' may add more arguments on
 these.")
 
-;; TODO: Make this a general API.
 (defun citre-global--get-output-lines (args)
   "Get output from global program.
-ARGS is the arguments passed to the program.
-
-This is designed to allow local quit to terminate the process."
-  ;; The implementation of this function is similar to
-  ;; `citre-readtags--get-lines'.
-  (let* ((output-buf (get-buffer-create " *citre-global*"))
-         inhibit-message
-         proc exit-msg)
-    (with-current-buffer output-buf
-      (erase-buffer))
-    (when (file-remote-p default-directory)
-      (setq inhibit-message t))
-    (let ((inhibit-quit t))
-      (pcase (with-local-quit
-               (catch 'citre-done
-                 (setq proc
-                       (make-process
-                        :name "global"
-                        :buffer output-buf
-                        :command (append (list
-                                          (or citre-global-program "global"))
-                                         args)
-                        :connection-type 'pipe
-                        :stderr nil
-                        :sentinel (lambda (_proc _msg)
-                                    (throw 'citre-done t))
-                        :file-handler t))
-                 (while (sleep-for 30))))
-        ('nil (set-process-sentinel proc #'ignore)
-              (if (eq system-type 'windows-nt)
-                  (signal-process proc 'sighup)
-                (interrupt-process proc))
-              nil)
-        (_ (pcase (process-status proc)
-             ('exit
-              (pcase (process-exit-status proc)
-                (0 nil)
-                (s (setq exit-msg (format "global exits %s\n" s)))))
-             (s (setq exit-msg
-                      (format "abnormal status of global: %s\n" s))))
-           (let ((output (with-current-buffer output-buf (buffer-string))))
-             (if exit-msg
-                 (error (concat exit-msg output))
-               (split-string output "\n" t))))))))
+ARGS is the arguments passed to the program."
+  (citre-get-output-lines
+   (append (list (or citre-global-program "global"))
+           args)))
 
 (defun citre-global--get-reference-lines (name &optional case-fold start-file)
   "Find references to NAME using global and return the outputed lines.
@@ -145,7 +107,6 @@ When CASE-FOLD is non-nil, do case-insensitive matching.  When
 START-FILE is non-nil, sort the result by nearness (see the help
 message of global) start from START-FILE."
   (let* ((name (when name (substring-no-properties name)))
-         inhibit-message
          cmd)
     (when case-fold (push "--ignore-case" cmd))
     (push (or citre-global-program "global") cmd)
@@ -198,6 +159,32 @@ The value of `extras' field is \"reference\"."
 
 ;;;;; API
 
+(defvar-local citre--global-dbpath nil
+  "Buffer-local cache for global database path.
+See `citre-global-dbpath' to know how this is used.")
+
+(defun citre-global-dbpath (&optional dir)
+  "Get global database path.
+This is the directory containing the GTAGS file.  When DIR is
+non-nil, find database of that directory, otherwise find the
+database of current directory."
+  (pcase citre--global-dbpath
+    ('none nil)
+    ((and val (pred stringp) (pred citre-dir-exists-p)) val)
+    (_ (let ((default-directory (or default-directory dir)))
+         (condition-case nil
+             (setq citre--global-dbpath
+                   (car (citre-global--get-output-lines '("--print-dbpath"))))
+           (error (setq citre--global-dbpath 'non)
+                  nil))))))
+
+(defun citre-clear-global-dbpath-cache ()
+  "Clear the cache of buffer -> global database path.
+Use this when a new database is created."
+  (dolist (b (buffer-list))
+    (with-current-buffer b
+      (kill-local-variable 'citre--global-dbpath))))
+
 (defun citre-global-get-references (&optional name case-fold start-file)
   "Get reference tags using global.
 When NAME is non-nil, get references of NAME, otherwise get
@@ -212,17 +199,18 @@ specify the start file, or be a symbol (like `alpha') to use the
 default alphabetical sort.
 
 Global program is run under current `default-directory'."
-  (let ((name (or name (citre-get-symbol)))
-        (start-file
-         (pcase start-file
-           ('nil (with-selected-window (or (minibuffer-selected-window)
-                                           (selected-window))
-                   (or (buffer-file-name) default-directory)))
-           ((pred stringp) start-file)
-           ((pred symbolp) nil))))
-    (mapcar (lambda (line)
-              (citre-global--parse-line line default-directory name))
-            (citre-global--get-reference-lines name case-fold start-file))))
+  (when (citre-global-dbpath)
+    (let ((name (or name (citre-tags-get-symbol)))
+          (start-file
+           (pcase start-file
+             ('nil (with-selected-window (or (minibuffer-selected-window)
+                                             (selected-window))
+                     (or (buffer-file-name) default-directory)))
+             ((pred stringp) start-file)
+             ((pred symbolp) nil))))
+      (mapcar (lambda (line)
+                (citre-global--parse-line line default-directory name))
+              (citre-global--get-reference-lines name case-fold start-file)))))
 
 ;;;; Tags file generating & updating
 
@@ -234,11 +222,9 @@ Global program is run under current `default-directory'."
   (interactive)
   (let* ((project (funcall citre-project-root-function))
          (default-directory
-           (or (and citre-use-project-root-when-creating-tags
-                    project)
-               (read-directory-name
-                "I want to tag this dir using gtags: "
-                project))))
+           (read-directory-name
+            "I want to tag this dir using gtags: "
+            project)))
     (make-process
      :name "gtags"
      :buffer (get-buffer-create "*citre-gtags*")
@@ -248,13 +234,16 @@ Global program is run under current `default-directory'."
      :stderr nil
      :sentinel
      (lambda (proc _msg)
-       (pcase (process-status proc)
-         ('exit
-          (pcase (process-exit-status proc)
-            (0 (message "Finished tagging"))
-            (s (user-error "Gtags exits %s.  See *citre-gtags* buffer" s))))
-         (s (user-error "Abnormal status of gtags: %s.  \
-See *citre-ctags* buffer" s))))
+       (unwind-protect
+           (pcase (process-status proc)
+             ('exit
+              (pcase (process-exit-status proc)
+                (0 (message "Finished tagging"))
+                (s (user-error "Gtags exits %s.  See *citre-gtags* buffer"
+                               s))))
+             (s (user-error "Abnormal status of gtags: %s.  \
+See *citre-gtags* buffer" s)))
+         (citre-clear-global-dbpath-cache)))
      :file-handler t)
     (message "Tagging...")))
 
@@ -285,82 +274,9 @@ See *citre-global-update* buffer" s))))
      :file-handler t)
     (message "Updating...")))
 
-;;;; `citre-jump' equivalent
+;;;; Find reference backend
 
-;;;###autoload
-(defun citre-jump-to-reference ()
-  "Jump to the reference of the symbol at point.
-This uses the `citre-jump' UI."
-  (interactive)
-  (let* ((symbol (citre-get-symbol))
-         (references
-          (citre-global-get-references symbol)))
-    (when (null references)
-      (user-error "Can't find references for %s" symbol))
-    (citre-jump-show references)))
-
-;;;; `citre-peek' equivalent
-
-;;;;; Internals
-
-(defun citre-global--peek-get-references ()
-  "Return the references of symbol at point.
-This is similar to `citre-peek--get-definitions'."
-  (citre-peek--hack-buffer-file-name
-    (let* ((symbol (or (citre-get-symbol)
-                       (user-error "No symbol at point"))))
-      (or (citre-global-get-references symbol)
-          (user-error "Can't find references for %s"
-                      symbol)))))
-
-;;;;; Commands
-
-;;;###autoload
-(defun citre-peek-references (&optional buf point)
-  "Peek the references of the symbol in BUF and POINT.
-When BUF or POINT is nil, it's set to the current buffer and
-point."
-  (interactive)
-  (let* ((buf (or buf (current-buffer)))
-         (point (or point (point)))
-         (refs (save-excursion
-                 (with-current-buffer buf
-                   (goto-char point)
-                   (citre-global--peek-get-references))))
-         (marker (if (buffer-file-name) (point-marker))))
-    (citre-peek-show refs marker)))
-
-;;;###autoload
-(defun citre-ace-peek-references ()
-  "Peek the references of a symbol on screen using ace jump.
-This is similar to `citre-ace-peek'."
-  (interactive)
-  (when-let ((pt (citre-ace-pick-point)))
-    (citre-peek-references (current-buffer) pt)))
-
-;;;###autoload
-(defun citre-peek-through-references ()
-  "Peek through a symbol in current peek window for its references."
-  (interactive)
-  (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window))
-              (refs
-               (save-excursion
-                 (with-current-buffer (car buffer-point)
-                   (goto-char (cdr buffer-point))
-                   (citre-global--peek-get-references)))))
-    (citre-peek-make-current-def-first)
-    (citre-peek--make-branch refs)))
-
-;;;; `xref-find-references' integration
-
-(defun citre-xref--global-find-reference (symbol)
-  "Return the xref object of references of SYMBOL."
-  (mapcar #'citre-xref--make-object
-          (citre-global-get-references symbol)))
-
-(cl-defmethod xref-backend-references ((_backend (eql citre)) symbol)
-  "Define method for xref to find reference of SYMBOL."
-  (citre-xref--global-find-reference symbol))
+(citre-register-find-reference-backend 'global #'citre-global-get-references)
 
 (provide 'citre-global)
 

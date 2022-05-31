@@ -10,6 +10,6 @@
   (let ((tags (citre-readtags-get-tags
                (expand-test-file "definition-size.tags")
                "a" 'exact nil :require '(line)
-               :sorter citre-definition-default-sorter)))
+               :sorter citre-tags-definition-default-sorter)))
     (should (equal (map-get-field 'line tags)
                    '(3 2)))))

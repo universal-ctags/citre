@@ -3,7 +3,10 @@
 (defconst default-tags "tags"
   "Default tags file under each test case directory.")
 
-(setq citre-readtags-program (getenv "READTAGS"))
+(setq citre-ctags-program (getenv "CTAGS_PROG"))
+(setq citre-readtags-program (getenv "READTAGS_PROG"))
+(setq citre-gtags-program (getenv "GTAGS_PROG"))
+(setq citre-global-program (getenv "GLOBAL_PROG"))
 (setq citre-readtags--dont-prompt-for-cwd t)
 
 (defun expand-test-file (&optional file)
@@ -29,8 +32,9 @@ work correctly."
          (equal (length (cl-intersection a b :test #'equal))
                 (length a)))))
 
-(defun get-definitions (mode buffer-file marker extra-move &optional tags-file)
-  "Call `citre-get-definitions' in the environment specified with the arguments.
+(defun tags-get-definitions
+    (mode buffer-file marker extra-move &optional tags-file)
+  "Call `citre-tags-get-definitions' in the environment specified with the arguments.
 This inserts the content of BUFFER-FILE in a buffer, and calls
 MODE, a function for entering a major mode.
 
@@ -39,7 +43,7 @@ buffer.  MARKER is a pattern string.  EXTRA-MOVE is a function
 taking no argument.  MARKER is searched with `re-search-forward'
 from the beginning of the buffer, then EXTRA-MOVE is called.
 
-Finally, `citre-get-definitions' is called, which returns the
+Finally, `citre-tags-get-definitions' is called, which returns the
 definitions of the symbol at point.
 
 If TAGS-FILE is non-nil, use that tags file."
@@ -51,7 +55,7 @@ If TAGS-FILE is non-nil, use that tags file."
     (re-search-forward marker)
     (when extra-move (funcall extra-move))
     (prog1
-        (citre-get-definitions nil tags-file)
+        (citre-tags-get-definitions nil tags-file)
       ;; Unset the buffer file name, so when running tests interactively, Emacs
       ;; won't ask if we want to kill the buffer when finishing the
       ;; `with-temp-buffer' form.

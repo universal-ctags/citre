@@ -863,10 +863,8 @@ PROP controls the format.  See `citre-make-tag-str' for details."
 
 (cl-defun citre-make-tag-str (tag separator &rest args)
   "Generate a string for TAG for displaying.
-TAG should be an element in the returned value of
-`citre-get-definitions'.  ARGS is the components the string
-should contain, in the order of presence.  Each element of ARGS
-is a list of:
+ARGS is the components the string should contain, in the order of
+presence.  Each element of ARGS is a list of:
 
   (component :prop val :prop val ...)
 

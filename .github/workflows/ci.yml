@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-ctags
     env:
-      READTAGS: '${{ github.workspace }}/uctags-bin/readtags'
+      READTAGS_PROG: '${{ github.workspace }}/uctags-bin/readtags'
       UCTAGS_REV: 0
     strategy:
       matrix:
@@ -106,7 +106,7 @@ jobs:
           path: 'citre'
       - name: '[citre] Unit tests'
         working-directory: "citre"
-        run: make test
+        run: FAIL_ON_WARNING=1 make test
       - name: '[citre] Byte compilation tests'
         working-directory: 'citre'
         run: make compile

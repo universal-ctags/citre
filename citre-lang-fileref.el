@@ -40,7 +40,7 @@
 
 ;;;; Libraries
 
-(require 'citre-util)
+(require 'citre-tags)
 
 (declare-function dired-get-filename "dired"
                   (localp no-error-if-not-filep))
@@ -57,7 +57,7 @@ directly.
 When there's an active region, the text inside it is returned, so
 if the default behavior is inappropriate, you can mark the module
 name part manually."
-  (or (citre-get-marked-symbol)
+  (or (citre-tags-get-marked-symbol)
       (when-let ((file (and (derived-mode-p 'dired-mode)
                             (dired-get-filename 'no-dir t))))
         (if (string-match "\\.[^.]*$" file)
@@ -100,8 +100,7 @@ It supports finding references of the file (or its related
 module/library) at point in file browser buffers.  Currently only
 Dired is supported.")
 
-(setf (alist-get 'dired-mode citre-language-support-alist)
-      citre-lang-fileref-plist)
+(citre-tags-register-language-support 'dired-mode citre-lang-fileref-plist)
 
 (provide 'citre-lang-fileref)
 

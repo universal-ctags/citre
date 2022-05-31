@@ -14,13 +14,13 @@ target.tags
 
 buffer/*.{h,c}
 	used for making a buffer from where test.el runs
-	get-definitions defined in common.el.
+	tags-get-definitions defined in common.el.
 
 xref/*.xref
 	expected string that xref-find-definitions may generate.
 
 NOTES
 =======================================================
-get-definitions returns a list of hashtables. defs-to-xref defined in
-test.el convert the list into a string for comparing with the xref
-files.
+tags-get-definitions returns a list of hashtables. defs-to-xref
+defined in test.el convert the list into a string for comparing
+with the xref files.

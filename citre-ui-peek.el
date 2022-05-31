@@ -125,6 +125,7 @@ non-nil."
     (define-key map (kbd "<down>") 'citre-peek-next-branch)
     ;; Modify history
     (define-key map (kbd "M-l p") 'citre-peek-through)
+    (define-key map (kbd "M-l r") 'citre-peek-through-reference)
     (define-key map (kbd "M-l d") 'citre-peek-delete-branch)
     (define-key map (kbd "M-l D") 'citre-peek-delete-branches)
     ;; Rearrange tag list
@@ -612,7 +613,7 @@ position.)"
 ;; - `citre-peek--ov', `citre-peek--bg'(-alt, -selected): You shouldn't use
 ;;   them directly.  These are controlled by `citre-peek--mode', and it makes
 ;;   sure that the overlay is cleaned up correctly.  When other state variables
-;;   are set up, enable `citre-peek-mode' sets up the UI, and disable
+;;   are set up, enable `citre-peek--mode' sets up the UI, and disable
 ;;   `citre-peek--mode' hides the UI.
 ;;
 ;; - `citre-peek--buffer-file-name': It's automatically set by
@@ -1390,8 +1391,8 @@ that the depth is not less than 0."
 
 ;;;;; Edit definition list
 
-(defun citre-peek-make-current-def-first ()
-  "Put the current def node in the first position."
+(defun citre-peek-make-current-tag-first ()
+  "Put the current tag node in the first position."
   (interactive)
   (citre-peek--error-if-not-peeking)
   (let* ((taglist (citre-peek--current-tag-list))

@@ -1,5 +1,5 @@
 (defun defs-to-xref (defs)
-  "Convert the value returned from `citre-get-definitions' to xref like string."
+  "Convert the value returned from `citre-tags-get-definitions' to xref like string."
   (let (last-abspath)
     (with-temp-buffer
       (mapc (lambda (def)
@@ -22,11 +22,11 @@
 
 (ert-deftest test-lang-c-header-sorting ()
   "Test `citre-lang-c--get-header-at-point' and `citre-lang-c-definition-sorter'"
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/buffer-header.h" "@"
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-content "xref/buffer-header-a.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/buffer-header.h" "!"
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-content "xref/buffer-header-b.xref")))
@@ -34,11 +34,11 @@
 
 (ert-deftest test-lang-c-struct-tag-sorting ()
   "Test the rule for (or \"struct\" \"union\" \"enum\") used in `citre-lang-c-definition-sorter'"
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/buffer-struct-tag.h" "@"
 				(lambda () (forward-word 1) (forward-char 2)) "target.tags"))
 		 (get-file-content "xref/buffer-struct-tag.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/buffer-struct-tag.h" "!"
 				(lambda () (backward-word 1)) "target.tags"))
 		 (get-file-content "xref/buffer-not-struct-tag.xref")))
@@ -46,20 +46,20 @@
 
 (ert-deftest test-lang-c-member-sorting ()
   "Test the rule for (or \"->\" \".\") used in `citre-lang-c-definition-sorter'"
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/member-sorting.c" "@arrow"
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-content "xref/member-sorting/arrow.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/member-sorting.c" "@dotinit"
 				(lambda () (backward-word 3)) "target.tags"))
 		 (get-file-content "xref/member-sorting/dotinit.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/member-sorting.c" "@dotassign"
 				(lambda () (backward-word 3)) "target.tags"))
 		 ;; The result should be the same as @arrow.
 		 (get-file-content "xref/member-sorting/arrow.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/member-sorting.c" "@nomember"
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-content "xref/member-sorting/nomember.xref")))
@@ -67,19 +67,19 @@
 
 (ert-deftest test-lang-c-callable-sorting ()
   "Test the rule for `callable()' used in `citre-lang-c-definition-sorter'"
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/callable-sorting.c" "@member"
 				(lambda () (backward-word 3)) "target.tags"))
 		 (get-file-content "xref/callable-sorting/member.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/callable-sorting.c" "@callable-member"
 				(lambda () (backward-word 4)) "target.tags"))
 		 (get-file-content "xref/callable-sorting/callable-member.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/callable-sorting.c" "@callable-func"
 				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
 		 (get-file-content "xref/callable-sorting/callable-func.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/callable-sorting.c" "@macro"
 				(lambda () (forward-word 1) (backward-word 1)) "target.tags"))
 		 (get-file-content "xref/callable-sorting/macro.xref")))
@@ -87,11 +87,11 @@
 
 (ert-deftest test-lang-c-goto-sorting ()
   "Test the rule for \"goto\" used in `citre-lang-c-definition-sorter'"
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/goto-sorting.c" "@call"
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-content "xref/goto-sorting/call.xref")))
-  (should (equal (defs-to-xref (get-definitions
+  (should (equal (defs-to-xref (tags-get-definitions
 				'c-mode "buffer/goto-sorting.c" "@goto"
 				(lambda () (backward-word 2)) "target.tags"))
 		 (get-file-content "xref/goto-sorting/goto.xref")))
