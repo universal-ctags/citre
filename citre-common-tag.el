@@ -445,7 +445,7 @@ PAIRS should form a sequence of field-value pairs to write into
 this tag.  Fields are symbols, values are normally strings.  An
 example is:
 
-    (citre-make-tag 'name \"symbol\" 'input \"file.el\")
+    (citre-make-tag \\='name \"symbol\" \\='input \"file.el\")
 
 If PAIRS is nil, return an empty tag."
   (let* ((idx 0)
