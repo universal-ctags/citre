@@ -118,7 +118,7 @@ jobs:
       - name: '[dep] Install Emacs'
         uses: purcell/setup-emacs@master
         with:
-          version: 27.1
+          version: 28.1
       - name: '[citre] Checkout Citre repo'
         uses: actions/checkout@v2
       - name: '[citre] Style check'
