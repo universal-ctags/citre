@@ -45,7 +45,6 @@
 ;;;; Libraries
 
 (require 'citre-backend-interface)
-(require 'citre-ui-peek)
 (require 'citre-tags)
 (require 'citre-global)
 
@@ -77,6 +76,18 @@
 ;;;###autoload
 (put 'citre-enable-imenu-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-imenu-integration)
+
+(defcustom citre-auto-enable-citre-mode-modes 'all
+  "The major modes where `citre-auto-enable-citre-mode-by-tags-file' works.
+If you require `citre-config' in your configuration, then these
+are the major modes where `citre-mode' is automatically enabled
+if a tags file can be found.
+
+This should be a list of major modes, or `all' for it to work in
+all major modes."
+  :type '(choice (repeat symbol)
+                 (const :tag "All major modes" all))
+  :group 'citre)
 
 ;;;; citre-jump
 

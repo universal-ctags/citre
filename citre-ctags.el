@@ -47,8 +47,8 @@
 
 ;;;;; Find tags file
 
-(defcustom citre-tags-files '(".tags" "tags")
-  "List of tags files.
+(defcustom citre-tags-file-names '(".tags" "tags")
+  "List of tags file names.
 These are searched up directory hierarchy from the file of
 current buffer, or from `default-directory' in current buffer, to
 decide which tags file to use.
@@ -57,6 +57,8 @@ This list is in descending order of priority (i.e., if we find
 one, then the rest will be ignored)."
   :type '(repeat string)
   :group 'citre)
+
+(make-obsolete 'citre-tags-files 'citre-tags-file-names "0.3")
 
 (defcustom citre-tags-file-global-cache-dir "~/.cache/tags/"
   "An absolute directory where you can save all your tags files.
@@ -109,7 +111,7 @@ this if ctags is not in your PATH, or its name is not \"ctags\""
   :type 'file
   :group 'citre)
 
-(defcustom citre-edit-cmd-buf-default-cmd
+(defcustom citre-ctags-cmd-buf-default-cmd
   "ctags
 -o
 %TAGSFILE%
@@ -121,20 +123,28 @@ this if ctags is not in your PATH, or its name is not \"ctags\""
 -R
 ;; add dirs/files to scan here, one line per dir/file
 "
-  "Default message in the command line editing buffer."
+  "Default message in the ctags command line editing buffer."
   :type 'string
   :group 'citre)
 
-(defcustom citre-edit-cmd-buf-map
+(make-obsolete 'citre-edit-cmd-buf-default-cmd
+               'citre-ctags-cmd-buf-default-cmd
+               "0.3")
+
+(defcustom citre-ctags-cmd-buf-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c l") 'citre-edit-cmd-buf-add-lang)
     (define-key map (kbd "C-c f") 'citre-edit-cmd-buf-add-dir-or-file)
     (define-key map (kbd "C-c C-c") 'citre-edit-cmd-buf-commit)
     (define-key map (kbd "C-c C-k") 'citre-edit-cmd-buf-cancel)
     map)
-  "Keymap used in the command editing buffer."
+  "Keymap used in the ctags command editing buffer."
   :type 'keymap
   :group 'citre)
+
+(make-obsolete 'citre-edit-cmd-buf-map
+               'citre-ctags-cmd-buf-map
+               "0.3")
 
 (defcustom citre-default-create-tags-file-location nil
   "Default location to create a tags file.  Can be:
@@ -175,7 +185,7 @@ This requires the ctags program provided by Universal Ctags."
 
 ;;;; Helper functions
 
-(defun citre-get-pseudo-tag-value (name &optional tagsfile)
+(defun citre--get-pseudo-tag-value (name &optional tagsfile)
   "Get the value field of pseudo tag NAME in TAGSFILE.
 NAME should not start with \"!_\".
 
@@ -192,7 +202,7 @@ See `citre-tags-file-path' to know how this is used.")
 
 ;;;;; By `citre-tags-file-alist'
 
-(defun citre--find-tags-by-tags-file-alist (dir project alist)
+(defun citre--find-tags-file-by-tags-file-alist (dir project alist)
   "Find the tags file of DIR by ALIST.
 ALIST meets the requirements of `citre-tags-file-alist'.  DIR is
 an absolute path.  Relative paths in the alist are expanded
@@ -264,7 +274,7 @@ path of the tags file is returned."
            (expand-file-name citre-tags-file-per-project-cache-dir project)))
       (error "Can't detect project root"))))
 
-(defun citre--find-tags-in-cache-dirs (dir &optional project)
+(defun citre--find-tags-file-in-cache-dirs (dir &optional project)
   "Find the tags file of DIR in cache dirs.
 DIR is absolute.  PROJECT is the project root.  If it's nil, it's
 detected by `citre-project-root-function'.
@@ -283,12 +293,12 @@ The full path of the tags file is returned."
           (when (citre-non-dir-file-exists-p tagsfile)
             (cl-return tagsfile)))))))
 
-;;;;; By `citre-tags-files'
+;;;;; By `citre-tags-file-names'
 
-(defun citre--find-tags-in-dir (dir)
-  "Find the tags file of DIR by `citre-tags-files' in DIR.
+(defun citre--find-tags-file-in-dir (dir)
+  "Find the tags file of DIR by `citre-tags-file-names' in DIR.
 DIR is an absolute path."
-  (cl-dolist (file citre-tags-files)
+  (cl-dolist (file citre-tags-file-names)
     (let ((tags (expand-file-name file dir)))
       (when (and (citre-non-dir-file-exists-p tags)
                  (not (file-directory-p tags)))
@@ -303,7 +313,7 @@ directory, it tries the following methods in turn:
 
 - Use `citre-tags-file-alist'.
 - Find in `citre-tags-file-cache-dirs'.
-- See if one name in `citre-tags-files' exists in this dir.
+- See if one name in `citre-tags-file-names' exists in this dir.
 
 The result is cached, and can be cleared by
 `citre-clear-tags-file-cache'.  It also sets
@@ -319,17 +329,18 @@ dir."
          (while (and current-dir (null tagsfile))
            (setq tagsfile
                  (or (and (local-variable-p 'citre-tags-file-alist)
-                          (citre--find-tags-by-tags-file-alist
+                          (citre--find-tags-file-by-tags-file-alist
                            current-dir project citre-tags-file-alist))
                      (and (default-value 'citre-tags-file-alist)
-                          (citre--find-tags-by-tags-file-alist
+                          (citre--find-tags-file-by-tags-file-alist
                            current-dir nil (default-value
                                              'citre-tags-file-alist)))
                      (and (or citre-tags-file-global-cache-dir
                               citre-tags-file-per-project-cache-dir)
-                          (citre--find-tags-in-cache-dirs current-dir project))
-                     (and citre-tags-files
-                          (citre--find-tags-in-dir current-dir))))
+                          (citre--find-tags-file-in-cache-dirs
+                           current-dir project))
+                     (and citre-tags-file-names
+                          (citre--find-tags-file-in-dir current-dir))))
            (unless tagsfile
              (setq current-dir (citre-directory-of current-dir))))
          (if tagsfile
@@ -368,7 +379,7 @@ Use this when a new tags file is created."
 
 ;;;; Create tags file: Internals
 
-(defun citre--escape-cmd-exec-to-file (cmd)
+(defun citre--escape-ctags-cmd-exec-to-file (cmd)
   "Escape cmd arg CMD.
 CMD is from a executable command, and is converted to the form in
 CITRE_CMD ptag in a tags file."
@@ -379,7 +390,7 @@ CITRE_CMD ptag in a tags file."
   (setq cmd (replace-regexp-in-string (rx (or "|" "%")) "\\\\\\&" cmd))
   cmd)
 
-(defun citre--escape-cmd-buf-to-file (cmd)
+(defun citre--escape-ctags-cmd-buf-to-file (cmd)
   "Escape cmd arg CMD.
 CMD is from the command editing buffer, and is converted to the
 form in CITRE_CMD ptag in a tags file."
@@ -389,7 +400,7 @@ form in CITRE_CMD ptag in a tags file."
   (setq cmd (replace-regexp-in-string "|" "\\\\\\&" cmd))
   cmd)
 
-(defun citre--unescape-cmd-file-to-exec (cmd)
+(defun citre--unescape-ctags-cmd-file-to-exec (cmd)
   "Unescape cmd arg CMD.
 CMD is from the CITRE_CMD ptag, and is converted to an arg in an
 executable command."
@@ -406,7 +417,7 @@ executable command."
              "\\1\\\\" cmd))
   cmd)
 
-(defun citre--unescape-cmd-file-to-buf (cmd)
+(defun citre--unescape-ctags-cmd-file-to-buf (cmd)
   "Unescape cmd arg CMD.
 CMD is from the CITRE_CMD ptag, and is converted to an arg in the
 command editing buffer."
@@ -426,12 +437,12 @@ This won't do anything if one of the \"%\"s is escaped."
    ;; (rx (group (or line-start (not (any "\\"))) (* "\\\\"))
    ;;     "%TAGSFILE%")
    "\\(\\(?:^\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\)%TAGSFILE%"
-   (concat "\\1" (citre--escape-cmd-exec-to-file
+   (concat "\\1" (citre--escape-ctags-cmd-exec-to-file
                   ;; Seems `make-process' doesn't know "~" in the commannd.
                   (expand-file-name (file-local-name tagsfile))))
    arg 'fixedcase))
 
-(defun citre--cmd-ptag-to-exec (ptag tagsfile)
+(defun citre--ctags-cmd-ptag-to-exec (ptag tagsfile)
   "Convert PTAG into an executable command CMD (a list).
 PTAG is the value of the CITRE_CMD ptag in TAGSFILE.  When
 TAGSFILE is nil, this won't translate the \"%TAGSFILE%\" part in
@@ -454,7 +465,7 @@ PTAG."
         ;; Translate %TAGSFILE%
         (when tagsfile
           (setq c (citre--replace-tagsfile-variable c tagsfile)))
-        (setq c (citre--unescape-cmd-file-to-exec c))
+        (setq c (citre--unescape-ctags-cmd-file-to-exec c))
         (push c cmd))
       ;; Move over the "!"
       (cl-incf pos))
@@ -464,7 +475,7 @@ PTAG."
       (setf (nth 0 cmd) (or citre-ctags-program "ctags")))
     cmd))
 
-(defun citre--cmd-ptag-to-buf (ptag)
+(defun citre--ctags-cmd-ptag-to-buf (ptag)
   "Convert PTAG to command for inserting into an editing bufer.
 PTAG is the value of the CITRE_CMD ptag in TAGSFILE"
   (let ((pos 0)
@@ -478,13 +489,14 @@ PTAG is the value of the CITRE_CMD ptag in TAGSFILE"
                              ptag pos)))
       ;; Jump over possible backslashes.
       (setq pos (string-match "|" ptag pos))
-      (push (citre--unescape-cmd-file-to-buf (substring ptag last pos)) cmd)
+      (push (citre--unescape-ctags-cmd-file-to-buf (substring ptag last pos))
+            cmd)
       ;; Move over the "!"
       (cl-incf pos))
     (push (substring ptag last) cmd)
     (string-join (nreverse cmd) "\n")))
 
-(defun citre--cmd-buf-to-ptag ()
+(defun citre--ctags-cmd-buf-to-ptag ()
   "Generate CITRE_CMD ptag from current command editing buffer."
   (let (cmd)
     (save-excursion
@@ -492,14 +504,14 @@ PTAG is the value of the CITRE_CMD ptag in TAGSFILE"
       (while (not (eobp))
         (cond
          ((looking-at (rx (or ";;" (seq (* space) line-end)))) nil)
-         (t (push (citre--escape-cmd-buf-to-file
+         (t (push (citre--escape-ctags-cmd-buf-to-file
                    (buffer-substring (line-beginning-position)
                                      (line-end-position)))
                   cmd)))
         (forward-line)))
     (string-join (nreverse cmd) "|")))
 
-(defun citre--cmd-ptag-from-languages ()
+(defun citre--ctags-cmd-ptag-from-languages ()
   "Read languages, return a CITRE_CMD ptag.
 This requires ctags program provided by Universal Ctags.  The
 generated command should work for most projects"
@@ -515,7 +527,7 @@ generated command should work for most projects"
             (if langs (concat "--languages=" (string-join langs ",") "|") "")
             "--kinds-all=*|--fields=*|--extras=*|-R")))
 
-(defun citre--write-recipe (tagsfile cmd-ptag cwd)
+(defun citre--write-ctags-recipe (tagsfile cmd-ptag cwd)
   "Write recipe to TAGSFILE.
 CMD-PTAG is the value of CITRE_CMD ptag, CWD is the working
 directory of Ctags.  It's expanded and convert to a local path."
@@ -532,7 +544,7 @@ directory of Ctags.  It's expanded and convert to a local path."
 
 ;;;;; Edit tags file generation recipe
 
-(defvar citre-edit-cmd-buf-help-msg
+(defvar citre-ctags-cmd-buf-help-msg
   ";; Edit the command line for creating the tags file
 ;;
 ;; Syntax:
@@ -552,19 +564,19 @@ directory of Ctags.  It's expanded and convert to a local path."
 "
   "Help message in the command line editing buffer.")
 
-(defvar-local citre--edit-cmd-buf-cwd nil
+(defvar-local citre--ctags-cmd-buf-cwd nil
   "The cwd of ctags program, recorded in the edit cmd buffer.")
 
-(defvar-local citre--edit-cmd-buf-tagsfile nil
+(defvar-local citre--ctags-cmd-buf-tagsfile nil
   "The tagsfile, recorded in the edit cmd buffer.")
 
-(defvar-local citre--edit-cmd-buf-callback nil
+(defvar-local citre--ctags-cmd-buf-callback nil
   "The callback function, recorded in the edit cmd buffer.")
 
-(defvar-local citre--edit-cmd-buf-prev-buf nil
+(defvar-local citre--ctags-cmd-buf-prev-buf nil
   "Previous buffer before switching to edit cmd buffer.")
 
-(defun citre--read-cwd (&optional tagsfile)
+(defun citre--read-ctags-cwd (&optional tagsfile)
   "Prompt the user to choose cwd for Ctags command.
 When TAGSFILE is non-nil and TAG_PROC_CWD ptag is found in it,
 use it as the default directory.
@@ -573,14 +585,15 @@ The full path is returned."
   (let (cwd)
     (when (and tagsfile
                (citre-non-dir-file-exists-p tagsfile)
-               (setq cwd (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile)))
+               (setq cwd (citre--get-pseudo-tag-value "TAG_PROC_CWD"
+                                                      tagsfile)))
       (when-let (remote-id (file-remote-p tagsfile))
         (setq cwd (concat remote-id cwd))))
     (unless cwd (setq cwd (funcall citre-project-root-function)))
     (expand-file-name
      (read-directory-name "Root dir to run ctags: " cwd))))
 
-(defun citre--read-cwd-and-cmd (callback &optional tagsfile cwd)
+(defun citre--read-ctags-cwd-and-cmd (callback &optional tagsfile cwd)
   "Read the root dir (cwd) and command to generate a tags file.
 If TAGSFILE is non-nil and there's a CITRE_CMD ptag in it,
 initialize the command editing buffer using this existing ptag,
@@ -596,33 +609,33 @@ buffer.  It's called with 3 args:
 - The CITRE_CMD ptag to be written into the tags file."
   (let (cmd)
     (unless cwd
-      (setq cwd (citre--read-cwd)))
+      (setq cwd (citre--read-ctags-cwd)))
     (when (and tagsfile
                (citre-non-dir-file-exists-p tagsfile)
-               (setq cmd (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile)))
-      (setq cmd (citre--cmd-ptag-to-buf cmd)))
+               (setq cmd (citre--get-pseudo-tag-value "CITRE_CMD" tagsfile)))
+      (setq cmd (citre--ctags-cmd-ptag-to-buf cmd)))
     (let ((buf (current-buffer)))
       (pop-to-buffer (generate-new-buffer "*ctags-command-line*")
                      '(display-buffer-same-window))
       (text-mode)
-      (setq citre--edit-cmd-buf-prev-buf buf))
-    (let ((map (copy-keymap citre-edit-cmd-buf-map)))
+      (setq citre--ctags-cmd-buf-prev-buf buf))
+    (let ((map (copy-keymap citre-ctags-cmd-buf-map)))
       (set-keymap-parent map (current-local-map))
       (use-local-map map))
-    (setq citre--edit-cmd-buf-tagsfile tagsfile)
-    (setq citre--edit-cmd-buf-cwd cwd)
-    (setq citre--edit-cmd-buf-callback callback)
-    (insert (substitute-command-keys citre-edit-cmd-buf-help-msg))
-    (if cmd (insert cmd) (insert citre-edit-cmd-buf-default-cmd))))
+    (setq citre--ctags-cmd-buf-tagsfile tagsfile)
+    (setq citre--ctags-cmd-buf-cwd cwd)
+    (setq citre--ctags-cmd-buf-callback callback)
+    (insert (substitute-command-keys citre-ctags-cmd-buf-help-msg))
+    (if cmd (insert cmd) (insert citre-ctags-cmd-buf-default-cmd))))
 
-(defun citre-edit-cmd-buf-add-dir-or-file ()
+(defun citre-ctags-cmd-buf-add-dir-or-file ()
   "Insert a directory or file in the command editing buffer.
 When it's in the cwd, it's converted to relative path."
   (interactive)
-  (let ((dir (read-file-name "Dir: " citre--edit-cmd-buf-cwd)))
-    (if (file-in-directory-p dir citre--edit-cmd-buf-cwd)
+  (let ((dir (read-file-name "Dir: " citre--ctags-cmd-buf-cwd)))
+    (if (file-in-directory-p dir citre--ctags-cmd-buf-cwd)
         (progn
-          (setq dir (file-relative-name dir citre--edit-cmd-buf-cwd)))
+          (setq dir (file-relative-name dir citre--ctags-cmd-buf-cwd)))
       (setq dir (file-local-name dir)))
     ;; For cwd itself, if we use "./" in ctags command, a file named "file"
     ;; under cwd will be "./file" in the input field.  But if we use ".", it
@@ -630,7 +643,7 @@ When it's in the cwd, it's converted to relative path."
     (when (equal dir "./") (setq dir "."))
     (insert dir "\n")))
 
-(defun citre-edit-cmd-buf-add-lang ()
+(defun citre-ctags-cmd-buf-add-lang ()
   "Insert a language in the command editing buffer.
 This command requires the ctags program from Universal Ctags."
   (interactive)
@@ -644,36 +657,29 @@ This command requires the ctags program from Universal Ctags."
               (lang (completing-read "Select a language: " langs)))
     (insert lang ",")))
 
-(defun citre-edit-cmd-buf-commit ()
+(defun citre-ctags-cmd-buf-commit ()
   "Commit in the command editing buffer."
   (interactive)
-  (funcall citre--edit-cmd-buf-callback
-           citre--edit-cmd-buf-tagsfile
-           citre--edit-cmd-buf-cwd
-           (citre--cmd-buf-to-ptag))
+  (funcall citre--ctags-cmd-buf-callback
+           citre--ctags-cmd-buf-tagsfile
+           citre--ctags-cmd-buf-cwd
+           (citre--ctags-cmd-buf-to-ptag))
   (let ((buf (current-buffer)))
-    (pop-to-buffer citre--edit-cmd-buf-prev-buf
+    (pop-to-buffer citre--ctags-cmd-buf-prev-buf
                    '(display-buffer-same-window))
     (kill-buffer buf)))
 
-(defun citre-edit-cmd-buf-cancel ()
+(defun citre-ctags-cmd-buf-cancel ()
   "Quit the command editing."
   (interactive)
   (let ((buf (current-buffer)))
-    (pop-to-buffer citre--edit-cmd-buf-prev-buf
+    (pop-to-buffer citre--ctags-cmd-buf-prev-buf
                    '(display-buffer-same-window))
     (kill-buffer buf)))
 
 ;;;; Create tags file: APIs
 
 ;;;;; Tags file updating
-
-(defun citre-tags-file-updatable-p (&optional tagsfile)
-  "Return t if TAGSFILE contains recipe for updating itself.
-If TAGSFILE is nil, use the tags file for current buffer."
-  (and (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile)
-       (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile)
-       t))
 
 (defun citre-update-updatable-tags-file (&optional tagsfile sync)
   "Update TAGSFILE that contains recipe for updating itself.
@@ -686,14 +692,14 @@ asynchronously), or the updating is finished (when updating
 synchronously).  Otherwise return nil."
   (when-let* ((tagsfile
                (or tagsfile (citre-read-tags-file-name)))
-              (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile))
-              (cmd (citre--cmd-ptag-to-exec cmd-ptag tagsfile))
-              (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
+              (cmd-ptag (citre--get-pseudo-tag-value "CITRE_CMD" tagsfile))
+              (cmd (citre--ctags-cmd-ptag-to-exec cmd-ptag tagsfile))
+              (cwd-ptag (citre--get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
               (cwd (if-let ((remote-id (file-remote-p tagsfile)))
                        (concat remote-id cwd-ptag) cwd-ptag))
               (after-process (lambda ()
                                (citre-clear-tags-file-cache)
-                               (citre--write-recipe
+                               (citre--write-ctags-recipe
                                 tagsfile cmd-ptag cwd-ptag))))
     ;; Workaround: If we put this let into the above `if-let*' spec, even
     ;; if it stops before let-binding `default-directory', later there'll
@@ -726,7 +732,7 @@ See *citre-ctags* buffer" s))))
 
 ;;;;; Get & manipulate update recipe
 
-(defun citre-get-recipe (&optional tagsfile target)
+(defun citre-get-tags-file-recipe (&optional tagsfile target)
   "Return ctags command and its cwd from TAGSFILE.
 When TAGSFILE is nil, find it automatically.  TARGET is the tags
 file to be written.  If it's nil, then the \"%TAGSFILE\" in the
@@ -739,9 +745,9 @@ Command and cwd is returned by a cons pair.  The command is a
 list whose car is the program, and cdr is a list of the args. If
 the tagsfile doesn't contain a recipe, nil is returned."
   (when-let* ((tagsfile (or tagsfile (citre-tags-file-path)))
-              (cmd-ptag (citre-get-pseudo-tag-value "CITRE_CMD" tagsfile))
-              (cmd (citre--cmd-ptag-to-exec cmd-ptag target))
-              (cwd-ptag (citre-get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
+              (cmd-ptag (citre--get-pseudo-tag-value "CITRE_CMD" tagsfile))
+              (cmd (citre--ctags-cmd-ptag-to-exec cmd-ptag target))
+              (cwd-ptag (citre--get-pseudo-tag-value "TAG_PROC_CWD" tagsfile))
               (cwd (if-let ((remote-id (file-remote-p tagsfile)))
                        (concat remote-id cwd-ptag) cwd-ptag)))
     (cons cmd cwd)))
@@ -784,7 +790,7 @@ local part of itself."
   (mapcar (lambda (arg) (citre--replace-tagsfile-variable arg target))
           cmd))
 
-(defun citre-get-recipe-and-replace-parts
+(defun citre-get-ctags-recipe-and-replace-parts
     (&optional tagsfile scan-files target)
   "Get ctags command and its cwd from TAGSFILE.
 When TAGSFILE is nil, find it automatically.  When SCAN-FILES is
@@ -799,7 +805,7 @@ Command and cwd is returned by a cons pair.  The command is a
 list whose car is the program, and cdr is a list of the args.  If
 the tagsfile doesn't contain a recipe, nil is returned."
   (when-let* ((tagsfile (or tagsfile (citre-tags-file-path)))
-              (cmd-and-cwd (citre-get-recipe tagsfile))
+              (cmd-and-cwd (citre-get-tags-file-recipe tagsfile))
               (cmd (car cmd-and-cwd))
               (cwd (cdr cmd-and-cwd)))
     (when scan-files
@@ -870,7 +876,7 @@ the tags file now (update it directly instead)."
                       (unless (file-exists-p (file-name-directory tagsfile))
                         (mkdir (file-name-directory tagsfile)))
                       (write-region "" nil tagsfile))
-                    (citre--write-recipe tagsfile ptag cwd)
+                    (citre--write-ctags-recipe tagsfile ptag cwd)
                     (when (or noconfirm
                               (y-or-n-p (format "Update %s now? " tagsfile)))
                       ;; WORKAROUND: When `noconfirm' is non-nil, what we do
@@ -889,9 +895,9 @@ the tags file now (update it directly instead)."
         (funcall
          callback tagsfile
          (or (and cwd (expand-file-name cwd))
-             (citre--read-cwd))
+             (citre--read-ctags-cwd))
          cmd-ptag)
-      (citre--read-cwd-and-cmd callback tagsfile cwd))))
+      (citre--read-ctags-cwd-and-cmd callback tagsfile cwd))))
 
 ;;;###autoload
 (defun citre-create-tags-file ()
@@ -931,13 +937,13 @@ is then required to use it).
       (unless scheme (funcall read-scheme))
       (pcase scheme
         ('in-dir
-         (if (null citre-tags-files)
-             (funcall warning "`citre-tags-files' \
+         (if (null citre-tags-file-names)
+             (funcall warning "`citre-tags-file-names' \
 should be non-nil to use this scheme. ")
            (let ((dir (funcall read-dir))
                  (tags-nondir (completing-read
-                               "Tags file name: " citre-tags-files nil t
-                               nil nil (car citre-tags-files))))
+                               "Tags file name: " citre-tags-file-names nil t
+                               nil nil (car citre-tags-file-names))))
              (setq tagsfile (expand-file-name tags-nondir dir)))))
         ('global-cache
          (if (null citre-tags-file-global-cache-dir)
@@ -971,7 +977,7 @@ Delete it first? "
       (citre-edit-tags-file-recipe
        tagsfile
        (when citre-prompt-language-for-ctags-command
-         (citre--cmd-ptag-from-languages))
+         (citre--ctags-cmd-ptag-from-languages))
        (when citre-use-project-root-when-creating-tags
          (funcall citre-project-root-function))
        'noconfirm))))

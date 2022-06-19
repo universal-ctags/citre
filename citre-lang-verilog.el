@@ -66,8 +66,8 @@
   (pcase (citre-get-property 'syntax symbol)
     ('macro
      (citre-readtags-sorter
-      citre-sorter-arg-put-references-below
-      (citre-sorter-arg-put-kinds-above '("constant"))
+      citre-tags-sorter-arg-put-references-below
+      (citre-tags-sorter-arg-put-kinds-above '("constant"))
       'input '(length name +) 'name))
     (_ citre-tags-definition-default-sorter)))
 
@@ -78,7 +78,7 @@
   `(<or>
     ,(pcase (citre-get-property 'syntax symbol)
        ('macro
-        (citre-readtags-sorter (citre-sorter-arg-put-kinds-above
+        (citre-readtags-sorter (citre-tags-sorter-arg-put-kinds-above
                                 '("constant"))))
        (_ 0))
     ,citre-tags-completion-default-sorter))

@@ -50,11 +50,6 @@ The function can return a string or nil."
   :type 'function
   :group 'citre)
 
-(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
-  "Hook to run after jumping to a location."
-  :type 'hook
-  :group 'citre)
-
 ;;;; String
 
 (defun citre-string-after-1st-colon (string)

@@ -133,7 +133,7 @@
   "Sorter for finding definitions of SYMBOL in C."
   `(<or>
     ,(citre-readtags-sorter
-      citre-sorter-arg-put-references-below)
+      citre-tags-sorter-arg-put-references-below)
     ;; Sort on the kinds.
     ,(pcase (citre-get-property 'syntax symbol)
        ('header
@@ -146,10 +146,11 @@
                  (list `(filter ,(citre-readtags-filter 'input path 'suffix)
                                 +)))))
        ('member
-        (citre-readtags-sorter (citre-sorter-arg-put-kinds-above '("member"))))
+        (citre-readtags-sorter (citre-tags-sorter-arg-put-kinds-above
+                                '("member"))))
        ('callable-member
         (citre-readtags-sorter
-         (citre-sorter-arg-put-kinds-above '("member"))
+         (citre-tags-sorter-arg-put-kinds-above '("member"))
          ;; If a member is callable, its typeref field may include
          ;; "(*)" as substring.
          ;;
@@ -167,9 +168,10 @@
          `(filter ,(citre-readtags-filter 'typeref "(*)" 'substr) +)))
        ('function
         (citre-readtags-sorter
-         (citre-sorter-arg-put-kinds-above '("function" "macro"))))
+         (citre-tags-sorter-arg-put-kinds-above '("function" "macro"))))
        ('goto
-        (citre-readtags-sorter (citre-sorter-arg-put-kinds-above '("label"))
+        (citre-readtags-sorter (citre-tags-sorter-arg-put-kinds-above
+                                '("label"))
                                ;; Several languages defines "label" kind, and
                                ;; we should put labels in C above others.  We
                                ;; do this for C++ too as ctags considers header
@@ -208,11 +210,11 @@
         ;; list though the struct tag and the member has the same name,
         ;; "point".
         (citre-readtags-sorter
-         (citre-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
+         (citre-tags-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
        ;; Don't sort for other syntax.
        (_ 0))
     ,(citre-readtags-sorter 'input '(length name +) 'name
-                            citre-sorter-arg-size-order)))
+                            citre-tags-sorter-arg-size-order)))
 
 ;;;; Auto-completion
 
@@ -220,7 +222,7 @@
   "Filter for auto-completing SYMBOL in C."
   (pcase (citre-get-property 'syntax symbol)
     ('header
-     citre-filter-file-tags)
+     citre-tags-filter-file-tags)
     (_
      (citre-tags-completion-default-filter symbol))))
 
@@ -229,22 +231,24 @@
   `(<or>
     ,(pcase (citre-get-property 'syntax symbol)
        ('member
-        (citre-readtags-sorter (citre-sorter-arg-put-kinds-above '("member"))))
+        (citre-readtags-sorter (citre-tags-sorter-arg-put-kinds-above
+                                '("member"))))
        ('callable-member
         (citre-readtags-sorter
-         (citre-sorter-arg-put-kinds-above '("member"))
+         (citre-tags-sorter-arg-put-kinds-above '("member"))
          ;; See the comment in `citre-lang-c-definition-sorter'.
          `(filter ,(citre-readtags-filter 'typeref "(*)" 'substr) +)))
        ('function
         (citre-readtags-sorter
-         (citre-sorter-arg-put-kinds-above '("function" "member"))))
+         (citre-tags-sorter-arg-put-kinds-above '("function" "member"))))
        ('goto
-        (citre-readtags-sorter (citre-sorter-arg-put-kinds-above '("label"))))
+        (citre-readtags-sorter (citre-tags-sorter-arg-put-kinds-above
+                                '("label"))))
        ((and (or 'struct 'union 'enum)
              keyword)
         ;; See the comment in `citre-lang-c-definition-sorter'.
         (citre-readtags-sorter
-         (citre-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
+         (citre-tags-sorter-arg-put-kinds-above (list (symbol-name keyword)))))
        (_ 0))
     ,citre-tags-completion-default-sorter))
 

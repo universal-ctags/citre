@@ -842,7 +842,7 @@ doesn't exist, these 2 fields are all nil."
     (cons buf point)))
 
 (defun citre-peek--get-content (node)
-  "Get file contents for peeking from NODE.
+  "Get file contents for peeking NODE.
 NODE is an instance of `citre-peek--tag-node'.
 `citre-peek-file-content-height' specifies the number of lines to
 get.
@@ -1080,7 +1080,7 @@ TAGLIST is the currently browsed tag list."
     file-content))
 
 (defun citre-peek--displayed-tags-str (taglist)
-  "Return a string for displaying definitions.
+  "Return a string for displaying TAGLIST.
 TAGLIST is the currently browsed tag list."
   (let* ((idx (citre-peek--tag-list-index taglist))
          (defs (citre-peek--tag-list-nodes taglist))

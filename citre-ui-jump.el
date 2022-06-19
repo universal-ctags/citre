@@ -42,16 +42,16 @@
 
 ;;;; User Options
 
-(defcustom citre-jump-select-definition-function
+(defcustom citre-jump-select-item-function
   #'citre-jump-completing-read
-  "The function for the user to select a definition from a list.
+  "The function for the user to select an item from a list.
 It receives 2 arguments:
 
-- A list of one or more strings to show the definitions.  The
-  function should let the user choose one in it.  The list is
-  guaranteed to have one or more elements.  When there are only
-  one element, the function can decide to let the user confirm,
-  or return it directly.
+- A list of one or more strings representing
+  definitions/references.  The function should let the user
+  choose one in it.  The list is guaranteed to have one or more
+  elements.  When there is only one element, the function can
+  decide to let the user confirm, or return it directly.
 - A string of the symbol name that's interested in.  The function
   can show it to the user.
 
@@ -60,17 +60,21 @@ implementation."
   :type 'function
   :group 'citre)
 
+(make-obsolete 'citre-jump-select-definition-function
+               'citre-jump-select-item-function
+               "0.3")
+
 ;;;; Internals
 
 (defvar citre-jump--marker-ring (make-ring 50)
   "The marker ring used by `citre-jump'.")
 
-(defun citre-jump-completing-read (definitions symbol)
-  "Select an element in DEFINITIONS, with SYMBOL as a prompt.
+(defun citre-jump-completing-read (items symbol)
+  "Select an item in ITEMS, with SYMBOL as a prompt.
 This uses the `completing-read' interface.  See
-`citre-jump-select-definition-function' for the use of this function."
-  (pcase (length definitions)
-    (1 (car definitions))
+`citre-jump-select-item-function' for the use of this function."
+  (pcase (length items)
+    (1 (car items))
     (_ (let ((collection
               (lambda (str pred action)
                 (if (eq action 'metadata)
@@ -78,7 +82,7 @@ This uses the `completing-read' interface.  See
                       (category . citre-jump)
                       (cycle-sort-function . identity)
                       (display-sort-function . identity))
-                  (complete-with-action action definitions str pred)))))
+                  (complete-with-action action items str pred)))))
          (completing-read (format "%s: " symbol) collection nil t)))))
 
 ;;;; API
@@ -112,7 +116,7 @@ paths relative to it.  If it's `none', show absolute paths."
                     tags))
            (locations (mapcar #'car loc-alist)))
       (citre-goto-tag (alist-get
-                       (funcall citre-jump-select-definition-function
+                       (funcall citre-jump-select-item-function
                                 locations symbol)
                        loc-alist nil nil #'equal))
       (when marker (ring-insert citre-jump--marker-ring marker)))))
