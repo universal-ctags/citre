@@ -279,7 +279,7 @@ cons pair."
 The first succeeded backend and the results are returned in a
 cons pair."
   (citre--try-func-in-backend-list
-   'tags-in-buffer-func
+   'get-tags-in-buffer-func
    citre--tags-in-buffer-backends-table citre-tags-in-buffer-backends))
 
 (defun citre-get-tags-in-buffer ()
