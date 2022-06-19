@@ -153,6 +153,11 @@
 
 ;;;; User Options
 
+(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
+  "Hook to run after jumping to a tag."
+  :type 'hook
+  :group 'citre)
+
 (defcustom citre-tag-pattern-search-limit 50000
   "The limit of chars to go when searching for a pattern in a tag."
   :type 'integer

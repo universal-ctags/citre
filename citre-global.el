@@ -117,7 +117,7 @@ message of global) start from START-FILE."
                       (list "--" name)))
     (citre-get-output-lines cmd)))
 
-(defun citre-global--read-path (path)
+(defun citre-global--parse-path (path)
   "Translate escaped sequences in PATH.
 The path should come from the output of global, with the
 \"--encode-path\" option."
@@ -150,7 +150,7 @@ The value of `extras' field is \"reference\"."
             (linum (match-string 2 line)))
         ;; We don't record the pattern field since it's generate in real time,
         ;; so it can't be used to deal with file updates.
-        (setq path (expand-file-name (citre-global--read-path path) rootdir))
+        (setq path (expand-file-name (citre-global--parse-path path) rootdir))
         (citre-make-tag 'name (when name (substring-no-properties name))
                         'ext-abspath path
                         'line linum
@@ -178,7 +178,7 @@ database of current directory."
            (error (setq citre--global-dbpath 'non)
                   nil))))))
 
-(defun citre-clear-global-dbpath-cache ()
+(defun citre-global-clear-dbpath-cache ()
   "Clear the cache of buffer -> global database path.
 Use this when a new database is created."
   (dolist (b (buffer-list))
@@ -243,13 +243,14 @@ Global program is run under current `default-directory'."
                                s))))
              (s (user-error "Abnormal status of gtags: %s.  \
 See *citre-gtags* buffer" s)))
-         (citre-clear-global-dbpath-cache)))
+         (citre-global-clear-dbpath-cache)))
      :file-handler t)
     (message "Tagging...")))
 
 ;;;###autoload
 (defun citre-global-update-database ()
-  "Update the gtags database in use."
+  "Update the gtags database in use.
+If no database is found, prompt the user to create one."
   (interactive)
   (let ((prog (or citre-global-program "global")))
     (make-process

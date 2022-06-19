@@ -101,9 +101,9 @@ What it does is:
 The *"tags"* are just hash tables, and can be utilized by
 `citre-get-tag-field`, to extract all kinds of information offered by them.
 
-A wrapper `citre-get-tags` is defined in `citre-util.el`. It's a handier
+A wrapper `citre-tags-get-tags` is defined in `citre-util.el`. It's a handier
 version of `citre-core-get-tags`. Tools offered by Citre should use
-`citre-get-tags` instead.
+`citre-tags-get-tags` instead.
 
 ### Extra extension fields
 

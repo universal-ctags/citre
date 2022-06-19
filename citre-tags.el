@@ -72,10 +72,10 @@ non-nil, *and* add `substring' to `completion-styles' (for Emacs
   "Case sensitivity of auto-completion.
 
 Note for developers: Actually this doesn't affect auto-completion
-directly.  This option controls the behavior of `citre-get-tags'
-when its argument MATCH is not nil or `exact', and when this is
-the case, it's likely that the user is getting tags for
-auto-completion."
+directly.  This option controls the behavior of
+`citre-tags-get-tags' when its argument MATCH is not nil or
+`exact', and when this is the case, it's likely that the user is
+getting tags for auto-completion."
   :type 'boolean
   :group 'citre)
 
@@ -106,30 +106,11 @@ file for imenu."
                'citre-tags-imenu-create-tags-file-threshold
                "0.3")
 
-;;;;; Misc
-
-(defcustom citre-after-jump-hook '(citre-recenter-and-blink)
-  "Hook to run after jumping to a location."
-  :type 'hook
-  :group 'citre)
-
-(defcustom citre-auto-enable-citre-mode-modes 'all
-  "The major modes where `citre-auto-enable-citre-mode' works.
-If you requires `citre-config' in your configuration, then these
-are the major modes where `citre-mode' is automatically enabled
-if a tags file can be found.
-
-This should be a list of major modes, or `all' for it to work in
-all major modes."
-  :type '(choice (repeat symbol)
-                 (const :tag "All major modes" all))
-  :group 'citre)
-
 ;;;; APIs
 
 ;;;;; Readtags API wrapper
 
-(cl-defun citre-get-tags
+(cl-defun citre-tags-get-tags
     (&optional tagsfile name match
                &key filter sorter
                require optional exclude parse-all-fields)
@@ -159,17 +140,17 @@ and some of its fields, which can be utilized by
 
 ;;;;; Common filter/sorter snippets
 
-(defun citre-filter-extra-tags (extras)
+(defun citre-tags-filter-extra-tags (extras)
   "Filter that matches extra tags in list EXTRAS."
   (citre-readtags-filter 'extras extras 'csv-contain))
 
-(defvar citre-filter-file-tags
+(defvar citre-tags-filter-file-tags
   `(or
     ,(citre-readtags-filter 'extras '("inputFile") 'csv-contain)
     ,(citre-readtags-filter-kind "file"))
   "Filter that matches file tags.")
 
-(defun citre-filter-local-symbol-in-other-file (file tagsfile)
+(defun citre-tags-filter-local-symbol-in-other-file (file tagsfile)
   "Filter that matches tags with \"file\" scope, but not in FILE.
 TAGSFILE is the absolute path of the tags file to use this filter
 on."
@@ -177,7 +158,7 @@ on."
         (or ,(citre-readtags-filter-field-exist 'file)
             ,(citre-readtags-filter 'extras "fileScope" 'csv-contain))))
 
-(defvar citre-sorter-arg-size-order
+(defvar citre-tags-sorter-arg-size-order
   '(expr (if (and $line $end &line &end)
              (<> (- &end &line) (- $end $line))
            0))
@@ -188,12 +169,12 @@ declaration, while the \"bigger\" one is the actual definition.
 
 This can be used as an arg for `citre-readtags-sorter'.")
 
-(defvar citre-sorter-arg-put-references-below
+(defvar citre-tags-sorter-arg-put-references-below
   `(filter ,(citre-readtags-filter 'extras "reference" 'csv-contain) -)
   "Put reference tags below others.
 This can be used as an arg for `citre-readtags-sorter'.")
 
-(defun citre-sorter-arg-put-kinds-above (kinds)
+(defun citre-tags-sorter-arg-put-kinds-above (kinds)
   "Put tags with kind field in list KINDS above others.
 This can be used as an arg for `citre-readtags-sorter'."
   (let ((filters (mapcar (lambda (k) (citre-readtags-filter-kind k))
@@ -339,10 +320,10 @@ MODE is a symbol of the major mode, PLIST is a plist described in
         (file-path (citre-get-property 'file-path symbol)))
     `(not
       (or
-       ,(citre-filter-extra-tags '("anonymous" "reference"))
-       ,citre-filter-file-tags
+       ,(citre-tags-filter-extra-tags '("anonymous" "reference"))
+       ,citre-tags-filter-file-tags
        ,(if file-path
-            (citre-filter-local-symbol-in-other-file file-path tags-file)
+            (citre-tags-filter-local-symbol-in-other-file file-path tags-file)
           'false)))))
 
 (defvar citre-tags-completion-default-sorter
@@ -366,15 +347,16 @@ completion can't be done."
   (when-let* ((symbol (or symbol (citre-tags-get-symbol tagsfile)))
               (tagsfile (or tagsfile (citre-tags-file-path)))
               (match (if substr-completion 'substr 'prefix)))
-    (citre-get-tags tagsfile symbol match
-                    :filter (or (citre-tags--get-value-in-language-alist
-                                 :completion-filter symbol)
-                                (citre-tags-completion-default-filter symbol))
-                    :sorter (or (citre-tags--get-value-in-language-alist
-                                 :completion-sorter symbol)
-                                citre-tags-completion-default-sorter)
-                    :require '(name)
-                    :optional '(ext-kind-full signature scope typeref))))
+    (citre-tags-get-tags
+     tagsfile symbol match
+     :filter (or (citre-tags--get-value-in-language-alist
+                  :completion-filter symbol)
+                 (citre-tags-completion-default-filter symbol))
+     :sorter (or (citre-tags--get-value-in-language-alist
+                  :completion-sorter symbol)
+                 citre-tags-completion-default-sorter)
+     :require '(name)
+     :optional '(ext-kind-full signature scope typeref))))
 
 ;;;;; Finding definitions
 
@@ -387,16 +369,16 @@ completion can't be done."
        ;; Don't excluded "anonymous" here as such symbols can appear in typeref
        ;; or scope fields of other tags, which may be shown in an xref buffer,
        ;; so we should be able to find their definitions.
-       ,citre-filter-file-tags
+       ,citre-tags-filter-file-tags
        ,(if file-path
-            (citre-filter-local-symbol-in-other-file file-path tags-file)
+            (citre-tags-filter-local-symbol-in-other-file file-path tags-file)
           'false)))))
 
 (defvar citre-tags-definition-default-sorter
   (citre-readtags-sorter
-   citre-sorter-arg-put-references-below
+   citre-tags-sorter-arg-put-references-below
    'input '(length name +) 'name
-   citre-sorter-arg-size-order)
+   citre-tags-sorter-arg-size-order)
   "The default sorter expression for finding definitions.
 This sorts the file name by their alphabetical order, then the
 length and alphabetical order of the tag names.")
@@ -414,15 +396,16 @@ is found."
          (tagsfile (or tagsfile (citre-get-property 'tags-file symbol))))
     (unless symbol
       (user-error "No symbol at point"))
-    (citre-get-tags tagsfile symbol 'exact
-                    :filter (or (citre-tags--get-value-in-language-alist
-                                 :definition-filter symbol)
-                                (citre-tags-definition-default-filter symbol))
-                    :sorter (or (citre-tags--get-value-in-language-alist
-                                 :definition-sorter symbol)
-                                citre-tags-definition-default-sorter)
-                    :require '(name ext-abspath pattern)
-                    :optional '(ext-kind-full line typeref scope extras))))
+    (citre-tags-get-tags
+     tagsfile symbol 'exact
+     :filter (or (citre-tags--get-value-in-language-alist
+                  :definition-filter symbol)
+                 (citre-tags-definition-default-filter symbol))
+     :sorter (or (citre-tags--get-value-in-language-alist
+                  :definition-sorter symbol)
+                 citre-tags-definition-default-sorter)
+     :require '(name ext-abspath pattern)
+     :optional '(ext-kind-full line typeref scope extras))))
 
 ;;;; Completion backend
 
@@ -493,15 +476,6 @@ The result is a list (BEG END TAGS), see
              (symbol (citre-tags-get-symbol)))
     (citre-tags-get-definitions symbol )))
 
-(defun citre--set-tags-file-by-buffer (buf)
-  "If no tags file can be found for current buffer, use the one in BUF.
-This does nothing if no tags file can be found for BUF."
-  (let (tags-file)
-    (when (and (null (citre-tags-file-path))
-               (setq tags-file (with-current-buffer buf
-                                 (citre-tags-file-path))))
-      (setq citre--tags-file tags-file))))
-
 (defvar citre-tags--find-definition-for-id-filter
   `(not ,(citre-readtags-filter 'extras "anonymous" 'csv-contain))
   "Filter for finding definitions when the symbol is inputted by user.")
@@ -521,11 +495,12 @@ When xref prompts for user input for the symbol, we can't get
 information from the environment of the symbol at point, so we
 have to bypass the whole filter/sort mechanism of Citre and use
 simple tag name matching.  This function is for it."
-  (citre-get-tags nil symbol 'exact
-                  :filter citre-tags--find-definition-for-id-filter
-                  :sorter citre-tags-definition-default-sorter
-                  :require '(name ext-abspath pattern)
-                  :optional '(ext-kind-full line typeref scope extras)))
+  (citre-tags-get-tags
+   nil symbol 'exact
+   :filter citre-tags--find-definition-for-id-filter
+   :sorter citre-tags-definition-default-sorter
+   :require '(name ext-abspath pattern)
+   :optional '(ext-kind-full line typeref scope extras)))
 
 (defun citre-tags-get-identifiers ()
   "Get a list of identifiers in current project."
@@ -546,7 +521,7 @@ simple tag name matching.  This function is for it."
              (cl-remove-duplicates
               (mapcar
                (lambda (tag) (citre-get-tag-field 'name tag))
-               (citre-get-tags
+               (citre-tags-get-tags
                 ;; We don't use STR here, but return all tag names,
                 ;; since we need to work with completion styles that
                 ;; may not do a prefix completion.
@@ -573,7 +548,7 @@ simple tag name matching.  This function is for it."
 (declare-function tramp-get-remote-tmpdir "tramp" (vec))
 (declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
 
-(defun citre-imenu--temp-tags-file-path ()
+(defun citre-tags--imenu-temp-tags-file-path ()
   "Return the temporary tags file path for imenu.
 This also works on a remote machine."
   (if (file-remote-p default-directory)
@@ -582,25 +557,25 @@ This also works on a remote machine."
                          (tramp-dissect-file-name default-directory)))
     (expand-file-name "citre-imenu.tags" temporary-file-directory)))
 
-(defun citre-imenu--ctags-command-cwd ()
+(defun citre-tags--imenu-ctags-command-cwd ()
   "Return ctags command and its cwd for tags file for imenu."
   (if-let* ((tagsfile (citre-tags-file-path))
             (scan-files (list (file-local-name (buffer-file-name))))
-            (target (citre-imenu--temp-tags-file-path))
-            (cmd-and-cwd (citre-get-recipe-and-replace-parts
+            (target (citre-tags--imenu-temp-tags-file-path))
+            (cmd-and-cwd (citre-get-ctags-recipe-and-replace-parts
                           tagsfile scan-files target))
             (cmd (car cmd-and-cwd))
             (cwd (cdr cmd-and-cwd)))
       (cons cmd cwd)
     (cons `(,(or citre-ctags-program "ctags") "-o"
-            ,(citre-imenu--temp-tags-file-path)
+            ,(citre-tags--imenu-temp-tags-file-path)
             "--kinds-all=*" "--fields=*" "--extras=*"
             ,(file-local-name (buffer-file-name)))
           default-directory)))
 
-(defun citre-imenu--tags-from-tags-file ()
+(defun citre-tags--imenu-tags-from-tags-file ()
   "Get tags for imenu from the tags file being used."
-  (citre-get-tags
+  (citre-tags-get-tags
    nil nil nil
    :filter
    `(and ,(citre-readtags-filter-input (buffer-file-name)
@@ -614,10 +589,11 @@ This also works on a remote machine."
    :require '(name pattern)
    :optional '(ext-kind-full line typeref scope extras)))
 
-(defun citre-imenu--tags-from-temp-tags-file ()
+(defun citre-tags--imenu-tags-from-temp-tags-file ()
   "Get tags for imenu from a new temporary tags file."
-  (pcase-let ((`(,cmd . ,cwd) (citre-imenu--ctags-command-cwd)))
-    (make-directory (file-name-directory (citre-imenu--temp-tags-file-path))
+  (pcase-let ((`(,cmd . ,cwd) (citre-tags--imenu-ctags-command-cwd)))
+    (make-directory (file-name-directory
+                     (citre-tags--imenu-temp-tags-file-path))
                     'parents)
     (let ((default-directory cwd))
       (apply #'process-file (car cmd)
@@ -626,8 +602,8 @@ This also works on a remote machine."
   ;; WORKAROUND: If we don't sit for a while, the readtags process will freeze.
   ;; TOOD: Fix this when uctags offers "edittags" command.
   (sit-for 0.001)
-  (citre-get-tags
-   (citre-imenu--temp-tags-file-path) nil nil
+  (citre-tags-get-tags
+   (citre-tags--imenu-temp-tags-file-path) nil nil
    :filter
    `(not (or ,(citre-readtags-filter
                'extras
@@ -645,8 +621,8 @@ This also works on a remote machine."
              (or (null citre-tags-imenu-create-tags-file-threshold)
                  (< (file-attribute-size (file-attributes tagsfile))
                     citre-tags-imenu-create-tags-file-threshold)))
-        (citre-imenu--tags-from-tags-file)
-      (citre-imenu--tags-from-temp-tags-file))))
+        (citre-tags--imenu-tags-from-tags-file)
+      (citre-tags--imenu-tags-from-temp-tags-file))))
 
 (citre-register-tags-in-buffer-backend 'tags #'citre-tags-get-tags-in-buffer)
 

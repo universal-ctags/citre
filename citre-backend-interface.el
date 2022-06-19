@@ -295,13 +295,8 @@ cons pair."
    'identifier-list-func
    citre--find-definition-backends-table citre-find-definition-backends))
 
-(defun citre-get-id-list ()
-  "Get a list of identifiers in the current project/workspace."
-  (when-let ((result (citre-get-backend-and-id-list)))
-    (cdr result)))
-
 (defun citre-get-definitions-of-id (id backend)
-  "Get definitions of ID using BACKEND.
+  "Get definitions of identifier ID using BACKEND.
 Returns a list of tags."
   (funcall (citre--get-prop-of-backend backend 'get-definitions-for-id-func
                                        citre--find-definition-backends-table)
