@@ -133,10 +133,10 @@ this if ctags is not in your PATH, or its name is not \"ctags\""
 
 (defcustom citre-ctags-cmd-buf-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c l") 'citre-edit-cmd-buf-add-lang)
-    (define-key map (kbd "C-c f") 'citre-edit-cmd-buf-add-dir-or-file)
-    (define-key map (kbd "C-c C-c") 'citre-edit-cmd-buf-commit)
-    (define-key map (kbd "C-c C-k") 'citre-edit-cmd-buf-cancel)
+    (define-key map (kbd "C-c l") 'citre-ctags-cmd-buf-add-lang)
+    (define-key map (kbd "C-c f") 'citre-ctags-cmd-buf-add-dir-or-file)
+    (define-key map (kbd "C-c C-c") 'citre-ctags-cmd-buf-commit)
+    (define-key map (kbd "C-c C-k") 'citre-ctags-cmd-buf-cancel)
     map)
   "Keymap used in the ctags command editing buffer."
   :type 'keymap
