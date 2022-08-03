@@ -408,6 +408,12 @@ This command requires the ctags program from Universal Ctags."
            citre--edit-cmd-buf-tagsfile
            citre--edit-cmd-buf-cwd
            (citre--cmd-buf-to-ptag))
+  (mapcar
+    (lambda (buf)
+      (if (buffer-file-name buf)
+          (with-current-buffer buf
+              (citre-auto-enable-citre-mode))))
+        (buffer-list))
   (let ((buf (current-buffer)))
     (pop-to-buffer citre--edit-cmd-buf-prev-buf
                    '(display-buffer-same-window))
