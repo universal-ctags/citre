@@ -394,11 +394,12 @@ The returned value is a valid return value for
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql 'citre)))
   "Define method for xref to get symbol at point."
-  (when-let ((symbol (symbol-name (symbol-at-point))))
+  (when-let ((symbol (symbol-at-point)))
     ;; The symbol name doesn't matter for us.  We record the buffer in the text
     ;; property so Citre backends could goto the buffer and find
     ;; definitions/references for symbol at point.
-    (citre-put-property symbol 'xref-symbol-buffer (current-buffer))))
+    (citre-put-property (symbol-name symbol)
+                        'xref-symbol-buffer (current-buffer))))
 
 (cl-defmethod xref-backend-identifier-completion-table
   ((_backend (eql 'citre)))
@@ -407,17 +408,8 @@ The returned value is a valid return value for
     ;; We need this since Xref calls this function in minibuffer.
     (let* ((result (with-selected-window (or (minibuffer-selected-window)
                                              (selected-window))
-                     (citre-get-backend-and-id-list)))
-           (backend (car result))
-           (id-list (cdr result))
-           (collection
-            (cl-remove-duplicates
-             (mapcar
-              (lambda (tag) (citre-put-property (citre-get-tag-field 'name tag)
-                                                'backend backend))
-              id-list)
-             :test #'equal)))
-      (complete-with-action action collection str pred))))
+                     (citre-get-backend-and-id-list))))
+      (complete-with-action action (cdr result) str pred))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql 'citre)) symbol)
   "Method for xref to find definitions of SYMBOL."
