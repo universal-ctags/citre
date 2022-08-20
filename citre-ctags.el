@@ -115,7 +115,7 @@ this if ctags is not in your PATH, or its name is not \"ctags\""
   "ctags
 -o
 %TAGSFILE%
-;; programming languages to be scanned
+;; programming languages to be scanned, or \"all\" for all supported languages
 --languages=C,C++
 --kinds-all=*
 --fields=*
