@@ -481,7 +481,7 @@ See *citre-ctags* buffer" s))))
         (message "Updating %s..." tagsfile))
       t)))
 
-(defun citre-get-definitions-maybe-update-tags-file (&optional symbol tagsfile)
+(defun citre-get-definitions-maybe-update-tags-file (&optional symbol tagsfile  no-update)
   "Get definitions of SYMBOL from TAGSFILE.
 When the definitions are not found, and
 `citre-update-tags-file-when-no-definitions' is non-nil, update
@@ -492,7 +492,7 @@ See `citre-get-definitions' to know the behavior of \"getting
 definitions\"."
   (let ((tagsfile (or tagsfile (citre-tags-file-path))))
     (or (citre-get-definitions symbol tagsfile)
-        (when (and citre-update-tags-file-when-no-definitions
+        (when (and citre-update-tags-file-when-no-definitions (not no-update)
                    (citre-tags-file-updatable-p tagsfile)
                    (y-or-n-p "Can't find definition.  \
 Update the tags file and search again? "))
