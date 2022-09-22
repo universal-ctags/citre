@@ -55,6 +55,11 @@ The function can return a string or nil."
   :type 'hook
   :group 'citre)
 
+(defcustom citre-process-timeout 1
+  " kill the process when citre-get-output-lines freeze over citre-process-timeout "
+  :type 'float
+  :group 'citre)
+
 ;;;; String
 
 (defun citre-string-after-1st-colon (string)
@@ -488,7 +493,8 @@ signaled."
           ;; Wait for the process to finish.  This trick is borrowed from
           ;; emacs-aio (https://github.com/skeeto/emacs-aio).  This doesn't
           ;; block.
-          (while (not finished) (accept-process-output))
+          (with-timeout (citre-process-timeout (kill-process proc))
+            (while (not finished) (accept-process-output)))
           ;; The process is finished, but there may still be buffered output
           ;; that's pending, so we `accept-process-output' from the process,
           ;; and the related stderr pipe process.  This blocks, but doesn't
