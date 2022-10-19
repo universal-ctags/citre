@@ -106,6 +106,12 @@ table.")
 Use `citre-register-tags-in-buffer-backend' to modify this
 table.")
 
+(defvar citre--symbol-at-point-backends-table
+  (make-hash-table :test #'eq :size 5)
+  "Lookup table for symbol at point functions.
+Use `citre-register-symbol-at-point-backend' to modify this
+table.")
+
 (defvar citre--after-jump-functions nil
   "List of after jump functions.
 Use `citre-register-after-jump-function' to modify this list.")
@@ -217,6 +223,19 @@ tags.  When no tags is available, it should return nil."
     (puthash 'get-tags-in-buffer-func get-tags-in-buffer-func backend)
     (puthash name backend citre--tags-in-buffer-backends-table)))
 
+(defun citre-register-symbol-at-point-backend (name symbol-at-point-func)
+  "Register a new backend for getting symbol at point.
+This is used as hints in the UI, e.g., in the error message when
+no definition is found for symbol at point.
+
+NAME is the name of the backend and should be a symbol.
+SYMBOL-AT-POINT-FUNC is called with no arguments, and should
+return a string of the symbol at point.  When there's no symbol
+at point, it should return nil."
+  (let ((backend (make-hash-table :test #'eq :size 5)))
+    (puthash 'symbol-at-point-func symbol-at-point-func backend)
+    (puthash name backend citre--symbol-at-point-backends-table)))
+
 (defun citre-register-after-jump-function (func)
   "Register FUNC as an after-jump function.
 FUNC is called after jumping to a definition or reference, with
@@ -301,6 +320,13 @@ Returns a list of tags."
   (funcall (citre--get-prop-of-backend backend 'get-definitions-for-id-func
                                        citre--find-definition-backends-table)
            id))
+
+(defun citre-get-symbol-at-point-for-backend (backend)
+  "Get symbol at point using BACKEND.
+It uses `citre--symbol-at-point-backends-table' internally and
+returns a string or nil."
+  (funcall (citre--get-prop-of-backend backend 'symbol-at-point-func
+                                       citre--symbol-at-point-backends-table)))
 
 (defun citre-after-jump-action (buffer)
   "Run the actions registered by `citre-register-after-jump-function'.

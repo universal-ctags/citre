@@ -312,6 +312,15 @@ MODE is a symbol of the major mode, PLIST is a plist described in
   (setf (alist-get mode citre-tags-language-support-alist)
         plist))
 
+(defun citre-tags--symbol-at-point ()
+  "Get the symbol at point using tags backend.
+This is for display purpose only and the returned string doesn't
+contain some properties as returned by `citre-tags-get-symbol'."
+  (funcall (or (citre-tags--get-value-in-language-alist :get-symbol)
+               #'citre-tags-get-symbol-default)))
+
+(citre-register-symbol-at-point-backend 'tags #'citre-tags--symbol-at-point)
+
 ;;;;; Auto-completion related
 
 (defun citre-tags-completion-default-filter (symbol)
