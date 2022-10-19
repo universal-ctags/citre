@@ -450,7 +450,7 @@ The returned value is a valid return value for
       ;; If true, the symbol is grabbed from a buffer, not identifier
       ;; completion table.
       (with-current-buffer buf
-        (citre-xref--make-collection (cdr (citre-get-definitions))))
+        (citre-xref--make-collection (citre-get-definitions)))
     (let ((defs (citre-get-definitions-of-id
                  symbol (citre-get-property 'backend symbol))))
       (citre-xref--make-collection defs))))
@@ -459,7 +459,7 @@ The returned value is a valid return value for
   "Method for xref to find references of SYMBOL."
   (if-let ((buf (citre-get-property 'xref-symbol-buffer symbol)))
       (with-current-buffer buf
-        (citre-xref--make-collection (cdr (citre-get-references))))
+        (citre-xref--make-collection (citre-get-references)))
     (user-error "Finding references of completed symbol is not supported \
 by Citre")))
 
