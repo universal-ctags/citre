@@ -378,7 +378,6 @@ completion can't be done."
        ;; Don't excluded "anonymous" here as such symbols can appear in typeref
        ;; or scope fields of other tags, which may be shown in an xref buffer,
        ;; so we should be able to find their definitions.
-       ,citre-tags-filter-file-tags
        ,(if file-path
             (citre-tags-filter-local-symbol-in-other-file file-path tags-file)
           'false)))))
