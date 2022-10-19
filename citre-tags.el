@@ -632,6 +632,10 @@ This also works on a remote machine."
 
 (citre-register-tags-in-buffer-backend 'tags #'citre-tags-get-tags-in-buffer)
 
+;;;; Auto enable citre-mode
+
+(citre-register-backend-usable-probe 'tags #'citre-tags-file-path)
+
 (provide 'citre-tags)
 
 ;; Local Variables:

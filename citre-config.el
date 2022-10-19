@@ -35,7 +35,9 @@
 
 ;;;; Auto enabling `citre-mode'
 
-(add-hook 'find-file-hook #'citre-auto-enable-citre-mode-by-tags-file)
+;; This is autoloaded in citre.el so it's usable.
+(declare-function citre-auto-enable-citre-mode "citre")
+(add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
 
 ;;;; Language supports
 
@@ -66,7 +68,6 @@
 (autoload 'citre-create-tags-file "citre" nil t)
 (autoload 'citre-global-create-database "citre" nil t)
 (autoload 'citre-global-update-database "citre" nil t)
-(autoload 'citre-auto-enable-citre-mode-by-tags-file "citre" nil t)
 
 (provide 'citre-config)
 

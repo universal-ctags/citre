@@ -280,6 +280,10 @@ See *citre-global-update* buffer" s))))
 (citre-register-symbol-at-point-backend 'global #'citre-tags--symbol-at-point)
 (citre-register-find-reference-backend 'global #'citre-global-get-references)
 
+;;;; Auto enable citre-mode
+
+(citre-register-backend-usable-probe 'global #'citre-global-dbpath)
+
 (provide 'citre-global)
 
 ;; Local Variables:

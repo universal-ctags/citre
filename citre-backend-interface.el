@@ -112,6 +112,11 @@ table.")
 Use `citre-register-symbol-at-point-backend' to modify this
 table.")
 
+(defvar citre--backend-usable-probe-table
+  (make-hash-table :test #'eq :size 5)
+  "Lookup table of probe functions to detect if a backend is usable.
+Use `citre-register-backend-usable-probe' to modify this table.")
+
 (defvar citre--after-jump-functions nil
   "List of after jump functions.
 Use `citre-register-after-jump-function' to modify this list.")
@@ -236,6 +241,16 @@ at point, it should return nil."
     (puthash 'symbol-at-point-func symbol-at-point-func backend)
     (puthash name backend citre--symbol-at-point-backends-table)))
 
+(defun citre-register-backend-usable-probe (name backend-usable-func)
+  "Register a probe for detecting if backend NAME is usable.
+BACKEND-USABLE-FUNC is called with no arguments, and should
+return nil when the backend is not usable in current buffer.
+
+This is used for `citre-auto-enable-citre-mode'."
+  (let ((backend (make-hash-table :test #'eq :size 5)))
+    (puthash 'backend-usable-func backend-usable-func backend)
+    (puthash name backend citre--backend-usable-probe-table)))
+
 (defun citre-register-after-jump-function (func)
   "Register FUNC as an after-jump function.
 FUNC is called after jumping to a definition or reference, with
@@ -327,6 +342,11 @@ It uses `citre--symbol-at-point-backends-table' internally and
 returns a string or nil."
   (funcall (citre--get-prop-of-backend backend 'symbol-at-point-func
                                        citre--symbol-at-point-backends-table)))
+
+(defun citre-backend-usable-p (backend)
+  "Check if BACKEND is usable for current buffer."
+  (funcall (citre--get-prop-of-backend backend 'backend-usable-func
+                                       citre--backend-usable-probe-table)))
 
 (defun citre-after-jump-action (buffer)
   "Run the actions registered by `citre-register-after-jump-function'.

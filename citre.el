@@ -77,8 +77,15 @@
 (put 'citre-enable-imenu-integration 'safe-local-variable #'booleanp)
 (make-variable-buffer-local 'citre-enable-imenu-integration)
 
+(defcustom citre-auto-enable-citre-mode-backends '(tags global)
+  "Backends for which `citre-auto-enable-citre-mode' works.
+If one of these backends are usable in current file,
+`citre-auto-enable-citre-mode' will enable `citre-mode'."
+  :type '(repeat symbol)
+  :group 'citre)
+
 (defcustom citre-auto-enable-citre-mode-modes 'all
-  "The major modes where `citre-auto-enable-citre-mode-by-tags-file' works.
+  "The major modes where `citre-auto-enable-citre-mode' works.
 If you require `citre-config' in your configuration, then these
 are the major modes where `citre-mode' is automatically enabled
 if a tags file can be found.
@@ -553,18 +560,14 @@ The returned value is a valid element of the return value of
             citre-imenu--create-index-function-orig)))))
 
 ;;;###autoload
-(defun citre-auto-enable-citre-mode-by-tags-file ()
-  "Enable `citre-mode' when a tags file can be found.
+(defun citre-auto-enable-citre-mode ()
+  "Enable `citre-mode' if one of `citre-auto-enable-citre-mode' is usable.
 Put this in `find-file-hook' to automatically enable `citre-mode'
 when opening a file."
-  (when (and (or (eq citre-auto-enable-citre-mode-modes 'all)
-                 (cl-some (lambda (mode) (derived-mode-p mode))
-                          citre-auto-enable-citre-mode-modes))
-             (citre-tags-file-path))
-    (citre-mode)))
-
-(define-obsolete-function-alias 'citre-auto-enable-citre-mode
-  'citre-auto-enable-citre-mode-by-tags-file "0.3")
+  (cl-dolist (backend citre-auto-enable-citre-mode-backends)
+    (when (citre-backend-usable-p backend)
+      (citre-mode)
+      (cl-return))))
 
 (provide 'citre)
 
