@@ -1,3 +1,10 @@
+### 0.3 (released 2022-10-19)
+
+- New features
+
+  - Citre now takes a pluggable backend design, and the GNU Global backend now
+    works for auto-completion, finding definitions and references.
+
 ### 0.2.1 (released 2022-05-23)
 
 - Improvements

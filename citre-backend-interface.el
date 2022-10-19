@@ -45,23 +45,27 @@
 ;;;; User Options
 
 (defcustom citre-completion-backends '(tags global)
-  "List of completion backends."
+  "List of completion backends.
+The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
 (defcustom citre-find-definition-backends '(tags global)
-  "List of backends for finding definitions."
+  "List of backends for finding definitions.
+The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
 (defcustom citre-find-reference-backends '(global)
-  "List of backends for finding references."
+  "List of backends for finding references.
+The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
 (defcustom citre-tags-in-buffer-backends '(tags)
   "List of backends for finding tags in buffer.
-This is used for imenu integration."
+This is used for imenu integration.  The backends are tried in
+turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
