@@ -16,19 +16,48 @@ wrap `citre-global' tests in this macro."
            ,@body)
        (setq process-environment process-environment-orig))))
 
-(ert-deftest test-global-get-references ()
-  "Test `citre-global-get-references'."
+(defun generate-global-database ()
+  "Generate global database at current directory.
+Signal an error if it fails."
+  (unless (eq (call-process (or citre-gtags-program "gtags")
+                            nil "*gtags*" nil
+                            "--compact"
+                            "--file=src.list")
+              0)
+    (error "gtags failed to run:\n%s" (buffer-string "*gtags*"))))
+
+(defun delete-global-database ()
+  "Delete global database in current directory."
+  (dolist (f '("GPATH" "GTAGS" "GRTAGS"))
+    (delete-file f)))
+
+(ert-deftest test-global-get-completions ()
+  "Test getting completions using `citre-global-get-tags'."
   (with-clean-global-envs
-    (unless (eq (call-process (or citre-gtags-program "gtags")
-                              nil "*gtags*" nil
-                              "--compact"
-                              "--file=src.list")
-                0)
-      (error "gtags failed to run:\n%s" (buffer-string "*gtags*")))
-    (let ((refs (citre-global-get-references "func")))
+    (generate-global-database)
+    (let ((completions (citre-global-get-tags "ma" 'completion)))
+      (should (equal (map-get-field 'name completions)
+                     '("main"))))
+    (delete-global-database)))
+
+(ert-deftest test-global-get-definitions ()
+  "Test getting definitions using `citre-global-get-tags'."
+  (with-clean-global-envs
+    (generate-global-database)
+    (let ((defs (citre-global-get-tags "func" 'definition)))
+      (should (equal (map-get-field 'name defs)
+                     '("func")))
+      (should (equal (map-get-field 'line defs)
+                     '(1))))
+    (delete-global-database)))
+
+(ert-deftest test-global-get-references ()
+  "Test getting references using `citre-global-get-tags'."
+  (with-clean-global-envs
+    (generate-global-database)
+    (let ((refs (citre-global-get-tags "func" 'reference)))
       (should (equal (map-get-field 'name refs)
                      '("func" "func")))
       (should (equal (map-get-field 'line refs)
                      '(6 10))))
-    (dolist (f '("GPATH" "GTAGS" "GRTAGS"))
-      (delete-file f))))
+    (delete-global-database)))

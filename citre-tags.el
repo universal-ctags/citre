@@ -69,7 +69,7 @@ non-nil, *and* add `substring' to `completion-styles' (for Emacs
                "0.3")
 
 (defcustom citre-tags-completion-case-sensitive t
-  "Case sensitivity of auto-completion.
+  "Case sensitivity of auto-completion using tags backend.
 
 Note for developers: Actually this doesn't affect auto-completion
 directly.  This option controls the behavior of
