@@ -119,8 +119,8 @@ Return nil if the property is undefined."
 
 (defun citre--try-func-in-backend-list (func table list &rest arguments)
   "Try call FUNC in TABLE with backend iterate over LIST.
-FUNC is a symbol, see for its valid values.  FUNC is called with
-ARGUMENTS.
+FUNC is a symbol, see `citre-register-*-backend' functions for
+its valid values.  FUNC is called with ARGUMENTS.
 
 The backend and the result of the first successful try is returnd
 in a cons pair.  If all backend fails, nil is returned."
