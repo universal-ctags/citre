@@ -44,12 +44,12 @@
 
 ;;;; User Options
 
-(defcustom citre-completion-backends '(tags)
+(defcustom citre-completion-backends '(tags global)
   "List of completion backends."
   :type '(repeat symbol)
   :group 'citre)
 
-(defcustom citre-find-definition-backends '(tags)
+(defcustom citre-find-definition-backends '(tags global)
   "List of backends for finding definitions."
   :type '(repeat symbol)
   :group 'citre)

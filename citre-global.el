@@ -79,20 +79,22 @@ database in the project directory."
   :type '(repeat string)
   :group 'citre)
 
+(defcustom citre-global-completion-case-sensitive t
+  "Case sensitivity of auto-completion using global backend."
+  :type 'boolean
+  :group 'citre)
+
 ;;;; Global program interface
 
 ;;;;; Internals
 
-(defvar citre-global--find-references-args
+(defvar citre-global--args
   '("--color=never"
     "--encode-path= :"
     "--result=grep"
-    "--literal"
-    "--reference"
-    "--symbol")
-  "Arguments used for finding references using global.
-`citre-global--get-reference-lines' may add more arguments on
-these.")
+    "--literal")
+  "Arguments used for global command.
+`citre-global--get-lines' further adds arguments on these.")
 
 (defun citre-global--get-output-lines (args)
   "Get output from global program.
@@ -101,19 +103,31 @@ ARGS is the arguments passed to the program."
    (append (list (or citre-global-program "global"))
            args)))
 
-(defun citre-global--get-reference-lines (name &optional case-fold start-file)
-  "Find references to NAME using global and return the outputed lines.
+(defun citre-global--get-lines (name &optional mode case-fold start-file)
+  "Find tags related to NAME using global and return the outputed lines.
+If MODE is
+
+- `completion', find tags that are completions to NAME;
+- `definition', find tags that are definitions of NAME;
+- `reference', find tags that are references to NAME.
+
 When CASE-FOLD is non-nil, do case-insensitive matching.  When
 START-FILE is non-nil, sort the result by nearness (see the help
 message of global) start from START-FILE."
   (let* ((name (when name (substring-no-properties name)))
          cmd)
-    (when case-fold (push "--ignore-case" cmd))
     (push (or citre-global-program "global") cmd)
+    (pcase mode
+      ('completion (push "--completion" cmd))
+      ('definition (push "--definition" cmd))
+      ('reference (push "--reference" cmd)
+                  (push "--symbol" cmd))
+      (_ (error "Invalid MODE")))
+    (when case-fold (push "--ignore-case" cmd))
     ;; Global doesn't know how to expand "~", so we need to expand START-FILE.
     (when start-file (push (concat "--nearness=" (expand-file-name start-file))
                            cmd))
-    (setq cmd (append (nreverse cmd) citre-global--find-references-args
+    (setq cmd (append (nreverse cmd) citre-global--args
                       (list "--" name)))
     (citre-get-output-lines cmd)))
 
@@ -134,12 +148,15 @@ The path should come from the output of global, with the
     (push (substring path last) parts)
     (apply #'concat (nreverse parts))))
 
-(defun citre-global--parse-line (line rootdir &optional name)
+(defun citre-global--parse-line (line rootdir &optional name reference)
   "Parse a LINE in the output of global.
 ROOTDIR is the working directory when running the global command.
-The return value is a tag contains `ext-abspath', `line', and
-`extras' field.  If NAME is given, is used as the `name' field.
-The value of `extras' field is \"reference\"."
+The return value is a tag contains `ext-abspath' and `line'
+fields.
+
+If NAME is given, is used as the `name' field.
+
+If REFERENCE is non-nil, \"reference\" is used as the `extras' field."
   (if (string-match (rx line-start
                         (group-n 1 (+ (not (any ":"))))
                         ":"
@@ -147,14 +164,17 @@ The value of `extras' field is \"reference\"."
                         ":")
                     line)
       (let ((path (match-string 1 line))
-            (linum (match-string 2 line)))
+            (linum (match-string 2 line))
+            (tag nil))
         ;; We don't record the pattern field since it's generate in real time,
         ;; so it can't be used to deal with file updates.
         (setq path (expand-file-name (citre-global--parse-path path) rootdir))
-        (citre-make-tag 'name (when name (substring-no-properties name))
-                        'ext-abspath path
-                        'line linum
-                        'extras "reference"))
+        (setq tag
+              (citre-make-tag 'name (when name (substring-no-properties name))
+                              'ext-abspath path
+                              'line linum))
+        (when reference (citre-set-tag-field 'extras "reference" tag))
+        tag)
     (error "Invalid LINE")))
 
 ;;;;; API
@@ -185,10 +205,12 @@ Use this when a new database is created."
     (with-current-buffer b
       (kill-local-variable 'citre--global-dbpath))))
 
-(defun citre-global-get-references (&optional name case-fold start-file)
-  "Get reference tags using global.
-When NAME is non-nil, get references of NAME, otherwise get
-references of the symbol under point.
+(defun citre-global-get-tags (&optional name mode case-fold start-file)
+  "Get tags using global.
+When NAME is non-nil, get tags for NAME, otherwise get
+tags for the symbol under point.
+
+See `citre-global--get-lines' for valid value of MODE.
 
 When CASE-FOLD is non-nil, do case-insensitive matching.
 
@@ -208,9 +230,19 @@ Global program is run under current `default-directory'."
                      (or (buffer-file-name) default-directory)))
              ((pred stringp) start-file)
              ((pred symbolp) nil))))
-      (mapcar (lambda (line)
-                (citre-global--parse-line line default-directory name))
-              (citre-global--get-reference-lines name case-fold start-file)))))
+      ;; `completion' mode needs special treatment as global just prints the
+      ;; symbols in this mode, rather than printing in grep format as in other
+      ;; modes.
+      (if (eq mode 'completion)
+          (mapcar (lambda (name)
+                    (citre-make-tag 'name name))
+                  (citre-global--get-lines
+                   name mode case-fold start-file))
+        (mapcar (lambda (line)
+                  (citre-global--parse-line line default-directory name
+                                            (eq mode 'reference)))
+                (citre-global--get-lines
+                 name mode case-fold start-file))))))
 
 ;;;; Tags file generating & updating
 
@@ -275,9 +307,39 @@ See *citre-global-update* buffer" s))))
      :file-handler t)
     (message "Updating...")))
 
-;;;; Find reference backend
+;;;; Symbol at point
 
 (citre-register-symbol-at-point-backend 'global #'citre-tags--symbol-at-point)
+
+;;;; Completion backend
+
+;; TODO: Do we need to cache the result like tags backend?
+(defun citre-global-get-completions ()
+  "Get tags of completions of symbol at point."
+  (let ((tags (citre-global-get-tags
+               nil 'completion (not citre-global-completion-case-sensitive)
+               'alpha)))
+    ;; Sort by length
+    (sort tags (lambda (a b)
+                 (< (length (citre-get-tag-field 'name a))
+                    (length (citre-get-tag-field 'name b)))))))
+
+(citre-register-completion-backend 'global #'citre-global-get-definitions)
+
+;;;; Find definitions backend
+
+(defun citre-global-get-definitions ()
+  "Get tags of definitions to symbol at point."
+  (citre-global-get-tags nil 'definition))
+
+(citre-register-find-definition-backend 'global #'citre-global-get-definitions)
+
+;;;; Find references backend
+
+(defun citre-global-get-references ()
+  "Get tags of references to symbol at point."
+  (citre-global-get-tags nil 'reference))
+
 (citre-register-find-reference-backend 'global #'citre-global-get-references)
 
 ;;;; Auto enable citre-mode
