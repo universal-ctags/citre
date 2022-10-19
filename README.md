@@ -52,9 +52,11 @@ Let's see them in action!
 All above screenshots were taken in a huge project (the Linux kernel), and
 Citre is still fast, because readtags performes binary search on the tags file.
 
-Besides, Citre has a GNU Global plugin that can find references using xref or
-the above UIs. See [this user manual](docs/user-manual/citre-global.md) to know
-about it.
+Besides, Citre has a GNU Global plugin that can find completions, definitions
+and references using xref or the above UIs. See [this user
+manual](docs/user-manual/citre-global.md) to know about it. Citre has a
+pluggable backend design so you could forget about ctags and only use Citre as
+a GNU Global frontend.
 
 ## Quick start
 
@@ -299,9 +301,13 @@ and tweak it to your own need.
   (global-set-key (kbd "C-x c u") 'citre-update-this-tags-file)
   :config
   (setq
-   ;; Set these if readtags/ctags is not in your path.
+   ;; Set these if readtags/ctags is not in your PATH.
    citre-readtags-program "/path/to/readtags"
    citre-ctags-program "/path/to/ctags"
+   ;; Set these if gtags/global is not in your PATH (and you want to use the
+   ;; global backend)
+   citre-gtags-program "/path/to/gtags"
+   citre-global-program "/path/to/global"
    ;; Set this if you use project management plugin like projectile.  It's
    ;; used for things like displaying paths relatively, see its docstring.
    citre-project-root-function #'projectile-project-root
@@ -316,8 +322,16 @@ and tweak it to your own need.
    citre-auto-enable-citre-mode-modes '(prog-mode)))
 ```
 
-See [this documentation](docs/user-manual/toc.md) to know more customizable
-options.
+These user options are for customizing enabled backends:
+
+- `citre-completion-backends`
+- `citre-find-definition-backends`
+- `citre-find-reference-backends`
+- `citre-tags-in-buffer-backends`
+- `citre-auto-enable-citre-mode-backends`
+
+Currently we have `tags` and `global` backends. See [this
+documentation](docs/user-manual/toc.md) to know more customizable options.
 
 ## Documentations
 

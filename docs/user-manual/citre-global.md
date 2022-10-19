@@ -1,8 +1,8 @@
 # How To Use `citre-global`
 
 `citre-global` is a GNU Global plugin for Citre. With `citre-global`, you can
-find the references of a symbol using xref or UI similar to `citre-jump` and
-`citre-peek`.
+find the completions, definitions or references of a symbol using capf, xref or
+UI similar to `citre-jump` and `citre-peek`.
 
 ## Prerequisite
 
@@ -16,8 +16,8 @@ languages. To use the Pygments plugin parser, you need:
 - Python (>=2.6. 3.x are also supported)
 - Pygments. Check if it's installed properly by `$ python -m pygments -h`. This
   should print the help message of Pygments.
-- Ctags. The documentation requires Exuberant Ctags, but Universal Ctags could
-  do the work (and should be better).
+- Ctags. The GNU Global documentation says Exuberant Ctags is required, but
+  Universal Ctags could do the work (and should be better).
 
 For latest information, see `plugin-factory/PLUGIN_HOWTO.pygments` in the GNU
 Global source tree.
@@ -96,49 +96,15 @@ f                   8 test.c             f();
 If all works as expected, you now have an working GNU Global installation that
 handles references.
 
-## Configure `citre-global`
+## Emacs configuration
 
-Requiring `citre-global` and you are good to go:
+You don't need further configuration to use the global backend. If this doesn't
+work for you, make sure `global` is in:
 
-```elisp
-(require 'citre-global)
-```
-
-Here's an `use-package` config example:
-
-```elisp
-(use-package citre-global
-  :ensure nil
-  :defer t
-  :init
-  (global-set-key (kbd "C-x c r") 'citre-jump-to-reference)
-  (global-set-key (kbd "C-x c P") 'citre-ace-peek-references)
-  (global-set-key (kbd "C-x c U") 'citre-global-update-database)
-  (with-eval-after-load 'citre-peek
-    (define-key citre-peek-keymap (kbd "M-l r")
-      'citre-peek-through-references)))
-```
-
-This lazy-loads `citre-global`, meaning it will load `citre-global` only after
-you use any command in it. But since `xref-find-references` is not a command
-defined in `citre-global`, calling it won't load `citre-global`. One way to
-deal with this is:
-
-```elisp
-(use-package citre-global
-  :ensure nil
-  :defer t
-  :init
-  (add-hook 'citre-mode-hook
-            (defun require-citre-global ()
-              (require 'citre-global)
-              (remove-hook 'citre-mode-hook #'require-citre-global)))
-  ;; ...the rest of the init block...
-  )
-```
-
-This still lazy-loads `citre-global`, plus when `citre-mode` is called (to
-enable the Citre xref backend), `citre-global` is loaded.
+- `citre-completion-backends` (for auto completion)
+- `citre-find-definition-backends` (for finding definitions)
+- `citre-find-reference-backends` (for finding references)
+- `citre-auto-enable-citre-mode-backends` (for auto-enabling `citre-mode`)
 
 ## Tagging the source tree
 
@@ -151,15 +117,17 @@ You could also use `citre-global-create-database` to create the database.
 
 ## Use `citre-global`
 
-`citre-global` offers `citre-jump-to-reference`, which reuses the `citre-jump`
-UI.
+If a global database is found for current file, you can use all the tools for
+finding completions, definitions and references offered by citre, capf and
+xref.
 
-`citre-global` also defines method to find references for the Citre xref
-backend. So with `citre-mode` being enabled, you can use
-`xref-find-references`.
+By default, `xref-find-references` always prompts you to choose an identifier
+from a list. You could set `xref-prompt-for-identifier` to `nil` to make it use
+the symbol at point instead. See its docstring for more details.
 
-`citre-global` offers commands that reuse the `citre-peek` UI:
+`citre` offeres these tools for finding references:
 
+- `citre-jump-to-reference`, which reuses the `citre-jump` UI;
 - `citre-peek-references`, equivalent to `citre-peek`;
 - `citre-ace-peek-references`, equivalent to `citre-ace-peek`;
 - `citre-peek-through-references`, equivalent to `citre-peek-through`.
