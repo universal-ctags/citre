@@ -91,6 +91,24 @@ all major modes."
 
 ;;;; citre-jump
 
+(defun citre--symbol-at-point-prompt (backends)
+  "Get symbol at point using BACKENDS and return a string of them.
+The returned string looks like:
+
+    \"symbol\" (A backend), no symbol at point (C backend)..."
+  (concat (string-join
+           (mapcar (lambda (backend)
+                     (let ((symbol
+                            (if-let ((s (citre-get-symbol-at-point-for-backend
+                                         backend)))
+                                (format "\"%s\"" s)
+                              "no symbol at point")))
+                       (format "%s (%s backend)"
+                               symbol backend)))
+                   backends)
+           ", ")
+          "."))
+
 ;;;###autoload
 (defun citre-jump ()
   "Jump to the definition of the symbol at point.
@@ -103,7 +121,9 @@ When there's multiple definitions, it lets you pick one using the
     (if (null defs)
         ;; TODO: Customizable fallback action (e.g. update tags file and try
         ;; again).  I don't know if it's necessary.
-        (user-error "Can't find definition of symbol at point"))
+        (user-error (concat "Can't find definition: "
+                            (citre--symbol-at-point-prompt
+                             citre-find-definition-backends))))
     (citre-jump-show defs)
     (citre-after-jump-action buf)))
 
@@ -118,7 +138,9 @@ When there's multiple definitions, it lets you pick one using the
          (buf (current-buffer)))
     (if (null refs)
         ;; TODO: Customizable fallback action.
-        (user-error "Can't find references of symbol at point"))
+        (user-error (concat "Can't find references: "
+                            (citre--symbol-at-point-prompt
+                             citre-find-reference-backends))))
     (citre-jump-show refs)
     (citre-after-jump-action buf)))
 
@@ -144,8 +166,12 @@ of the xref item under point, with the `name' field being
                      (citre-get-definitions)))))
       (if (null tags)
           (user-error
-           (if reference "Can't find references of symbol at point"
-             "Can't find definitions of symbol at point"))
+           (if reference (concat "Can't find references: "
+                                 (citre--symbol-at-point-prompt
+                                  citre-find-reference-backends))
+             (concat "Can't find definition: "
+                     (citre--symbol-at-point-prompt
+                      citre-find-definition-backends))))
         tags))))
 
 ;;;;; Peek definitions
