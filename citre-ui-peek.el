@@ -678,7 +678,8 @@ which take care of setting up other things."
    (citre-peek--mode
     (when citre-peek--ov (delete-overlay citre-peek--ov))
     (setq citre-peek--ov
-          (make-overlay (1+ (point-at-eol)) (1+ (point-at-eol))))
+          (let ((ov-pos (line-end-position)))
+            (make-overlay ov-pos ov-pos)))
     (overlay-put citre-peek--ov 'window (selected-window))
     (let* ((bg-mode (frame-parameter nil 'background-mode))
            (bg-unspecified-p (string= (face-background 'default)
@@ -861,7 +862,7 @@ not go beyond the start/end of the file."
                 (goto-char pos)
                 (setq beg (point))
                 (forward-line (1- citre-peek-file-content-height))
-                (setq end (point-at-eol))
+                (setq end (line-end-position))
                 (font-lock-fontify-region beg end)
                 (concat (buffer-substring beg end) "\n")))))
       (propertize "This file doesn't exist.\n" 'face 'error))))
@@ -1190,7 +1191,7 @@ directly."
 When FORCE is non-nil, the content of the peek window is
 recalculated."
   (unless (minibufferp)
-    (let ((overlay-pos (min (point-max) (1+ (point-at-eol)))))
+    (let ((overlay-pos (min (point-max) (1+ (line-end-position)))))
       (move-overlay citre-peek--ov overlay-pos overlay-pos))
     (when (or citre-peek--content-update force)
       (let* ((taglist (citre-peek--current-tag-list))
