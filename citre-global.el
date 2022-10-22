@@ -187,16 +187,21 @@ See `citre-global-dbpath' to know how this is used.")
   "Get global database path.
 This is the directory containing the GTAGS file.  When DIR is
 non-nil, find database of that directory, otherwise find the
-database of current directory."
-  (pcase citre--global-dbpath
-    ('none nil)
-    ((and val (pred stringp) (pred citre-dir-exists-p)) val)
-    (_ (let ((default-directory (or default-directory dir)))
-         (condition-case nil
-             (setq citre--global-dbpath
-                   (car (citre-global--get-output-lines '("--print-dbpath"))))
-           (error (setq citre--global-dbpath 'non)
-                  nil))))))
+database of current directory.
+
+When the global program is not found on the machine, return nil
+as it is needed to get the database path."
+  (when (citre-executable-find (or citre-global-program "global") t)
+    (pcase citre--global-dbpath
+      ('none nil)
+      ((and val (pred stringp) (pred citre-dir-exists-p)) val)
+      (_ (let ((default-directory (or default-directory dir)))
+           (condition-case nil
+               (setq citre--global-dbpath
+                     (car (citre-global--get-output-lines
+                           '("--print-dbpath"))))
+             (error (setq citre--global-dbpath 'non)
+                    nil)))))))
 
 (defun citre-global-clear-dbpath-cache ()
   "Clear the cache of buffer -> global database path.
@@ -298,7 +303,7 @@ If no database is found, prompt the user to create one."
          ('exit
           (pcase (process-exit-status proc)
             (0 (message "Finished updating"))
-            (_ (if (executable-find prog)
+            (_ (if (citre-executable-find prog t)
                    (when (y-or-n-p "Can't find database.  Create one? ")
                      (citre-global-create-database))
                  (user-error "Can't find global program")))))

@@ -128,15 +128,16 @@ SORTER, REQUIRE, OPTIONAL, EXCLUDE, and PARSE-ALL-FIELDS, see
 Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-tag-field'."
-  (citre-readtags-get-tags (or tagsfile (citre-tags-file-path)
-                               (user-error "Can't find a tags file"))
-                           name match
-                           (unless (or (null match) (eq match 'exact))
-                             (not citre-tags-completion-case-sensitive))
-                           :filter filter :sorter sorter
-                           :require require :optional optional
-                           :exclude exclude
-                           :parse-all-fields parse-all-fields))
+  (when (citre-executable-find (or citre-readtags-program "readtags") t)
+    (citre-readtags-get-tags (or tagsfile (citre-tags-file-path)
+                                 (user-error "Can't find a tags file"))
+                             name match
+                             (unless (or (null match) (eq match 'exact))
+                               (not citre-tags-completion-case-sensitive))
+                             :filter filter :sorter sorter
+                             :require require :optional optional
+                             :exclude exclude
+                             :parse-all-fields parse-all-fields)))
 
 ;;;;; Common filter/sorter snippets
 

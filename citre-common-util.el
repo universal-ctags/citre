@@ -50,6 +50,46 @@ The function can return a string or nil."
   :type 'function
   :group 'citre)
 
+;;;; Backports
+
+;; Backported from Emacs 28.2, as a dependency of `citre--file-name-quote'.
+(defsubst citre--file-name-quoted-p (name &optional top)
+  "Whether NAME is quoted with prefix \"/:\".
+If NAME is a remote file name and TOP is nil, check the local part of NAME."
+  (let ((file-name-handler-alist (unless top file-name-handler-alist)))
+    (string-prefix-p "/:" (file-local-name name))))
+
+;; Backported from Emacs 28.2, as a dependency of `citre-executable-find'.
+(defsubst citre--file-name-quote (name &optional top)
+  "Add the quotation prefix \"/:\" to file NAME.
+If NAME is a remote file name and TOP is nil, the local part of
+NAME is quoted.  If NAME is already a quoted file name, NAME is
+returned unchanged."
+  (let ((file-name-handler-alist (unless top file-name-handler-alist)))
+    (if (citre--file-name-quoted-p name top)
+        name
+      (concat (file-remote-p name) "/:" (file-local-name name)))))
+
+;; Backported from Emacs 28.2.  Versions below 27 doesn't have the REMOTE
+;; argument.
+(defun citre-executable-find (command &optional remote)
+  "Search COMMAND in variable `exec-path' and return the absolute file name.
+Return nil if COMMAND is not found anywhere in variable
+`exec-path'.  If REMOTE is non-nil, search on the remote host
+indicated by `default-directory' instead."
+  (if (and remote (file-remote-p default-directory))
+      (let* ((handler (find-file-name-handler default-directory 'exec-path))
+             (exec-path (if handler (funcall handler 'exec-path) exec-path))
+             (res (locate-file
+                   command
+                   (mapcar
+                    (lambda (x) (concat (file-remote-p default-directory) x))
+                    exec-path)
+                   exec-suffixes 'file-executable-p)))
+        (when (stringp res) (file-local-name res)))
+    (let ((default-directory (citre--file-name-quote default-directory 'top)))
+      (locate-file command exec-path exec-suffixes 1))))
+
 ;;;; String
 
 (defun citre-string-after-1st-colon (string)
