@@ -482,7 +482,7 @@ The result is a list (BEG END TAGS), see
   "Get definitions of symbol at point."
   (when-let ((tagsfile (citre-tags-file-path))
              (symbol (citre-tags-get-symbol)))
-    (citre-tags-get-definitions symbol )))
+    (citre-tags-get-definitions symbol tagsfile)))
 
 (defvar citre-tags--find-definition-for-id-filter
   `(not ,(citre-readtags-filter 'extras "anonymous" 'csv-contain))
