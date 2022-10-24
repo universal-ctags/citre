@@ -129,15 +129,14 @@ Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-tag-field'."
   (when (citre-executable-find (or citre-readtags-program "readtags") t)
-    (citre-readtags-get-tags (or tagsfile (citre-tags-file-path)
-                                 (user-error "Can't find a tags file"))
-                             name match
-                             (unless (or (null match) (eq match 'exact))
-                               (not citre-tags-completion-case-sensitive))
-                             :filter filter :sorter sorter
-                             :require require :optional optional
-                             :exclude exclude
-                             :parse-all-fields parse-all-fields)))
+    (when-let ((tagsfile (or tagsfile (citre-tags-file-path))))
+      (citre-readtags-get-tags tagsfile name match
+                               (unless (or (null match) (eq match 'exact))
+                                 (not citre-tags-completion-case-sensitive))
+                               :filter filter :sorter sorter
+                               :require require :optional optional
+                               :exclude exclude
+                               :parse-all-fields parse-all-fields))))
 
 ;;;;; Common filter/sorter snippets
 
@@ -401,10 +400,8 @@ from SYMBOL.
 
 The result is a list of tags.  Nil is returned when no definition
 is found."
-  (let* ((symbol (or symbol (citre-tags-get-symbol tagsfile)))
-         (tagsfile (or tagsfile (citre-get-property 'tags-file symbol))))
-    (unless symbol
-      (user-error "No symbol at point"))
+  (when-let* ((symbol (or symbol (citre-tags-get-symbol tagsfile)))
+              (tagsfile (or tagsfile (citre-get-property 'tags-file symbol))))
     (citre-tags-get-tags
      tagsfile symbol 'exact
      :filter (or (citre-tags--get-value-in-language-alist
@@ -513,9 +510,9 @@ simple tag name matching.  This function is for it."
 
 (defun citre-tags-get-identifiers ()
   "Get a list of identifiers in current project."
-  (let* ((tagsfile (citre-tags-file-path))
-         (update-time (gethash 'time (citre-readtags-tags-file-info
-                                      tagsfile))))
+  (when-let* ((tagsfile (citre-tags-file-path))
+              (update-time (gethash 'time (citre-readtags-tags-file-info
+                                           tagsfile))))
     (if (and (equal tagsfile
                     (plist-get citre-tags--id-list-cache
                                :tags-file))
