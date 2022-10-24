@@ -62,7 +62,7 @@ The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
-(defcustom citre-tags-in-buffer-backends '(tags)
+(defcustom citre-tags-in-buffer-backends '(tags global)
   "List of backends for finding tags in buffer.
 This is used for imenu integration.  The backends are tried in
 turn until one succeeded."

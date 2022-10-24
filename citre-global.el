@@ -88,14 +88,6 @@ database in the project directory."
 
 ;;;;; Internals
 
-(defvar citre-global--args
-  '("--color=never"
-    "--encode-path= :"
-    "--result=grep"
-    "--literal")
-  "Arguments used for global command.
-`citre-global--get-lines' further adds arguments on these.")
-
 (defun citre-global--get-output-lines (args)
   "Get output from global program.
 ARGS is the arguments passed to the program."
@@ -111,9 +103,10 @@ If MODE is
 - `definition', find tags that are definitions of NAME;
 - `reference', find tags that are references to NAME.
 
-When CASE-FOLD is non-nil, do case-insensitive matching.  When
-START-FILE is non-nil, sort the result by nearness (see the help
-message of global) start from START-FILE."
+The output is in grep format.  When CASE-FOLD is non-nil, do
+case-insensitive matching.  When START-FILE is non-nil, sort the
+result by nearness (see the help message of global) start from
+START-FILE."
   (let* ((name (when name (substring-no-properties name)))
          cmd)
     (push (or citre-global-program "global") cmd)
@@ -127,9 +120,24 @@ message of global) start from START-FILE."
     ;; Global doesn't know how to expand "~", so we need to expand START-FILE.
     (when start-file (push (concat "--nearness=" (expand-file-name start-file))
                            cmd))
-    (setq cmd (append (nreverse cmd) citre-global--args
-                      (list "--" name)))
+    (setq cmd (append (nreverse cmd)
+                      (list "--color=never"
+                            "--encode-path= :"
+                            "--result=grep"
+                            "--literal"
+                            "--" name)))
     (citre-get-output-lines cmd)))
+
+(defun citre-global--get-tag-lines-in-file (&optional file)
+  "Find definitions in FILE using global and return the outputed lines.
+
+The output is in cxref format.  FILE can be absolute or relative
+to `default-directory', and is the current file if it's nil."
+  (let ((file (or file (file-relative-name buffer-file-name))))
+    (citre-get-output-lines
+     (list (or citre-global-program "global")
+           "--file"
+           file))))
 
 (defun citre-global--parse-path (path)
   "Translate escaped sequences in PATH.
@@ -148,8 +156,8 @@ The path should come from the output of global, with the
     (push (substring path last) parts)
     (apply #'concat (nreverse parts))))
 
-(defun citre-global--parse-line (line rootdir &optional name reference)
-  "Parse a LINE in the output of global.
+(defun citre-global--parse-grep-line (line rootdir &optional name reference)
+  "Parse a LINE in the output of global in grep format.
 ROOTDIR is the working directory when running the global command.
 The return value is a tag contains `ext-abspath' and `line'
 fields.
@@ -176,6 +184,18 @@ If REFERENCE is non-nil, \"reference\" is used as the `extras' field."
         (when reference (citre-set-tag-field 'extras "reference" tag))
         tag)
     (error "Invalid LINE")))
+
+(defun citre-global--parse-cxref-line (line)
+  "Parse a LINE in the output of global in cxref format.
+The return value is a tag containing `name' and `line' fields.
+If the line cannot be parsed, return nil."
+  (let ((pat (rx line-start
+                 (group (+? not-newline))
+                 (+ " ")
+                 (group (+ digit)))))
+    (when (string-match pat line)
+      (citre-make-tag 'name (match-string 1 line)
+                      'line (match-string 2 line)))))
 
 ;;;;; API
 
@@ -244,10 +264,19 @@ Global program is run under current `default-directory'."
                   (citre-global--get-lines
                    name mode case-fold start-file))
         (mapcar (lambda (line)
-                  (citre-global--parse-line line default-directory name
-                                            (eq mode 'reference)))
+                  (citre-global--parse-grep-line line default-directory name
+                                                 (eq mode 'reference)))
                 (citre-global--get-lines
                  name mode case-fold start-file))))))
+
+(defun citre-global-get-tags-in-file (&optional file)
+  "Find definitions in FILE using global and return the tags.
+The tags have `name' and `line' fields.  Use the current file if
+FILE is nil."
+  (cl-delete nil
+             (mapcar #'citre-global--parse-cxref-line
+                     (citre-global--get-tag-lines-in-file file))
+             :test #'eq))
 
 ;;;; Tags file generating & updating
 
@@ -350,6 +379,10 @@ See *citre-global-update* buffer" s))))
   (citre-global-get-tags nil 'reference))
 
 (citre-register-find-reference-backend 'global #'citre-global-get-references)
+
+;;;; Imenu backend
+
+(citre-register-tags-in-buffer-backend 'global #'citre-global-get-tags-in-file)
 
 ;;;; Auto enable citre-mode
 
