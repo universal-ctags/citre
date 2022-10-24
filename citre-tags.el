@@ -578,50 +578,53 @@ This also works on a remote machine."
 
 (defun citre-tags--imenu-tags-from-tags-file ()
   "Get tags for imenu from the tags file being used."
-  (citre-tags-get-tags
-   nil nil nil
-   :filter
-   `(and ,(citre-readtags-filter-input (buffer-file-name)
-                                       (citre-tags-file-path))
-         (not (or ,(citre-readtags-filter
-                    'extras
-                    '("anonymous" "inputFile")
-                    'csv-contain)
-                  ,(citre-readtags-filter-kind "file"))))
-   :sorter (citre-readtags-sorter 'line)
-   :require '(name pattern)
-   :optional '(ext-kind-full line typeref scope extras)))
+  (when-let ((tagsfile (citre-tags-file-path)))
+    (citre-tags-get-tags
+     tagsfile nil nil
+     :filter
+     `(and ,(citre-readtags-filter-input (buffer-file-name)
+                                         tagsfile)
+           (not (or ,(citre-readtags-filter
+                      'extras
+                      '("anonymous" "inputFile")
+                      'csv-contain)
+                    ,(citre-readtags-filter-kind "file"))))
+     :sorter (citre-readtags-sorter 'line)
+     :require '(name pattern)
+     :optional '(ext-kind-full line typeref scope extras))))
 
 (defun citre-tags--imenu-tags-from-temp-tags-file ()
-  "Get tags for imenu from a new temporary tags file."
-  (pcase-let ((`(,cmd . ,cwd) (citre-tags--imenu-ctags-command-cwd)))
-    (make-directory (file-name-directory
-                     (citre-tags--imenu-temp-tags-file-path))
-                    'parents)
-    (let ((default-directory cwd))
-      (apply #'process-file (car cmd)
-             nil (get-buffer-create "*ctags*") nil
-             (cdr cmd))))
-  ;; WORKAROUND: If we don't sit for a while, the readtags process will freeze.
-  ;; TOOD: Fix this when uctags offers "edittags" command.
-  (sit-for 0.001)
-  (citre-tags-get-tags
-   (citre-tags--imenu-temp-tags-file-path) nil nil
-   :filter
-   `(not (or ,(citre-readtags-filter
-               'extras
-               '("anonymous" "inputFile")
-               'csv-contain)
-             ,(citre-readtags-filter-kind "file")))
-   :sorter (citre-readtags-sorter 'line)
-   :require '(name pattern)
-   :optional '(ext-kind-full line typeref scope extras)))
+  "Get tags for imenu from a new temporary tags file.
+If the ctags program is not found, this returns nil."
+  (when (citre-executable-find (or citre-ctags-program "ctags"))
+    (pcase-let ((`(,cmd . ,cwd) (citre-tags--imenu-ctags-command-cwd)))
+      (make-directory (file-name-directory
+                       (citre-tags--imenu-temp-tags-file-path))
+                      'parents)
+      (let ((default-directory cwd))
+        (apply #'process-file (car cmd)
+               nil (get-buffer-create "*ctags*") nil
+               (cdr cmd))))
+    ;; WORKAROUND: If we don't sit for a while, the readtags process will
+    ;; freeze.  TOOD: Fix this when uctags offers "edittags" command.
+    (sit-for 0.001)
+    (citre-tags-get-tags
+     (citre-tags--imenu-temp-tags-file-path) nil nil
+     :filter
+     `(not (or ,(citre-readtags-filter
+                 'extras
+                 '("anonymous" "inputFile")
+                 'csv-contain)
+               ,(citre-readtags-filter-kind "file")))
+     :sorter (citre-readtags-sorter 'line)
+     :require '(name pattern)
+     :optional '(ext-kind-full line typeref scope extras))))
 
 (defun citre-tags-get-tags-in-buffer ()
   "Get tags in buffer."
   (let* ((tagsfile (citre-tags-file-path)))
-    (if (and tagsfile
-             (or (null citre-tags-imenu-create-tags-file-threshold)
+    (if (or (null citre-tags-imenu-create-tags-file-threshold)
+            (and tagsfile
                  (< (file-attribute-size (file-attributes tagsfile))
                     citre-tags-imenu-create-tags-file-threshold)))
         (citre-tags--imenu-tags-from-tags-file)
