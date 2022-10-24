@@ -2,7 +2,7 @@
 
 `citre-global` is a GNU Global plugin for Citre. With `citre-global`, you can
 find the completions, definitions or references of a symbol using capf, xref or
-UI similar to `citre-jump` and `citre-peek`.
+UI similar to `citre-jump` and `citre-peek`. It also support Imenu.
 
 ## Prerequisite
 
@@ -104,6 +104,7 @@ work for you, make sure `global` is in:
 - `citre-completion-backends` (for auto completion)
 - `citre-find-definition-backends` (for finding definitions)
 - `citre-find-reference-backends` (for finding references)
+- `citre-tags-in-buffer-backends` (for Imenu integration)
 - `citre-auto-enable-citre-mode-backends` (for auto-enabling `citre-mode`)
 
 ## Tagging the source tree
@@ -131,6 +132,26 @@ the symbol at point instead. See its docstring for more details.
 - `citre-peek-references`, equivalent to `citre-peek`;
 - `citre-ace-peek-references`, equivalent to `citre-ace-peek`;
 - `citre-peek-through-references`, equivalent to `citre-peek-through`.
+
+## Use global backend for Imenu
+
+The default configuation of Citre may use tags backend for Imenu even if you
+haven't created a tags file: If ctags program is found on the machine, then
+when using Imenu in small files, Citre first scans the file using ctags, then
+read the tags from the generated tags file. This should work better for most
+situations.
+
+If you have created a gtags database and want to use global backend, then one
+of the following conditions needs to be satisfied:
+
+- `global` comes before `tags` in `citre-tags-in-buffer-backends`
+- `ctags` program is not installed
+- `citre-tags-imenu-create-tags-file-threshold` is set to `nil`
+- Current file is bigger than `citre-tags-imenu-create-tags-file-threshold`
+
+Please note that since a gtags database doesn't contain kind information, all
+the Imenu items are in the "<unclassified>" category, rather than in classified
+as "variable", "function", etc..
 
 ## Tips for using global/gtags program
 

@@ -1,3 +1,13 @@
+### 0.3.1 (released 2022-10-25)
+
+- Improvements
+
+  - `citre-global`: Now the global backend supports Imenu.
+
+- Fixes
+
+  - Various bugfixes
+
 ### 0.3 (released 2022-10-19)
 
 - New features
