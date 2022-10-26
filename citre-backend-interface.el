@@ -155,9 +155,9 @@ return a list like (BEG END TAGS).  BEG and END is the region
 that the completion should replace, and TAGS is a list of tags,
 which are completions of symbol at point.  The tags should at
 least contain `name' field, and optionally `ext-kind-full',
-`signature', `scope' and `typeref' fields, which allows the UI to
-display more information.  If no completion is available, it
-should return nil."
+`signature', `pattern', `scope' and `typeref' fields, which
+allows the UI to display more information.  If no completion is
+available, it should return nil."
   (let ((backend (make-hash-table :test #'eq :size 5)))
     (puthash 'get-completions-func get-completions-func backend)
     (puthash name backend citre--completion-backends-table)))

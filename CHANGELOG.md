@@ -1,3 +1,11 @@
+### Unreleased
+
+- Improvements
+
+  - `company-docsig` and `company-kind` information are offerd by tags backend,
+    so company (and corfu, kind-icon, and maybe other packages...) users could
+    see more help information.
+
 ### 0.3.1 (released 2022-10-25)
 
 - Improvements

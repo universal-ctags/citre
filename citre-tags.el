@@ -365,7 +365,7 @@ completion can't be done."
                   :completion-sorter symbol)
                  citre-tags-completion-default-sorter)
      :require '(name)
-     :optional '(ext-kind-full signature scope typeref))))
+     :optional '(ext-kind-full signature pattern scope typeref))))
 
 ;;;;; Finding definitions
 

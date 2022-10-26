@@ -287,7 +287,14 @@ definitions."
    (citre-make-tag-str tag nil '(name))
    'annotation
    (citre-make-tag-str tag nil '(annotation :prefix " ("
-                                            :suffix ")"))))
+                                            :suffix ")"))
+   'signature
+   (or (citre-get-tag-field 'signature tag)
+       (when-let ((str (citre-get-tag-field 'extra-matched-str tag)))
+         (string-trim str)))
+   'kind
+   (when-let ((kind (citre-get-tag-field 'ext-kind-full tag)))
+     (intern kind))))
 
 (defun citre-capf--make-candidates (tags)
   "Make auto-completion candidates of TAGS."
@@ -319,10 +326,13 @@ is a valid return value of `completion-at-point-functions'."
               (get-annotation
                (lambda (cand) (citre-get-property 'annotation cand)))
               (get-docsig
-               (lambda (cand) (citre-get-property 'signature cand))))
+               (lambda (cand) (citre-get-property 'signature cand)))
+              (get-kind
+               (lambda (cand) (citre-get-property 'kind cand))))
     (list start end collection
           :annotation-function get-annotation
           :company-docsig get-docsig
+          :company-kind get-kind
           ;; This makes our completion function a "non-exclusive" one, which
           ;; means to try the next completion function when current completion
           ;; table fails to match the text at point (see the docstring of
