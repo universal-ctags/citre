@@ -296,25 +296,12 @@ definitions."
    (when-let ((kind (citre-get-tag-field 'ext-kind-full tag)))
      (intern kind))))
 
-(defun citre-capf--make-candidates (tags)
-  "Make auto-completion candidates of TAGS."
-  (let* ((collection
-          (mapcar #'citre-capf--make-candidate tags))
-         ;; `equal-including-properties' doesn't work. I don't know why, maybe
-         ;; it uses `eq' to compare the properties.
-         (str-equal
-          (lambda (str1 str2)
-            (and (equal str1 str2)
-                 (equal (citre-get-property 'annotation str1)
-                        (citre-get-property 'annotation str2))))))
-    (cl-remove-duplicates collection :test str-equal)))
-
 (defun citre-capf--make-collection (tags start end)
   "Make completion table from TAGS.
 START and END are the boundaries of the region to complete, see
 `completion-at-point-functions' for details.  The returned value
 is a valid return value of `completion-at-point-functions'."
-  (when-let* ((cands (citre-capf--make-candidates tags))
+  (when-let* ((cands (mapcar #'citre-capf--make-candidate tags))
               (collection
                (lambda (str pred action)
                  (if (eq action 'metadata)
