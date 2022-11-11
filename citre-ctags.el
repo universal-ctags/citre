@@ -636,12 +636,13 @@ When it's in the cwd, it's converted to relative path."
   (let ((dir (read-file-name "Dir: " citre--ctags-cmd-buf-cwd)))
     (if (file-in-directory-p dir citre--ctags-cmd-buf-cwd)
         (progn
-          (setq dir (file-relative-name dir citre--ctags-cmd-buf-cwd)))
-      (setq dir (file-local-name dir)))
-    ;; For cwd itself, if we use "./" in ctags command, a file named "file"
-    ;; under cwd will be "./file" in the input field.  But if we use ".", it
-    ;; will be "file", which saves some space.
-    (when (equal dir "./") (setq dir "."))
+          (setq dir (file-relative-name dir citre--ctags-cmd-buf-cwd))
+          ;; For cwd itself, if we use "./" in ctags command, a file named
+          ;; "file" under cwd will be "./file" in the input field.  But if we
+          ;; use ".", it will be "file", which saves some space.
+          (when (equal dir "./") (setq dir ".")))
+      ;; Expand "~" in the file name as ctags program doesn't expand it.
+      (setq dir (file-local-name (expand-file-name dir))))
     (insert dir "\n")))
 
 (defun citre-ctags-cmd-buf-add-lang ()
