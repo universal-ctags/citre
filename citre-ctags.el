@@ -556,10 +556,11 @@ directory of Ctags.  It's expanded and convert to a local path."
 ;;
 ;; Commands:
 ;;
-;; - \\[citre-edit-cmd-buf-add-lang]: Insert a language (needs Universal Ctags)
-;; - \\[citre-edit-cmd-buf-add-dir-or-file]: Insert a dir or file
-;; - \\[citre-edit-cmd-buf-commit]: Commit
-;; - \\[citre-edit-cmd-buf-cancel]: Cancel
+;; - \\[citre-ctags-cmd-buf-add-lang]: Insert a language (needs Universal \
+Ctags)
+;; - \\[citre-ctags-cmd-buf-add-dir-or-file]: Insert a dir or file
+;; - \\[citre-ctags-cmd-buf-commit]: Commit
+;; - \\[citre-ctags-cmd-buf-cancel]: Cancel
 
 "
   "Help message in the command line editing buffer.")
