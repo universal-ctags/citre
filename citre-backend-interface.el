@@ -193,7 +193,23 @@ available, it should return nil.
 
 GET-DEFINITIONS-FOR-ID-FUNC are called with an identifier name (a
 string) as the argument and inside the code buffer, and should
-return the definition tags of the identifier."
+return the definition tags of the identifier.
+
+IDENTIFIER-LIST-FUNC and GET-DEFINITIONS-FOR-ID-FUNC are used
+together by xref to find definitions of any symbol in a project.
+To make them work, ensure that:
+
+- GET-DEFINITIONS-FOR-ID-FUNC doesn't rely on the text properties
+  of the returned value by IDENTIFIER-LIST-FUNC.  This is because
+  xref uses `completing-read' to filter the identifier list which
+  strips the text properties.
+- When GET-DEFINITIONS-FOR-ID-FUNC returns nil, i.e., no
+  identifiers could be find for the current project,
+  GET-DEFINITIONS-FOR-ID-FUNC should return nil for any argument
+  value.  This is to make sure that, for an id given by a certain
+  backend, when we try backends in
+  `citre-find-definition-backends' to find definitions for it,
+  backends comes before that backend don't intercept it."
   (let ((backend (make-hash-table :test #'eq :size 5)))
     (puthash 'get-definitions-func get-definitions-func backend)
     (puthash 'identifier-list-func identifier-list-func backend)
@@ -333,12 +349,18 @@ cons pair."
    'identifier-list-func
    citre--find-definition-backends-table citre-find-definition-backends))
 
-(defun citre-get-definitions-of-id (id backend)
+(defun citre-get-definitions-of-id (id &optional backend)
   "Get definitions of identifier ID using BACKEND.
-Returns a list of tags."
-  (funcall (citre--get-prop-of-backend backend 'get-definitions-for-id-func
-                                       citre--find-definition-backends-table)
-           id))
+Returns a list of tags.  If BACKEND is nil, try backends in
+`citre-find-definition-backends'."
+  (if backend
+      (funcall (citre--get-prop-of-backend
+                backend 'get-definitions-for-id-func
+                citre--find-definition-backends-table)
+               id)
+    (cdr (citre--try-func-in-backend-list
+          'get-definitions-for-id-func citre--find-definition-backends-table
+          citre-find-definition-backends id))))
 
 (defun citre-get-symbol-at-point-for-backend (backend)
   "Get symbol at point using BACKEND.

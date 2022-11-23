@@ -448,8 +448,7 @@ The returned value is a valid return value for
       ;; completion table.
       (with-current-buffer buf
         (citre-xref--make-collection (citre-get-definitions)))
-    (let ((defs (citre-get-definitions-of-id
-                 symbol (citre-get-property 'backend symbol))))
+    (let ((defs (citre-get-definitions-of-id symbol)))
       (citre-xref--make-collection defs))))
 
 (cl-defmethod xref-backend-references ((_backend (eql 'citre)) symbol)
