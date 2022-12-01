@@ -1046,7 +1046,14 @@ tabs in a pseudo tagline."
                   (citre-readtags-filter 'name name (if prefix 'prefix 'eq))
                   nil "-D")))
     (mapcar (lambda (line)
-              (split-string line "\t" t))
+              (let ((parts (split-string line "\t" t)))
+                ;; Experiment shows that pseudo tags are recorded literally,
+                ;; and when reading using readtags, the ptag value are escaped,
+                ;; and the ptag name & comment are not. See
+                ;; https://github.com/universal-ctags/ctags/issues/3559
+                (setf (nth 1 parts)
+                      (citre-readtags--read-field-value (nth 1 parts)))
+                parts))
             result)))
 
 (cl-defun citre-readtags-get-tags
