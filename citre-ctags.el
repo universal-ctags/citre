@@ -379,12 +379,19 @@ Use this when a new tags file is created."
 
 ;;;; Create tags file: Internals
 
+;; A ctags command has 3 "faces":
+;;
+;; - Executed command: A list of arguments that's actually executed.
+;; - In the ptag: Arguments separated by "|".  The path to the tags file is
+;;   replaced by "%TAGSFILE%", and "|"s, "%"s, tabs in the args are escaped.
+;; - In the command editing buffer: Arguments separated by newlines.  The path
+;;   to the tags file is replaced by "%TAGSFILE%", and "%"s in the args (other
+;;   than in "%TAGSFILE%") are escaped.
+
 (defun citre--escape-ctags-cmd-exec-to-file (cmd)
   "Escape cmd arg CMD.
 CMD is from a executable command, and is converted to the form in
 CITRE_CMD ptag in a tags file."
-  ;; Escape backslashes
-  (setq cmd (replace-regexp-in-string "\\\\" "\\\\\\&" cmd))
   ;; Escape tabs, "%" and "|"
   (setq cmd (replace-regexp-in-string "\t" "\\\\t" cmd))
   (setq cmd (replace-regexp-in-string (rx (or "|" "%")) "\\\\\\&" cmd))
@@ -394,8 +401,8 @@ CITRE_CMD ptag in a tags file."
   "Escape cmd arg CMD.
 CMD is from the command editing buffer, and is converted to the
 form in CITRE_CMD ptag in a tags file."
-  ;; Escape tabs and "|".  We don't escape "\" and "%" since in edit command
-  ;; buffer we explicitely ask for them to be manaully escaped.
+  ;; Escape tabs and "|".  We don't escape "%" since in edit command buffer we
+  ;; explicitely ask for them to be manaully escaped.
   (setq cmd (replace-regexp-in-string "\t" "\\\\t" cmd))
   (setq cmd (replace-regexp-in-string "|" "\\\\\\&" cmd))
   cmd)
@@ -411,10 +418,6 @@ executable command."
   (setq cmd (replace-regexp-in-string
              (rx (group (* "\\\\")) "\\" (group (or "%" "|")))
              "\\1\\2" cmd))
-  ;; Unescape backslashes
-  (setq cmd (replace-regexp-in-string
-             (rx (group (* "\\\\") "\\\\"))
-             "\\1\\\\" cmd))
   cmd)
 
 (defun citre--unescape-ctags-cmd-file-to-buf (cmd)
@@ -467,7 +470,7 @@ PTAG."
           (setq c (citre--replace-tagsfile-variable c tagsfile)))
         (setq c (citre--unescape-ctags-cmd-file-to-exec c))
         (push c cmd))
-      ;; Move over the "!"
+      ;; Move over the "|"
       (cl-incf pos))
     (push (substring ptag last) cmd)
     (setq cmd (nreverse cmd))
@@ -552,7 +555,7 @@ directory of Ctags.  It's expanded and convert to a local path."
 ;; - One command line argument in one line
 ;; - Lines start with ;; are ignored
 ;; - Use %TAGSFILE% to refer to the tags file
-;; - \"%\" (other than those in %TAGSFILE%) and \"\\\" need escaping
+;; - \"%\" (other than those in %TAGSFILE%) needs escaping
 ;;
 ;; Commands:
 ;;
