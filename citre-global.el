@@ -220,7 +220,7 @@ as it is needed to get the database path."
                (setq citre--global-dbpath
                      (car (citre-global--get-output-lines
                            '("--print-dbpath"))))
-             (error (setq citre--global-dbpath 'non)
+             (error (setq citre--global-dbpath 'none)
                     nil)))))))
 
 (defun citre-global-clear-dbpath-cache ()
