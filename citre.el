@@ -557,13 +557,19 @@ The returned value is a valid element of the return value of
 
 ;;;###autoload
 (defun citre-auto-enable-citre-mode ()
-  "Enable `citre-mode' if one of `citre-auto-enable-citre-mode' is usable.
+  "Enable `citre-mode' if appropriate.
+This means the current major mode satisfies
+`citre-auto-enable-citre-mode-modes', and one of
+`citre-auto-enable-citre-mode-backends' is usable.
+
 Put this in `find-file-hook' to automatically enable `citre-mode'
 when opening a file."
-  (cl-dolist (backend citre-auto-enable-citre-mode-backends)
-    (when (citre-backend-usable-p backend)
-      (citre-mode)
-      (cl-return))))
+  (when (or (eq citre-auto-enable-citre-mode-modes 'all)
+            (apply #'derived-mode-p citre-auto-enable-citre-mode-modes))
+    (cl-dolist (backend citre-auto-enable-citre-mode-backends)
+      (when (citre-backend-usable-p backend)
+        (citre-mode)
+        (cl-return)))))
 
 (provide 'citre)
 
