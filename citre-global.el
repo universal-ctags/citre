@@ -273,10 +273,11 @@ Global program is run under current `default-directory'."
   "Find definitions in FILE using global and return the tags.
 The tags have `name' and `line' fields.  Use the current file if
 FILE is nil."
-  (cl-delete nil
-             (mapcar #'citre-global--parse-cxref-line
-                     (citre-global--get-tag-lines-in-file file))
-             :test #'eq))
+  (when (citre-global-dbpath)
+    (cl-delete nil
+               (mapcar #'citre-global--parse-cxref-line
+                       (citre-global--get-tag-lines-in-file file))
+               :test #'eq)))
 
 ;;;; Tags file generating & updating
 
