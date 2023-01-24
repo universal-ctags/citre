@@ -632,6 +632,20 @@ If the ctags program is not found, this returns nil."
 
 (citre-register-tags-in-buffer-backend 'tags #'citre-tags-get-tags-in-buffer)
 
+;;;; Tags in project backend
+
+(defun citre-tags-get-tags-in-project (pattern)
+  "Get tags in project of PATTERN."
+  (when-let ((tagsfile (citre-tags-file-path)))
+    (citre-tags-get-tags
+     tagsfile nil nil
+     :filter (citre-readtags-filter 'name pattern 'regexp)
+     :sorter (citre-readtags-sorter 'line)
+     :require '(name ext-abspath pattern)
+     :optional '(ext-kind-full line typeref scope extras))))
+
+(citre-register-tags-in-project-backend 'tags #'citre-tags-get-tags-in-project)
+
 ;;;; Auto enable citre-mode
 
 (citre-register-backend-usable-probe 'tags #'citre-tags-file-path)

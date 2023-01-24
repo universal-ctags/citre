@@ -69,6 +69,12 @@ turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
+(defcustom citre-tags-in-project-backends '(tags)
+  "List of backends for finding tags in project.
+This is used for xref apropos integration."
+  :type '(repeat symbol)
+  :group 'citre)
+
 ;; Not used in this file, but defined here so backends could check it, e.g.,
 ;; cache the results only when this is non-nil.
 (defcustom citre-capf-optimize-for-popup t
@@ -108,6 +114,12 @@ table.")
   (make-hash-table :test #'eq :size 5)
   "Lookup table for find tags in buffer.
 Use `citre-register-tags-in-buffer-backend' to modify this
+table.")
+
+(defvar citre--tags-in-project-backends-table
+  (make-hash-table :test #'eq :size 5)
+  "Lookup table for find tags in project.
+Use `citre-register-tags-in-project-backend' to modify this
 table.")
 
 (defvar citre--symbol-at-point-backends-table
@@ -248,6 +260,17 @@ tags.  When no tags is available, it should return nil."
     (puthash 'get-tags-in-buffer-func get-tags-in-buffer-func backend)
     (puthash name backend citre--tags-in-buffer-backends-table)))
 
+(defun citre-register-tags-in-project-backend (name get-tags-in-project-func)
+  "Register a new backend for finding tags in project.
+This is used for xref apropos integration.
+
+NAME is the name of the backend and should be a symbol.
+GET-TAGS-IN-PROJECT-FUNC is called with PATTERN argument, and should
+return a list of tags in current project."
+  (let ((backend (make-hash-table :test #'eq :size 5)))
+    (puthash 'get-tags-in-project-func get-tags-in-project-func backend)
+    (puthash name backend citre--tags-in-project-backends-table)))
+
 (defun citre-register-symbol-at-point-backend (name symbol-at-point-func)
   "Register a new backend for getting symbol at point.
 This is used as hints in the UI, e.g., in the error message when
@@ -339,6 +362,20 @@ cons pair."
 (defun citre-get-tags-in-buffer ()
   "Get tags in buffer."
   (when-let ((result (citre-get-backend-and-tags-in-buffer)))
+    (cdr result)))
+
+(defun citre-get-backend-and-tags-in-project (pattern)
+  "Try getting tags in project using `citre-tags-in-project-backends'.
+The first succeeded backend and the results are returned in a
+cons pair."
+  (citre--try-func-in-backend-list
+   'get-tags-in-project-func
+   citre--tags-in-project-backends-table citre-tags-in-project-backends
+   pattern))
+
+(defun citre-get-tags-in-project (pattern)
+  "Get tags in project."
+  (when-let ((result (citre-get-backend-and-tags-in-project pattern)))
     (cdr result)))
 
 (defun citre-get-backend-and-id-list ()

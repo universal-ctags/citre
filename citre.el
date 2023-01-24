@@ -460,14 +460,9 @@ The returned value is a valid return value for
 by Citre")))
 
 (cl-defmethod xref-backend-apropos ((_backend (eql citre)) pattern)
-    "Method for xref apropos of PATTERN."
-    (citre-xref--make-collection
-     (citre-tags-get-tags nil pattern 'regexp
-                          :filter citre-tags--find-definition-for-id-filter
-                          :sorter citre-tags-definition-default-sorter
-                          :require '(name ext-abspath pattern)
-                          :optional '(ext-kind-full line typeref scope extras)
-                          )))
+  "Method for xref apropos of PATTERN."
+  (citre-xref--make-collection
+   (citre-get-tags-in-project pattern)))
 
 ;;;; Imenu
 
