@@ -552,13 +552,16 @@ simple tag name matching.  This function is for it."
 (declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
 
 (defun citre-tags--imenu-temp-tags-file-path ()
-  "Return the temporary tags file path for imenu.
+  "Return a temporary tags file path for imenu.
 This also works on a remote machine."
-  (if (file-remote-p default-directory)
-      (expand-file-name "citre-imenu.tags"
-                        (tramp-get-remote-tmpdir
-                         (tramp-dissect-file-name default-directory)))
-    (expand-file-name "citre-imenu.tags" temporary-file-directory)))
+  ;; Generate a name unique to this user & Emacs instance so we don't prevent
+  ;; other users on the same machine to generate their own temporary tags file.
+  (let* ((file (format "citre-%s-%s.tags" (user-login-name) (emacs-pid)))
+         (dir (if (file-remote-p default-directory)
+                  (tramp-get-remote-tmpdir
+                   (tramp-dissect-file-name default-directory))
+                temporary-file-directory)))
+    (expand-file-name file dir)))
 
 (defun citre-tags--imenu-ctags-command-cwd ()
   "Return ctags command and its cwd for tags file for imenu."
@@ -597,28 +600,28 @@ This also works on a remote machine."
   "Get tags for imenu from a new temporary tags file.
 If the ctags program is not found, this returns nil."
   (when (citre-executable-find (or citre-ctags-program "ctags"))
-    (pcase-let ((`(,cmd . ,cwd) (citre-tags--imenu-ctags-command-cwd)))
-      (make-directory (file-name-directory
-                       (citre-tags--imenu-temp-tags-file-path))
-                      'parents)
+    (pcase-let* ((`(,cmd . ,cwd) (citre-tags--imenu-ctags-command-cwd))
+                 (tags-file (citre-tags--imenu-temp-tags-file-path)))
+      (make-directory (file-name-directory tags-file) 'parents)
       (let ((default-directory cwd))
         (apply #'process-file (car cmd)
                nil (get-buffer-create "*ctags*") nil
-               (cdr cmd))))
-    ;; WORKAROUND: If we don't sit for a while, the readtags process will
-    ;; freeze.  TOOD: Fix this when uctags offers "edittags" command.
-    (sit-for 0.001)
-    (citre-tags-get-tags
-     (citre-tags--imenu-temp-tags-file-path) nil nil
-     :filter
-     `(not (or ,(citre-readtags-filter
-                 'extras
-                 '("anonymous" "inputFile")
-                 'csv-contain)
-               ,(citre-readtags-filter-kind "file")))
-     :sorter (citre-readtags-sorter 'line)
-     :require '(name pattern)
-     :optional '(ext-kind-full line typeref scope extras))))
+               (cdr cmd)))
+      ;; WORKAROUND: If we don't sit for a while, the readtags process will
+      ;; freeze.  TOOD: Fix this when uctags offers "edittags" command.
+      (sit-for 0.001)
+      (citre-tags-get-tags
+       tags-file nil nil
+       :filter
+       `(not (or ,(citre-readtags-filter
+                   'extras
+                   '("anonymous" "inputFile")
+                   'csv-contain)
+                 ,(citre-readtags-filter-kind "file")))
+       :sorter (citre-readtags-sorter 'line)
+       :require '(name pattern)
+       :optional '(ext-kind-full line typeref scope extras))
+      (delete-file tags-file))))
 
 (defun citre-tags-get-tags-in-buffer ()
   "Get tags in buffer."
