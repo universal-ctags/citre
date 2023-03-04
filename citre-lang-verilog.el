@@ -54,10 +54,14 @@
                   (bounds (citre-get-property 'bounds sym)))
         (let (syntax)
           (when (eq (aref sym 0) ?`)
+            ;; remove "`", because this char is not a component of tag name in tags file
             (setq sym (substring sym 1)
-                  bounds (cons (1+ (car bounds)) (cdr bounds))
+                  ;; Even if droped first char "`", we don't move bound,
+                  ;; so that company-capf can return a prefix same as other backends.
+                  ;; `citre-lang-verilog-update-tag' will add a "`" to tag if need
+                  bounds (cons (car bounds) (cdr bounds))
                   syntax 'macro))
-          (citre-put-property sym 'bounds bounds 'syntax syntax)))))
+          (citre-put-property sym 'bounds bounds 'syntax syntax 'mode mode-name)))))
 
 ;;;; Finding definitions
 
@@ -83,6 +87,19 @@
        (_ 0))
     ,citre-tags-completion-default-sorter))
 
+;;;; update tag's name. if current point is a macro, add "`" to name of a tag whose kind is define
+(defun citre-lang-verilog-update-tag (tag symbol)
+  (or (and
+       ;; add "`" ahead of define macro
+       (member (gethash 'language tag) (list "Verilog" "SystemVerilog"))
+       (string= (gethash 'ext-kind-full tag) "define")
+       (string= (citre-get-property 'syntax symbol) "macro")
+       (string= (citre-get-property 'mode symbol) "Verilog")
+       (puthash 'name (concat "`" (gethash 'name tag)) tag)
+       tag)
+      tag))
+
+
 ;;;; Plugging into the language support framework
 
 (defvar citre-lang-verilog-plist
@@ -91,7 +108,11 @@
     :definition-sorter
     citre-lang-verilog-definition-sorter
     :completion-sorter
-    citre-lang-verilog-completion-sorter)
+    citre-lang-verilog-completion-sorter
+    :update-completion
+    citre-lang-verilog-update-tag
+    :field-require
+    (name language))
   "(System) Verilog support for Citre.")
 
 (citre-tags-register-language-support 'verilog-mode citre-lang-verilog-plist)

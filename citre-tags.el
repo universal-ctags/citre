@@ -238,6 +238,14 @@ A value of it is a plist.  Its props and values are:
   `citre-tags-definition-default-filter' and
   `citre-tags-definition-default-sorter'.
 
+- `:update-completion': A function with two inputs, TAG and SYMBOL.
+
+  TAG is element returned by `citre-tags-get-tags'.
+  SYMBOL is the symbol returned by `citre-tags-get-symbol'
+  This function run after `citre-tags-get-tags'
+
+- `:field-require': Field that `citre-tags-get-tags' should return.
+
 The filter/sorter functions should be pure, i.e., should only use
 information provided by the symbol, and not fetch information
 from the environment.")
@@ -356,16 +364,21 @@ completion can't be done."
   (when-let* ((symbol (or symbol (citre-tags-get-symbol tagsfile)))
               (tagsfile (or tagsfile (citre-tags-file-path)))
               (match (if substr-completion 'substr 'prefix)))
-    (citre-tags-get-tags
-     tagsfile symbol match
-     :filter (or (citre-tags--get-value-in-language-alist
-                  :completion-filter symbol)
-                 (citre-tags-completion-default-filter symbol))
-     :sorter (or (citre-tags--get-value-in-language-alist
-                  :completion-sorter symbol)
-                 citre-tags-completion-default-sorter)
-     :require '(name)
-     :optional '(ext-kind-full signature pattern scope typeref))))
+    (mapcar (lambda (tag)
+              (let* ((f (or (citre-tags--get-value-in-language-alist :update-completion)
+                            (lambda (tag symbol) tag))))
+                (funcall f tag symbol)))
+            (citre-tags-get-tags
+             tagsfile symbol match
+             :filter (or (citre-tags--get-value-in-language-alist
+                          :completion-filter symbol)
+                         (citre-tags-completion-default-filter symbol))
+             :sorter (or (citre-tags--get-value-in-language-alist
+                          :completion-sorter symbol)
+                         citre-tags-completion-default-sorter)
+             :require (or (citre-tags--get-value-in-language-alist :field-require)
+                          '(name))
+             :optional '(ext-kind-full signature pattern scope typeref)))))
 
 ;;;;; Finding definitions
 
