@@ -523,7 +523,7 @@ The returned value is a valid element of the return value of
 (defun citre-imenu-create-index-function ()
   "Create imenu index."
   (when-let ((tags (citre-get-tags-in-buffer)))
-    (citre-imenu--make-index (cdr tags))))
+    (citre-imenu--make-index tags)))
 
 ;;;; citre-mode
 
