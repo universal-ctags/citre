@@ -1056,12 +1056,16 @@ ROOT is the project root."
       (propertize
        (citre-peek--maybe-decorate-fringes "\n")
        'face 'citre-peek-border-face)
-    (propertize
-     (concat (make-string (1- (window-body-width)) ?-) "\n")
-     'face (list :inherit 'default
-                 :foreground
-                 (face-attribute 'citre-peek-border-face
-                                 :background)))))
+    (let ((total-column-number (1- (window-body-width))))
+      (when display-line-numbers-mode
+        (setq total-column-number
+              (- total-column-number (+ 2 (line-number-display-width)))))
+      (propertize
+       (concat (make-string total-column-number ?-) "\n")
+       'face (list :inherit 'default
+                   :foreground
+                   (face-attribute 'citre-peek-border-face
+                                   :background))))))
 
 (defun citre-peek--file-content (taglist)
   "Return a string for displaying file content.
