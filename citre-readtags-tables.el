@@ -274,7 +274,7 @@
       ("varlink")))
   "Hash table of languages and their corresponding extensions.
 This is for filtering tags in certain languages by their file
-name when the `language' field is not presented. See
+name when the `language' field is not presented.  See
 `citre-readtags-filter-lang'.
 
 Currently this table is not used as we don't want to filter

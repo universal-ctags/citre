@@ -334,7 +334,7 @@ dir."
                      (and (default-value 'citre-tags-file-alist)
                           (citre--find-tags-file-by-tags-file-alist
                            current-dir nil (default-value
-                                             'citre-tags-file-alist)))
+                                            'citre-tags-file-alist)))
                      (and (or citre-tags-file-global-cache-dir
                               citre-tags-file-per-project-cache-dir)
                           (citre--find-tags-file-in-cache-dirs

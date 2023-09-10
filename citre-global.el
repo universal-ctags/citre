@@ -289,9 +289,9 @@ FILE is nil."
   (interactive)
   (let* ((project (funcall citre-project-root-function))
          (default-directory
-           (read-directory-name
-            "I want to tag this dir using gtags: "
-            project)))
+          (read-directory-name
+           "I want to tag this dir using gtags: "
+           project)))
     (make-process
      :name "gtags"
      :buffer (get-buffer-create "*citre-gtags*")

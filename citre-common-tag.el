@@ -385,7 +385,7 @@ presented.")
       extra-lang
       citre--get-lang-from-tag))
   "Hash table for getting extra extension fields from tags.
-It's used by `citre-get-tag-field'. Its keys are valid FIELD
+It's used by `citre-get-tag-field'.  Its keys are valid FIELD
 argument values for `citre-get-tag-field', and values are
 functions that return the value of the fields.  The arguments of
 the functions are:

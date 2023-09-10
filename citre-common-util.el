@@ -429,7 +429,7 @@ for your callback function."
                        ((and i (guard i)) (1+ i))
                        ('nil nil))))
                (cl-symbol-macrolet ((stdout-cache
-                                     (citre-process--stdout-str proc-data)))
+                                      (citre-process--stdout-str proc-data)))
                  (if chunk-end
                      (progn
                        (funcall (citre-process-callback proc-data)
