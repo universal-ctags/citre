@@ -215,7 +215,7 @@ as it is needed to get the database path."
     (pcase citre--global-dbpath
       ('none nil)
       ((and val (pred stringp) (pred citre-dir-exists-p)) val)
-      (_ (let ((default-directory (or default-directory dir)))
+      (_ (let ((default-directory (or dir default-directory)))
            (condition-case nil
                (setq citre--global-dbpath
                      (car (citre-global--get-output-lines
