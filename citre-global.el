@@ -210,7 +210,7 @@ non-nil, find database of that directory, otherwise find the
 database of current directory.
 
 When the global program is not found on the machine, return nil
-as it is needed to get the database path."
+as global program is needed to get the database path."
   (when (citre-executable-find (or citre-global-program "global") t)
     (pcase citre--global-dbpath
       ('none nil)
