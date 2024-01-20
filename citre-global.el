@@ -87,6 +87,9 @@ database in the project directory."
 ;;;; Global program interface
 
 ;;;;; Internals
+(declare-function tramp-file-name-localname "tramp" (structure))
+(declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
+(declare-function tramp-handle-expand-file-name "tramp" (name &optional dir))
 
 (defun citre-global--get-output-lines (args)
   "Get output from global program.
@@ -118,8 +121,13 @@ START-FILE."
       (_ (error "Invalid MODE")))
     (when case-fold (push "--ignore-case" cmd))
     ;; Global doesn't know how to expand "~", so we need to expand START-FILE.
-    (when start-file (push (concat "--nearness=" (expand-file-name start-file))
-                           cmd))
+    (when start-file (let ((file (if (file-remote-p start-file)
+                                     (tramp-file-name-localname
+                                      (tramp-dissect-file-name
+                                       (tramp-handle-expand-file-name
+                                        start-file)))
+                                   (expand-file-name start-file))))
+                       (push (concat "--nearness=" file) cmd)))
     (setq cmd (append (nreverse cmd)
                       (list "--color=never"
                             "--encode-path= :"
