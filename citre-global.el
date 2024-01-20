@@ -84,6 +84,11 @@ database in the project directory."
   :type 'boolean
   :group 'citre)
 
+(defcustom citre-global-timeout 1
+  "Timeout value in seconds for running global."
+  :type 'integer
+  :group 'citre)
+
 ;;;; Global program interface
 
 ;;;;; Internals
@@ -224,7 +229,7 @@ as global program is needed to get the database path."
                      ;; https://github.com/universal-ctags/citre/issues/163 and
                      ;; https://github.com/universal-ctags/citre/issues/150.
                      ;; This is a workaround.
-                     (with-timeout (1 nil)
+                     (with-timeout (citre-global-timeout nil)
                        (car (citre-global--get-output-lines
                              '("--print-dbpath")))))
              (error (setq citre--global-dbpath 'none)
