@@ -357,6 +357,39 @@ See *citre-global-update* buffer" s))))
      :file-handler t)
     (message "Updating...")))
 
+;;;###autoload
+(defun citre-global-update-file (&optional file)
+  "Update the gtags database of a single FILE.
+If no database is found, prompt the user to create one."
+  (interactive)
+  (let* ((prog (or citre-global-program "global"))
+         (filename (or file (buffer-file-name)))
+         (realname (if (file-remote-p filename)
+                       (tramp-file-name-localname
+                        (tramp-dissect-file-name
+                         (tramp-handle-expand-file-name filename)))
+                     (expand-file-name filename))))
+    (make-process
+     :name "global"
+     :buffer (get-buffer-create "*citre-global-update-file*")
+     :command (list prog "--single-update" realname)
+     :connection-type 'pipe
+     :stderr nil
+     :sentinel
+     (lambda (proc _msg)
+       (pcase (process-status proc)
+         ('exit
+          (pcase (process-exit-status proc)
+            (0 (message "Finished updating file \"%s\"" realname))
+            (_ (if (citre-executable-find prog t)
+                   (when (y-or-n-p "Can't find database.  Create one? ")
+                     (citre-global-create-database))
+                 (user-error "Can't find global program")))))
+         (s (user-error "Abnormal status of global: %s.  \
+See *citre-global-update-file* buffer" s))))
+     :file-handler t)
+    (message "Updating file \"%s\"..." realname)))
+
 ;;;; Symbol at point
 
 (citre-register-symbol-at-point-backend 'global #'citre-tags--symbol-at-point)
