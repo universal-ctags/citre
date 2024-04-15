@@ -50,13 +50,13 @@ The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
-(defcustom citre-find-definition-backends '(tags global)
+(defcustom citre-find-definition-backends '(eglot tags global)
   "List of backends for finding definitions.
 The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
-(defcustom citre-find-reference-backends '(global)
+(defcustom citre-find-reference-backends '(eglot global)
   "List of backends for finding references.
 The backends are tried in turn until one succeeded."
   :type '(repeat symbol)

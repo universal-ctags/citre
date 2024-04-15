@@ -47,6 +47,7 @@
 (require 'citre-backend-interface)
 (require 'citre-tags)
 (require 'citre-global)
+(require 'citre-xref-adapter)
 
 ;;;; User options
 
@@ -282,7 +283,6 @@ peek the references."
     (when (region-active-p) (deactivate-mark))
     (citre-peek (current-buffer) pt reference)))
 
-;;;###autoload
 (defun citre-peek-through (&optional reference)
   "Peek through a symbol in current peek window.
 If REFERENCE is non-nil, peek its references, otherwise peek its
@@ -325,7 +325,6 @@ supports it."
   (interactive)
   (citre-ace-peek 'reference))
 
-;;;###autoload
 (defun citre-peek-through-reference ()
   "Peek through a symbol in current peek window for references."
   (interactive)

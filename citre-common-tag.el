@@ -147,7 +147,8 @@
 ;; We use these functions only in xref buffer, and they will be avaliable at
 ;; that time.
 (declare-function xref--item-at-point "xref" ())
-(declare-function xref-item-location "xref" (arg &rest args))
+(declare-function xref-item-summary "xref" (cl-x))
+(declare-function xref-item-location "xref" (cl-x))
 (declare-function xref-location-group "xref" (location))
 (declare-function xref-location-line "xref" (location))
 
@@ -511,16 +512,30 @@ This returns a valid `pattern' field of a tag."
                     'pattern pat
                     'line (number-to-string (line-number-at-pos)))))
 
+(defun citre-xref-object-to-tag (object name)
+  "Converg xref object OBJECT to a tag.
+NAME should be the identifier name, which may be get from
+`xref-backend-identifier-at-point'.  If OBJECT is not a
+`xref-file-location', then the tag cannot be created, and it
+returns nil."
+  (let* ((summary (xref-item-summary object))
+         (loc (xref-item-location object)))
+    ;; We require this to be a xref-file-location
+    (let* ((file (expand-file-name (xref-location-group loc)))
+           (line (xref-location-line loc)))
+      (citre-make-tag
+       'name name
+       ;; By definition of `xref-item', SUMMARY is a line in a file or buffer
+       ;; containing the location, so it can be used as the search pattern.
+       'pattern (citre-create-tag-search-pattern summary)
+       'ext-abspath file
+       'line (when line (number-to-string line))))))
+
 (defun citre-make-tag-of-current-xref-item (name)
   "Make a tag for current item in xref buffer.
 The name field is set to NAME."
-  (when-let* ((item (xref--item-at-point))
-              (location (xref-item-location item))
-              (file (xref-location-group location))
-              (line (xref-location-line location)))
-    (citre-make-tag 'name name
-                    'ext-abspath (expand-file-name file)
-                    'line (number-to-string line))))
+  (when-let* ((item (xref--item-at-point)))
+    (citre-xref-object-to-tag item name)))
 
 ;;;;; Helpers for getting information from a tag
 

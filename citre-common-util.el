@@ -273,7 +273,9 @@ But a suitable major mode is enabled."
     (let ((buf (create-file-buffer filename)))
       (with-current-buffer buf
         (insert-file-contents filename t)
-        (delay-mode-hooks (set-auto-mode)))
+        (delay-mode-hooks
+          (set-auto-mode)
+          (hack-local-variables 'no-mode)))
       buf)))
 
 (defun citre-file-content-buffer (filename &optional set-major-mode)
