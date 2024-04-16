@@ -857,7 +857,7 @@ PROP controls the format.  See `citre-make-tag-str' for details."
               (or (plist-get prop :suffix) ""))
     (when (plist-get prop :ensure)
       (if-let ((path (citre-get-tag-field 'ext-abspath tag)))
-          (or (citre-with-file-buffer path
+          (or (citre-with-file-buffer path nil nil
                 (goto-char (citre-locate-tag tag))
                 (buffer-substring (line-beginning-position)
                                   (line-end-position)))

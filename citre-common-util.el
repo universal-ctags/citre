@@ -263,22 +263,52 @@ nil, use project in current buffer instead."
         (file-relative-name path root)
       path)))
 
-(defmacro citre-with-file-buffer (file &rest body)
+(defun citre-new-buffer-read-file (filename)
+  "Read file FILENAME into a buffer and return the buffer.
+Unlike `find-file-noselect', this reads the file in a simpler
+way, without running `find-file-hook', prompting the user, etc.
+But a suitable major mode is enabled."
+  (setq filename (file-truename filename))
+  (when (citre-non-dir-file-exists-p filename)
+    (let ((buf (create-file-buffer filename)))
+      (with-current-buffer buf
+        (insert-file-contents filename t)
+        (delay-mode-hooks (set-auto-mode)))
+      buf)))
+
+(defun citre-file-content-buffer (filename &optional set-major-mode)
+  "Insert the content of FILENAME in a buffer and return it.
+The buffer will be a invisible one.  If SET-MAJOR-MODE is
+non-nil, set the major mode in that buffer."
+  (when (citre-non-dir-file-exists-p filename)
+    (let ((buf (generate-new-buffer (format " *citre-%s" filename))))
+      (with-current-buffer buf
+        (insert-file-contents filename)
+        (when set-major-mode
+          ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
+          (let ((buffer-file-name filename))
+            (delay-mode-hooks
+              (set-auto-mode)))))
+      buf)))
+
+(defmacro citre-with-file-buffer (file visit set-major-mode &rest body)
   "Run BODY in the buffer of FILE.
 When FILE is already opened, use that buffer, otherwise create a
 temporary buffer.  If FILE doesn't exist, do nothing and return
-nil.
+nil.  When VISIT is non-nil, the temporary buffer will actually
+open the file, otherwise it will be a temporary buffer with the
+file contents inserted.  When SET-MAJOR-MODE is non-nil and a
+temporary buffer is used, enable proper major-mode in the buffer.
 
 BODY is wrapped in `save-excursion' and `save-restriction', with
 the buffer being widened."
-  (declare (indent 1))
-  `(let* ((buf-opened (find-buffer-visiting ,file)) buf)
-     (when (citre-non-dir-file-exists-p path)
-       (if buf-opened
-           (setq buf buf-opened)
-         (setq buf (generate-new-buffer (format " *citre-%s*" ,file)))
-         (with-current-buffer buf
-           (insert-file-contents ,file)))
+  (declare (indent 3))
+  `(let* ((buf-opened (find-buffer-visiting ,file))
+          buf)
+     (when (citre-non-dir-file-exists-p ,file)
+       (setq buf (or buf-opened
+                     (and ,visit (citre-new-buffer-read-file ,file))
+                     (citre-file-content-buffer ,file ,set-major-mode)))
        (unwind-protect
            (with-current-buffer buf
              (save-excursion

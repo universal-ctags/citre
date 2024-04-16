@@ -87,6 +87,7 @@ database in the project directory."
 ;;;; Global program interface
 
 ;;;;; Internals
+
 (declare-function tramp-file-name-localname "tramp" (structure))
 (declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
 (declare-function tramp-handle-expand-file-name "tramp" (name &optional dir))
@@ -357,10 +358,6 @@ See *citre-global-update* buffer" s))))
      :file-handler t)
     (message "Updating...")))
 
-;;;; Symbol at point
-
-(citre-register-symbol-at-point-backend 'global #'citre-tags--symbol-at-point)
-
 ;;;; Completion backend
 
 ;; TODO: Do we need to cache the result like tags backend?
@@ -378,15 +375,11 @@ See *citre-global-update* buffer" s))))
                        (< (length (citre-get-tag-field 'name a))
                           (length (citre-get-tag-field 'name b))))))))
 
-(citre-register-completion-backend 'global #'citre-global-get-completions)
-
 ;;;; Find definitions backend
 
 (defun citre-global-get-definitions ()
   "Get tags of definitions to symbol at point."
   (citre-global-get-tags nil 'definition))
-
-(citre-register-find-definition-backend 'global #'citre-global-get-definitions)
 
 ;;;; Find references backend
 
@@ -394,15 +387,19 @@ See *citre-global-update* buffer" s))))
   "Get tags of references to symbol at point."
   (citre-global-get-tags nil 'reference))
 
-(citre-register-find-reference-backend 'global #'citre-global-get-references)
+;;;; Backend definition
 
-;;;; Imenu backend
+(defvar citre-global-backend
+  (citre-backend-create
+   :usable-probe #'citre-global-dbpath
+   :symbol-at-point-fn #'citre-tags-symbol-at-point
+   :completions-fn #'citre-global-get-completions
+   :defs-fn #'citre-global-get-definitions
+   :refs-fn #'citre-global-get-references
+   :tags-in-buffer-fn #'citre-global-get-tags-in-file)
+  "Global backend.")
 
-(citre-register-tags-in-buffer-backend 'global #'citre-global-get-tags-in-file)
-
-;;;; Auto enable citre-mode
-
-(citre-register-backend-usable-probe 'global #'citre-global-dbpath)
+(citre-register-backend 'global citre-global-backend)
 
 (provide 'citre-global)
 

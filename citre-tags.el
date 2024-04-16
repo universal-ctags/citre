@@ -312,14 +312,12 @@ MODE is a symbol of the major mode, PLIST is a plist described in
   (setf (alist-get mode citre-tags-language-support-alist)
         plist))
 
-(defun citre-tags--symbol-at-point ()
+(defun citre-tags-symbol-at-point ()
   "Get the symbol at point using tags backend.
 This is for display purpose only and the returned string doesn't
 contain some properties as returned by `citre-tags-get-symbol'."
   (funcall (or (citre-tags--get-value-in-language-alist :get-symbol)
                #'citre-tags-get-symbol-default)))
-
-(citre-register-symbol-at-point-backend 'tags #'citre-tags--symbol-at-point)
 
 ;;;;; Auto-completion related
 
@@ -413,7 +411,7 @@ is found."
      :require '(name ext-abspath pattern)
      :optional '(ext-kind-full line typeref scope extras))))
 
-;;;; Completion backend
+;;;; Completion
 
 (defvar citre-tags--completion-cache
   '(:file nil :symbol nil :bounds nil :substr nil :cands nil)
@@ -472,9 +470,7 @@ The result is a list (BEG END TAGS), see
               (citre-tags-get-completions
                symbol nil citre-tags-substr-completion))))))
 
-(citre-register-completion-backend 'tags #'citre-tags-get-completions-at-point)
-
-;;;; Find definition backend
+;;;; Find definition
 
 (defun citre-tags-get-definitions-at-point ()
   "Get definitions of symbol at point."
@@ -495,7 +491,7 @@ Its props and vals are:
 - `:time': Last modified time of tags file.
 - `:tags': The tags.")
 
-(defun citre-tags--get-definition-for-id (symbol)
+(defun citre-tags-get-definitions-of-id (symbol)
   "Get definition for SYMBOL without text property.
 When xref prompts for user input for the symbol, we can't get
 information from the environment of the symbol at point, so we
@@ -541,12 +537,7 @@ simple tag name matching.  This function is for it."
                    :tags tags)
         tags))))
 
-(citre-register-find-definition-backend
- 'tags #'citre-tags-get-definitions-at-point
- :identifier-list-func #'citre-tags-get-identifiers
- :get-definitions-for-id-func #'citre-tags--get-definition-for-id)
-
-;;;; Tags in buffer backend
+;;;; Tags in buffer
 
 (declare-function tramp-get-remote-tmpdir "tramp" (vec))
 (declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
@@ -634,11 +625,20 @@ If the ctags program is not found, this returns nil."
         (citre-tags--imenu-tags-from-tags-file)
       (citre-tags--imenu-tags-from-temp-tags-file))))
 
-(citre-register-tags-in-buffer-backend 'tags #'citre-tags-get-tags-in-buffer)
+;;;; Backend definition
 
-;;;; Auto enable citre-mode
+(defvar citre-tags-backend
+  (citre-backend-create
+   :usable-probe #'citre-tags-file-path
+   :symbol-at-point-fn #'citre-tags-symbol-at-point
+   :completions-fn #'citre-tags-get-completions-at-point
+   :id-list-fn #'citre-tags-get-identifiers
+   :defs-fn #'citre-tags-get-definitions-at-point
+   :defs-of-id-fn #'citre-tags-get-definitions-of-id
+   :tags-in-buffer-fn #'citre-tags-get-tags-in-buffer)
+  "Tags backend.")
 
-(citre-register-backend-usable-probe 'tags #'citre-tags-file-path)
+(citre-register-backend 'tags citre-tags-backend)
 
 (provide 'citre-tags)
 

@@ -86,299 +86,324 @@ key by mistake, but that doesn't happen very often."
 
 ;;;; Backend interface
 
-;;;;; Internals
+(defvar citre-debug nil
+  "Debug mode switch.
+If this is nil, errors produced by backends are demoted.")
 
-(defvar citre--completion-backends-table (make-hash-table :test #'eq :size 5)
+(defmacro citre--with-demoted-errors (format &rest body)
+  "Demote errors produced by BODY if `citre-debug' is nil.
+See `with-demoted-errors' for FORMAT."
+  `(if citre-debug
+       (with-demoted-errors ,format ,@body)
+     ,@body))
+
+(defvar citre--backends-table (make-hash-table :test #'eq :size 5)
   "Lookup table for Citre backends.
-Use `citre-register-completion-backend' to modify this table.")
+It's keys are symbols of backend names, values are of
+`citre--backend' type.")
 
-(defvar citre--find-definition-backends-table
-  (make-hash-table :test #'eq :size 5)
-  "Lookup table for find definition backends.
-Use `citre-register-find-definition-backend' to modify this
-table.")
+(cl-defstruct (citre--backend
+               (:constructor nil)
+               (:constructor
+                citre-backend-create
+                (&key usable-probe symbol-at-point-fn
+                      completions-fn id-list-fn
+                      defs-fn defs-of-id-fn
+                      refs-fn refs-of-id-fn
+                      tags-in-buffer-fn after-jump-fn))
+               (:copier nil))
+  "Citre backend.
+Use `citre-backend-create' to create a backend, then use
+`citre-register-backend' to register one.
 
-(defvar citre--find-reference-backends-table
-  (make-hash-table :test #'eq :size 5)
-  "Lookup table for find reference backends.
-Use `citre-register-find-reference-backend' to modify this
-table.")
+`citre-backend-create' accpets key arguments. For detailed
+explanation, see docstrings of data members of `citre--backend'.
 
-(defvar citre--tags-in-buffer-backends-table
-  (make-hash-table :test #'eq :size 5)
-  "Lookup table for find tags in buffer.
-Use `citre-register-tags-in-buffer-backend' to modify this
-table.")
+If a backend could check whether itself is usable for a newly
+opened file, provide `:usable-probe'.  This is used to
+automatically enable `citre-mode'.
 
-(defvar citre--symbol-at-point-backends-table
-  (make-hash-table :test #'eq :size 5)
-  "Lookup table for symbol at point functions.
-Use `citre-register-symbol-at-point-backend' to modify this
-table.")
+For auto-completion capability, provide `:completions-fn'.  This
+function may want to utilize `citre-capf-optimize-for-popup', see
+its docstring.
 
-(defvar citre--backend-usable-probe-table
-  (make-hash-table :test #'eq :size 5)
-  "Lookup table of probe functions to detect if a backend is usable.
-Use `citre-register-backend-usable-probe' to modify this table.")
+For finding definition capability, provide `:symbol-at-point-fn'
+and `:defs-fn'.  If the backend is capable of finding definitions
+of user inputted symbol, provide `:defs-of-id-fn'.  If the
+backend can also find all symbols in current project, provide
+`:id-list-fn', and xref could uses this as identifier completion
+table. Based on how the backend works, you may also want to
+provide `:after-jump-fn'.
 
-(defvar citre--after-jump-functions nil
-  "List of after jump functions.
-Use `citre-register-after-jump-function' to modify this list.")
+Finding references are similar to finding definitions, only the
+keyword names are changed to `:refs-fn' and `refs-of-id-fn'.
 
-(defun citre--get-prop-of-backend (backend prop table)
-  "Get property PROP of BACKEND from TABLE.
-Return nil if the property is undefined."
-  (if-let ((backend-table (gethash backend table)))
-      (gethash prop backend-table)
-    (error "Backend %s not exist in TABLE" backend)))
+For the capability of finding tags in current buffer (which is
+used by imenu), provide `:tags-in-buffer-fn'."
+  (usable-probe
+   nil
+   :documentation
+   "Detect if the backend is usable in current buffer.
+It is called with no arguments, and should return nil when the
+backend is not usable.")
+  (symbol-at-point-fn
+   nil
+   :documentation
+   "A function that returns symbol at point.
+The symbol name is shown in various Citre UIs.  The function is
+called with no arguments, and should return a string of the
+symbol at point.  When there's no symbol at point, it should
+return nil.
 
-(defun citre--try-func-in-backend-list (func table list &rest arguments)
-  "Try call FUNC in TABLE with backend iterate over LIST.
-FUNC is a symbol, see `citre-register-*-backend' functions for
-its valid values.  FUNC is called with ARGUMENTS.
+Depending on the behavior of `defs-fn' and `refs-fn' (see their
+docstrings), this may return the marked text if there's an active
+region."
+   :type "function")
+  (completions-fn
+   nil
+   :documentation
+   "A function that returns completions of symbol at point.
+It is called with no arguments, and should return a list
+like (BEG END TAGS).  BEG and END is the region that the
+completion should replace, and TAGS is a list of tags, which are
+completions of symbol at point.  The tags should at least contain
+`name' field, and optionally `ext-kind-full', `signature',
+`pattern', `scope' and `typeref' fields, which allows the UI to
+display more information.  If no completion is available, it
+should return nil.")
+  (id-list-fn
+   nil
+   :documentation
+   "A function that returns all symbols in the current project.
+It is called in the code buffer, with no arguments.  It should
+return a list of strings, or nil if it can't figure out the
+symbols.")
+  (defs-fn
+   nil
+   :documentation
+   "A function that returns definitions of symbol at point.
+It is called with no arguments, and should return a list of tags,
+which are definitions of the symbol at point.  The tags should at
+least contain `name' and `ext-abspath' fields.  `line' and
+`pattern' field are optional but could help locating the
+definition more precisely.  `ext-kind-full', `typeref', `scope'
+and `extras' fields allows the UI to display more information.
+If no definition is available, it should return nil.
 
-The backend and the result of the first successful try is returnd
-in a cons pair.  If all backend fails, nil is returned."
-  (cl-dolist (backend list)
-    (when-let* ((f (citre--get-prop-of-backend backend func table))
-                (result (apply f arguments)))
-      (cl-return (cons backend result)))))
+If it's possible, This should use the marked text as the symbol
+at point when there's an active region, so the user could specify
+the symbol in case it's not grabbed correctly.")
+  ;; TODO: For now this is only used in xref. Could Citre use this to show
+  ;; definitions of a user inputted symbol?
+  (defs-of-id-fn
+   nil
+   :documentation
+   "A function that returns definitions of a symbol name.
+It is called in the code buffer, with an symbol name (a string)
+as the argument , and should return the definition tags of the
+symbol.")
+  (refs-fn
+   nil
+   :documentation
+   "Like `defs-fn', but returns references.
+The returned tags should contain \"reference\" in their `extras'
+field so Citre knows they are references.")
+  (refs-of-id-fn
+   nil
+   :documentation
+   "Like `defs-of-id-fn', but returns references.")
+  (tags-in-buffer-fn
+   nil
+   :documentation
+   "A function that returns a list of tags in current buffer.
+It is called with no arguments.  `name' field is required in the
+returned tags, `pattern' and/or `line' fields should also appear.
+`kind' and `extras' fields helps imenu to classify the tags.
+When no tags is available, it should return nil.")
+  (after-jump-fn
+   nil
+   :documentation
+   "A function that's called after jumping to a definition or reference.
+Some backends requires certain initialization procedures, e.g.,
+finding a database or connect to a server.  If the user jumps to
+a location found by some backend, it's likely that the user will
+continue to find definitions or references from that location, so
+the backend should be initialized.
+
+This is called with no arguments."))
+
+(defun citre--get-backend (name)
+  "Get a `citre--backend' by symbol NAME.
+Returns nil if there's no such backend."
+  (gethash name citre--backends-table))
+
+(defun citre--call-backend-fn (name member &rest args)
+  "Call function MEMBER from backend symbol NAME.
+When the backend is not registered or the member is not defined,
+return nil.  The errors produced by the function may be demoted
+based on `citre-debug'."
+  (when-let* ((backend (citre--get-backend name))
+              (fn (funcall (intern (format "citre--backend-%s" member))
+                           backend)))
+    (citre--with-demoted-errors "Citre backend error: %S"
+                                (apply fn args))))
+
+(defun citre--try-fn-on-list (fn lst &rest args)
+  "Call fn on LST until one returns non-nil.
+A cons cell of that element in LST and the returned value of FN
+is returned.  Elements in LST is used as the first argument of
+FN, ARGS are the rest."
+  (cl-dolist (e lst)
+    (when-let ((v (apply fn e args)))
+      (cl-return (cons e v)))))
 
 ;;;;; APIs for backends
 
-(defun citre-register-completion-backend (name get-completions-func)
-  "Register a new completion backend.
-NAME is the name of the backend and should be a symbol.
-
-GET-COMPLETIONS-FUNC is called with no arguments, and should
-return a list like (BEG END TAGS).  BEG and END is the region
-that the completion should replace, and TAGS is a list of tags,
-which are completions of symbol at point.  The tags should at
-least contain `name' field, and optionally `ext-kind-full',
-`signature', `pattern', `scope' and `typeref' fields, which
-allows the UI to display more information.  If no completion is
-available, it should return nil."
-  (let ((backend (make-hash-table :test #'eq :size 5)))
-    (puthash 'get-completions-func get-completions-func backend)
-    (puthash name backend citre--completion-backends-table)))
-
-(cl-defun citre-register-find-definition-backend
-    (name get-definitions-func &key identifier-list-func
-          get-definitions-for-id-func)
-  "Register a new backend for finding definitions.
-NAME is the name of the backend and should be a symbol.
-
-GET-DEFINITIONS-FUNC is called with no arguments, and should
-return a list of tags, which are the possible definitions of the
-symbol at point.  The tags should at least contain `name' and
-`ext-abspath' fields.  `line' and `pattern' field are optional but
-could help locating the definition more precisely.
-`ext-kind-full', `typeref', `scope' and `extras' fields allows
-the UI to display more information.  If no definition is
-available, it should return nil.
-
-If it's possible, GET-DEFINITIONS-FUNC should use the marked text
-as the symbol at point when there's an active region, so the user
-could specify the symbol in case it's not grabbed correctly.
-
-When finding definitions using xref, and there's no symbol at
-point, xref prompts the user for an identifier.  If the backend
-wants to support this, IDENTIFIER-LIST-FUNC and
-GET-DEFINITIONS-FOR-ID-FUNC are needed.
-
-IDENTIFIER-LIST-FUNC is called with no arguments and inside the
-code buffer.  It should return a list of strings, which is all
-identifiers in the current project.  If no identifier is
-available, it should return nil.
-
-GET-DEFINITIONS-FOR-ID-FUNC are called with an identifier name (a
-string) as the argument and inside the code buffer, and should
-return the definition tags of the identifier.
-
-IDENTIFIER-LIST-FUNC and GET-DEFINITIONS-FOR-ID-FUNC are used
-together by xref to find definitions of any symbol in a project.
-To make them work, ensure that:
-
-- GET-DEFINITIONS-FOR-ID-FUNC doesn't rely on the text properties
-  of the returned value by IDENTIFIER-LIST-FUNC.  This is because
-  xref uses `completing-read' to filter the identifier list which
-  strips the text properties.
-- When GET-DEFINITIONS-FOR-ID-FUNC returns nil, i.e., no
-  identifiers could be find for the current project,
-  GET-DEFINITIONS-FOR-ID-FUNC should return nil for any argument
-  value.  This is to make sure that, for an id given by a certain
-  backend, when we try backends in
-  `citre-find-definition-backends' to find definitions for it,
-  backends comes before that backend don't intercept it."
-  (let ((backend (make-hash-table :test #'eq :size 5)))
-    (puthash 'get-definitions-func get-definitions-func backend)
-    (puthash 'identifier-list-func identifier-list-func backend)
-    (puthash 'get-definitions-for-id-func get-definitions-for-id-func backend)
-    (puthash name backend citre--find-definition-backends-table)))
-
-;; NOTE: We don't implement identifier table for finding references using xref,
-;; since an `xref-backend-identifier-completion-table' method can't know if
-;; it's called for finding definitions or references.  We don't want to call
-;; `get-definitions-for-id-func' in a find-definition backend to get an ID
-;; (maybe from a tags file) but feed it to a find-reference backend (which may
-;; use global), so we only implement it for finding definitions.
-(cl-defun citre-register-find-reference-backend
-    (name get-references-func)
-  "Register a new backend for finding references.
-NAME is the name of the backend and should be a symbol.
-
-The arguments are similar to
-`citre-register-find-definition-backend', but GET-REFERENCES-FUNC
-should return tags of references, not definitions."
-  (let ((backend (make-hash-table :test #'eq :size 5)))
-    (puthash 'get-references-func get-references-func backend)
-    (puthash name backend citre--find-reference-backends-table)))
-
-(defun citre-register-tags-in-buffer-backend (name get-tags-in-buffer-func)
-  "Register a new backend for finding tags in buffer.
-This is used for, e.g., imenu integration.
-
-NAME is the name of the backend and should be a symbol.
-GET-TAGS-IN-BUFFER-FUNC is called with no arguments, and should
-return a list of tags in current buffer.  `name' field is
-required in the tags, `pattern' and/or `line' fields should also
-appear.  `kind' and `extras' fields helps imenu to classify the
-tags.  When no tags is available, it should return nil."
-  (let ((backend (make-hash-table :test #'eq :size 5)))
-    (puthash 'get-tags-in-buffer-func get-tags-in-buffer-func backend)
-    (puthash name backend citre--tags-in-buffer-backends-table)))
-
-(defun citre-register-symbol-at-point-backend (name symbol-at-point-func)
-  "Register a new backend for getting symbol at point.
-This is used as hints in the UI, e.g., in the error message when
-no definition is found for symbol at point.
-
-NAME is the name of the backend and should be a symbol.
-SYMBOL-AT-POINT-FUNC is called with no arguments, and should
-return a string of the symbol at point.  When there's no symbol
-at point, it should return nil."
-  (let ((backend (make-hash-table :test #'eq :size 5)))
-    (puthash 'symbol-at-point-func symbol-at-point-func backend)
-    (puthash name backend citre--symbol-at-point-backends-table)))
-
-(defun citre-register-backend-usable-probe (name backend-usable-func)
-  "Register a probe for detecting if backend NAME is usable.
-BACKEND-USABLE-FUNC is called with no arguments, and should
-return nil when the backend is not usable in current buffer.
-
-This is used for `citre-auto-enable-citre-mode'."
-  (let ((backend (make-hash-table :test #'eq :size 5)))
-    (puthash 'backend-usable-func backend-usable-func backend)
-    (puthash name backend citre--backend-usable-probe-table)))
-
-(defun citre-register-after-jump-function (func)
-  "Register FUNC as an after-jump function.
-FUNC is called after jumping to a definition or reference, with
-the buffer before jumping as the argument.  If the backends uses
-some database (e.g., tags file), and no suitable database can be
-found for the new buffer, this function could set it to be the
-database used for the previous buffer, which could be beneficial
-when jumping outside of current project"
-  (unless (member func citre--after-jump-functions)
-    (push func citre--after-jump-functions)))
+(defun citre-register-backend (name backend)
+  "Register a Citre backend.
+NAME is a symbol, BACKEND is a created by `citre-backend-create'.
+This ties the symbol with the backend, so the symbol could be
+used in `citre-completion-backends',
+`citre-find-definition-backends', `citre-find-reference-backends'
+and `citre-tags-in-buffer-backends', and other Citre APIs."
+  (puthash name backend citre--backends-table))
 
 ;;;; APIs for upper components
 
+;;;;; APIs for tinkering with a single backend
+
+(defun citre-backend-usable-p (backend)
+  "Check if BACKEND is usable."
+  (citre--call-backend-fn backend 'usable-probe))
+
+(defun citre-backend-completions (backend)
+  "Get completions of symbol at point by BACKEND."
+  (citre--call-backend-fn backend 'completions-fn))
+
+(defun citre-backend-symbol-at-point (backend)
+  "Get symbol at point by BACKEND."
+  (citre--call-backend-fn backend 'symbol-at-point-fn))
+
+(defun citre-backend-id-list (backend)
+  "Get identifiers in project by BACKEND."
+  (citre--call-backend-fn backend 'id-list-fn))
+
+(defun citre-backend-find-definition (backend)
+  "Return definitions of symbol at point by BACKEND."
+  (citre--call-backend-fn backend 'defs-fn))
+
+(defun citre-backend-find-definition-of-id (backend id)
+  "Return definitions of ID by BACKEND."
+  (citre--call-backend-fn backend 'defs-of-id-fn id))
+
+(defun citre-backend-find-reference (backend)
+  "Return references of symbol at point by BACKEND."
+  (citre--call-backend-fn backend 'refs-fn))
+
+(defun citre-backend-find-reference-of-id (backend id)
+  "Return references of ID by BACKEND."
+  (citre--call-backend-fn backend 'refs-of-id-fn id))
+
+(defun citre-backend-tag-in-buffer (backend)
+  "Return tags in buffer by BACKEND."
+  (citre--call-backend-fn backend 'tags-in-buffer-fn))
+
+(defun citre-backend-after-jump (backend)
+  "Call after-jump action of BACKEND."
+  (citre--call-backend-fn backend 'after-jump-fn))
+
+;;;;; APIs for getting completions, definitions, references and tags in buffer
+
 (defun citre-get-backend-and-completions ()
-  "Try getting completions of symbol at point.
+  "Get completions of symbol at point.
 Backends in `citre-completion-backends' are tried in turn.  The
 first succeeded backend and the results are returned in a cons
 pair."
-  (citre--try-func-in-backend-list
-   'get-completions-func
-   citre--completion-backends-table citre-completion-backends))
+  (citre--try-fn-on-list #'citre-backend-completions
+                         citre-completion-backends))
 
 (defun citre-get-completions ()
   "Get completions of symbol at point.
-The result is a list (BEG END TAGS), see
-`citre-register-completion-backends'."
-  (when-let ((result (citre-get-backend-and-completions)))
-    (cdr result)))
+The result is a list (BEG END TAGS)."
+  (cdr (citre-get-backend-and-completions)))
+
+(defun citre-get-backend-and-id-list ()
+  "Get a list of identifiers of current project.
+`citre-find-definition-backends' and
+`citre-find-reference-backends' are both tried.  The first
+succeeded backend and the results are returned in a cons pair."
+  (citre--try-fn-on-list #'citre-backend-id-list
+                         (cl-union citre-find-definition-backends
+                                   citre-find-reference-backends)))
+
+(defun citre-get-id-list ()
+  "Get a list of identifiers of current project."
+  (cdr (citre-get-backend-and-id-list)))
 
 (defun citre-get-backend-and-definitions ()
-  "Try getting definitions of symbol at point.
+  "Get definitions of symbol at point.
 Backends in `citre-find-definition-backends' are tried in turn.
 The first succeeded backend and the results are returned in a
 cons pair."
-  (citre--try-func-in-backend-list
-   'get-definitions-func
-   citre--find-definition-backends-table citre-find-definition-backends))
+  (citre--try-fn-on-list #'citre-backend-find-definition
+                         citre-find-definition-backends))
 
 (defun citre-get-definitions ()
-  "Get definitions of symbol at point."
-  (when-let ((result (citre-get-backend-and-definitions)))
-    (cdr result)))
+  "Get definitions of symbol at point.
+The result is a list of tags."
+  (cdr (citre-get-backend-and-definitions)))
+
+(defun citre-get-backend-and-definitions-of-id (id)
+  "Get definitions of identifier ID.
+Backends in `citre-find-definition-backends' are tried in turn.
+The first succeeded backend and the results are returned in a
+cons pair."
+  (citre--try-fn-on-list #'citre-backend-find-definition-of-id
+                         citre-find-definition-backends
+                         id))
+
+(defun citre-get-definitions-of-id (id)
+  "Get definitions of identifier ID.
+The result is a list of tags."
+  (car (citre-get-backend-and-definitions-of-id id)))
 
 (defun citre-get-backend-and-references ()
-  "Try getting references of symbol at point.
+  "Get references of symbol at point.
 Backends in `citre-find-reference-backends' are tried in turn.
 The first succeeded backend and the results are returned in a
 cons pair."
-  (citre--try-func-in-backend-list
-   'get-references-func
-   citre--find-reference-backends-table citre-find-reference-backends))
+  (citre--try-fn-on-list #'citre-backend-find-reference
+                         citre-find-reference-backends))
 
 (defun citre-get-references ()
-  "Get references of symbol at point."
-  (when-let ((result (citre-get-backend-and-references)))
-    (cdr result)))
+  "Get references of symbol at point.
+The result is a list of tags."
+  (cdr (citre-get-backend-and-references)))
+
+(defun citre-get-backend-and-references-of-id (id)
+  "Get references of identifier ID.
+Backends in `citre-find-reference-backends' are tried in turn.
+The first succeeded backend and the results are returned in a
+cons pair."
+  (citre--try-fn-on-list #'citre-backend-find-reference-of-id
+                         citre-find-reference-backends
+                         id))
+
+(defun citre-get-references-of-id (id)
+  "Get references of identifier ID.
+The result is a list of tags."
+  (car (citre-get-backend-and-references-of-id id)))
 
 (defun citre-get-backend-and-tags-in-buffer ()
   "Try getting tags in buffer using `citre-tags-in-buffer-backends'.
 The first succeeded backend and the results are returned in a
 cons pair."
-  (citre--try-func-in-backend-list
-   'get-tags-in-buffer-func
-   citre--tags-in-buffer-backends-table citre-tags-in-buffer-backends))
+  (citre--try-fn-on-list #'citre-backend-tag-in-buffer
+                         citre-tags-in-buffer-backends))
 
 (defun citre-get-tags-in-buffer ()
   "Get tags in buffer."
-  (when-let ((result (citre-get-backend-and-tags-in-buffer)))
-    (cdr result)))
-
-(defun citre-get-backend-and-id-list ()
-  "Try getting a list of identifiers using `citre-find-definition-backends'.
-The first succeeded backend and the results are returned in a
-cons pair."
-  (citre--try-func-in-backend-list
-   'identifier-list-func
-   citre--find-definition-backends-table citre-find-definition-backends))
-
-(defun citre-get-definitions-of-id (id &optional backend)
-  "Get definitions of identifier ID using BACKEND.
-Returns a list of tags.  If BACKEND is nil, try backends in
-`citre-find-definition-backends'."
-  (if backend
-      (funcall (citre--get-prop-of-backend
-                backend 'get-definitions-for-id-func
-                citre--find-definition-backends-table)
-               id)
-    (cdr (citre--try-func-in-backend-list
-          'get-definitions-for-id-func citre--find-definition-backends-table
-          citre-find-definition-backends id))))
-
-(defun citre-get-symbol-at-point-for-backend (backend)
-  "Get symbol at point using BACKEND.
-It uses `citre--symbol-at-point-backends-table' internally and
-returns a string or nil."
-  (funcall (citre--get-prop-of-backend backend 'symbol-at-point-func
-                                       citre--symbol-at-point-backends-table)))
-
-(defun citre-backend-usable-p (backend)
-  "Check if BACKEND is usable for current buffer."
-  (funcall (citre--get-prop-of-backend backend 'backend-usable-func
-                                       citre--backend-usable-probe-table)))
-
-(defun citre-after-jump-action (buffer)
-  "Run the actions registered by `citre-register-after-jump-function'.
-BUFFER should be the buffer before jumping."
-  (dolist (f citre--after-jump-functions)
-    (funcall f buffer)))
+  (cdr (citre-get-backend-and-tags-in-buffer)))
 
 (provide 'citre-backend-interface)
 

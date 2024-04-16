@@ -50,6 +50,7 @@
 ;;;; Libraries
 
 (require 'citre-common-tag)
+(require 'citre-common-util)
 (require 'color)
 (require 'fringe)
 
@@ -615,9 +616,6 @@ position.)"
 ;;   sure that the overlay is cleaned up correctly.  When other state variables
 ;;   are set up, enable `citre-peek--mode' sets up the UI, and disable
 ;;   `citre-peek--mode' hides the UI.
-;;
-;; - `citre-peek--buffer-file-name': It's automatically set by
-;;   `citre-peek--find-file-buffer'.
 
 (defvar citre-peek--current-session nil
   "Current peek session.")
@@ -658,14 +656,6 @@ bounds as returned by `citre--search-symbols'.")
 
 (defvar citre-peek--bg-selected nil
   "Background color for selected tags when peeking.")
-
-(defvar-local citre-peek--buffer-file-name nil
-  "File name in non-file buffers.
-`citre-peek' needs to open files in non-file temporary buffers,
-where the function `buffer-file-name' doesn't work.  `citre-peek'
-uses hacks to make it work when peeking through symbols inside
-such buffers, which may need the file name.  For this to work,
-`citre-peek--buffer-file-name' must be set in these buffers.")
 
 (define-minor-mode citre-peek--mode
   "Mode for `citre-peek'.
@@ -726,26 +716,6 @@ which take care of setting up other things."
 
 ;;;;; Handle temp file buffer
 
-;; Actually we can make Emacs believe our temp buffer is visiting FILENAME (by
-;; setting `buffer-file-name' and `buffer-file-truename'), but then the buffer
-;; is not hidden (Emacs hides buffers whose name begin with a space, but those
-;; visiting a file are not hidden), and Emacs ask you to confirm when killing
-;; it because its content are modified.  Rather than trying to workaround these
-;; issues, it's better to create this function instead.
-
-(defmacro citre-peek--hack-buffer-file-name (&rest body)
-  "Override function `buffer-file-name' in BODY.
-This makes it work in non-file buffers where
-`citre-peek--buffer-file-name' is set."
-  (declare (indent 0))
-  `(cl-letf* ((buffer-file-name-orig (symbol-function 'buffer-file-name))
-              ((symbol-function 'buffer-file-name)
-               (lambda (&optional buffer)
-                 (or (with-current-buffer (or buffer (current-buffer))
-                       citre-peek--buffer-file-name)
-                     (funcall buffer-file-name-orig buffer)))))
-     ,@body))
-
 (defun citre-peek--find-file-buffer (path)
   "Return the buffer visiting file PATH.
 PATH is an absolute path.  This is like `find-buffer-visiting',
@@ -761,18 +731,9 @@ When PATH doesn't exist, this returns nil."
     (or (alist-get path citre-peek--temp-buffer-alist
                    nil nil #'equal)
         (find-buffer-visiting path)
-        (let ((buf (generate-new-buffer (format " *citre-peek-%s*" path))))
+        (let ((buf (citre-file-content-buffer path 'set-major-mode)))
           (with-current-buffer buf
-            (insert-file-contents path)
-            ;; `set-auto-mode' checks `buffer-file-name' to set major mode.
-            (let ((buffer-file-name path))
-              (delay-mode-hooks
-                (set-auto-mode)))
-            (setq citre-peek--buffer-file-name path)
-            ;; In case language-specific `:get-symbol' function uses
-            ;; `default-directory'.
-            (setq default-directory (file-name-directory path))
-            (hack-dir-local-variables-non-file-buffer))
+            (setq default-directory (file-name-directory path)))
           (push (cons path buf) citre-peek--temp-buffer-alist)
           buf))))
 
@@ -931,22 +892,35 @@ If SESSION is nil, use the currently active session."
   (let* ((session (or session citre-peek--current-session)))
     (citre-peek--session-root-list session)))
 
-(defun citre-peek--current-tag-list (&optional session)
-  "Return the currently browsed tag list in a peek session SESSION.
+(defun citre-peek--tag-list-at-depth (n &optional session)
+  "Return the browsed tag list in a peek session SESSION at depth N.
 If SESSION is nil, use the currently active session."
   (let* ((session (or session citre-peek--current-session))
-         (taglist (citre-peek--session-root-list session))
-         (depth (citre-peek--session-depth session)))
-    (dotimes (_ depth)
+         (taglist (citre-peek--session-root-list session)))
+    (dotimes (_ n)
       (let* ((node (citre-peek--current-node-in-tag-list taglist))
              (branches (citre-peek--tag-node-branches node)))
         (setq taglist (car branches))))
     taglist))
 
-(defun citre-peek--current-tag-node ()
-  "Return the currently browsed tag node."
+(defun citre-peek--current-tag-list (&optional session)
+  "Return the currently browsed tag list in a peek session SESSION.
+If SESSION is nil, use the currently active session."
+  (let ((session (or session citre-peek--current-session)))
+    (citre-peek--tag-list-at-depth
+     (citre-peek--session-depth session) session)))
+
+(defun citre-peek--tag-node-at-depth (n &optional session)
+  "Return the browsed tag node in a peek session SESSION at depth N.
+If SESSION is nil, use the currently active session."
   (citre-peek--current-node-in-tag-list
-   (citre-peek--current-tag-list)))
+   (citre-peek--tag-list-at-depth n session)))
+
+(defun citre-peek--current-tag-node (&optional session)
+  "Return the currently browsed tag node in a peek session SESSION.
+If SESSION is nil, use the currently active session."
+  (citre-peek--current-node-in-tag-list
+   (citre-peek--current-tag-list session)))
 
 ;;;;; Create tag lists & sessions
 
@@ -1287,6 +1261,18 @@ root of the peek history so we can go back to it after
   (citre-peek--setup-session (citre-peek--make-session tags marker))
   (citre-peek--mode))
 
+(defun citre-peek-peeked-tag ()
+  "Get the currently peeked tag."
+  (citre-peek--tag-node-tag (citre-peek--current-tag-node)))
+
+(defun citre-peek-parent-tag ()
+  "Get the parent tag of the currently peeked tag.
+That is, the previous tag in the peek history.  If we are at the
+root of the history, return nil."
+  (let ((depth (1- (citre-peek--session-depth citre-peek--current-session))))
+    (unless (< depth 0)
+      (citre-peek--tag-node-tag (citre-peek--tag-node-at-depth depth)))))
+
 ;;;; Commands
 
 ;;;;; Create/end/restore peek sessions
@@ -1303,6 +1289,19 @@ root of the peek history so we can go back to it after
     (if citre-peek--current-session
         (citre-peek--mode)
       (user-error "No peek session to restore"))))
+
+;;;;; Jump
+
+(defun citre-peek-jump ()
+  "Jump to the definition that is currently peeked."
+  (interactive)
+  (citre-peek--error-if-not-peeking)
+  (citre-peek-abort)
+  (citre-goto-tag (citre-peek-peeked-tag))
+  (when citre-peek-auto-restore-after-jump
+    (citre-peek-restore)
+    (when citre-peek-backward-in-chain-after-jump
+      (citre-peek-chain-backward))))
 
 ;;;;; Browse in file
 
@@ -1518,15 +1517,12 @@ This location is for using in Clue API calls."
                (`(,buf . ,pos) (citre-peek--get-buf-and-pos node))
                (file (citre-get-tag-field 'ext-abspath tag))
                (line) (project))
-    (if buf
-        (with-current-buffer buf
-          (save-excursion
-            (goto-char pos)
-            (setq line (line-number-at-pos)))
-          (citre-peek--hack-buffer-file-name
-            (setq project (funcall citre-project-root-function)))
-          `(,file ,line ,project))
-      (user-error "The file doesn't exist"))))
+    (unless buf (user-error "The file doesn't exist"))
+    (citre-with-file-buffer file 'visit nil
+      (goto-char pos)
+      (setq line (line-number-at-pos))
+      (setq project (funcall citre-project-root-function))
+      `(,file ,line ,project))))
 
 (defun citre-peek-copy-clue-link ()
   "Copy currently browsed line in the peek window as a clue link.

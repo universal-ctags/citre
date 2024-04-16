@@ -106,7 +106,7 @@ The returned string looks like:
   (concat (string-join
            (mapcar (lambda (backend)
                      (let ((symbol
-                            (if-let ((s (citre-get-symbol-at-point-for-backend
+                            (if-let ((s (citre-backend-symbol-at-point
                                          backend)))
                                 (format "\"%s\"" s)
                               "no symbol at point")))
@@ -123,8 +123,7 @@ When there's multiple definitions, it lets you pick one using the
 `completing-read' UI, or you could use your own UI by customizing
 `citre-select-definition-function'."
   (interactive)
-  (let* ((defs (citre-get-definitions))
-         (buf (current-buffer)))
+  (pcase-let ((`(,backend . ,defs) (citre-get-backend-and-definitions)))
     (if (null defs)
         ;; TODO: Customizable fallback action (e.g. update tags file and try
         ;; again).  I don't know if it's necessary.
@@ -132,7 +131,7 @@ When there's multiple definitions, it lets you pick one using the
                             (citre--symbol-at-point-prompt
                              citre-find-definition-backends))))
     (citre-jump-show defs)
-    (citre-after-jump-action buf)))
+    (citre-backend-after-jump backend)))
 
 ;;;###autoload
 (defun citre-jump-to-reference ()
@@ -141,15 +140,14 @@ When there's multiple definitions, it lets you pick one using the
 `completing-read' UI, or you could use your own UI by customizing
 `citre-select-definition-function'."
   (interactive)
-  (let* ((refs (citre-get-references))
-         (buf (current-buffer)))
+  (pcase-let* ((`(,backend . ,refs) (citre-get-backend-and-references)))
     (if (null refs)
         ;; TODO: Customizable fallback action.
         (user-error (concat "Can't find references: "
                             (citre--symbol-at-point-prompt
                              citre-find-reference-backends))))
     (citre-jump-show refs)
-    (citre-after-jump-action buf)))
+    (citre-backend-after-jump backend)))
 
 ;;;; citre-peek
 
@@ -157,35 +155,37 @@ When there's multiple definitions, it lets you pick one using the
 
 (defun citre-peek--get-tags (&optional reference)
   "Return definitions or references of symbol under point.
-If REFERENCE is non-nil, references are returned.  This works for
-temporary buffer created by `citre-peek'.  The backend and
-definitions are returned in a cons pair.
+If REFERENCE is non-nil, references are returned.
 
 When in an xref buffer, return a single-element list of the tag
 of the xref item under point, with the `name' field being
-`citre-peek-root-symbol-str'."
-  (citre-peek--hack-buffer-file-name
-    (let* ((tags (if (derived-mode-p 'xref--xref-buffer-mode)
-                     (let ((tag (citre-make-tag-of-current-xref-item
-                                 citre-peek-root-symbol-str)))
-                       (cons nil (when tag (list tag))))
-                   (if reference (citre-get-references)
-                     (citre-get-definitions)))))
-      (if (null tags)
-          (user-error
-           (if reference (concat "Can't find references: "
-                                 (citre--symbol-at-point-prompt
-                                  citre-find-reference-backends))
-             (concat "Can't find definition: "
-                     (citre--symbol-at-point-prompt
-                      citre-find-definition-backends))))
-        tags))))
+`citre-peek-root-symbol-str'.
+
+A `citre-backend' field in tags will be set to the symbol of the
+citre backend, unless when in an xref buffer."
+  (pcase-let ((`(,backend . ,tags)
+               (if (derived-mode-p 'xref--xref-buffer-mode)
+                   (let ((tag (citre-make-tag-of-current-xref-item
+                               citre-peek-root-symbol-str)))
+                     (cons nil (when tag (list tag))))
+                 (if reference (citre-get-backend-and-references)
+                   (citre-get-backend-and-definitions)))))
+    (if (null tags)
+        (user-error
+         (if reference (concat "Can't find references: "
+                               (citre--symbol-at-point-prompt
+                                citre-find-reference-backends))
+           (concat "Can't find definition: "
+                   (citre--symbol-at-point-prompt
+                    citre-find-definition-backends))))
+      (dolist (tag tags) (citre-set-tag-field 'citre-backend backend tag))
+      tags)))
 
 ;;;;; Peek definitions
 
 ;;;###autoload
 (defun citre-peek (&optional buf point reference)
-  "Peek the definition of symbol at pointthe symbol in BUF at POINT.
+  "Peek the definition of the symbol in BUF at POINT.
 Or, When BUF or POINT is non-nil, peek the symbol at POINT (or
 current point) in BUF (or the current buffer).
 
@@ -193,12 +193,13 @@ When REFERENCE is non-nil, peek the references."
   (interactive)
   (let* ((buf (or buf (current-buffer)))
          (point (or point (point)))
-         (defs (save-excursion
+         (tags (save-excursion
                  (with-current-buffer buf
                    (goto-char point)
                    (citre-peek--get-tags reference))))
          (marker (when (buffer-file-name) (point-marker))))
-    (citre-peek-show defs marker)))
+    ;; Keep backend info in private field for `citre-peek-through'.
+    (citre-peek-show tags marker)))
 
 ;;;###autoload
 (defun citre-ace-peek (&optional reference)
@@ -221,22 +222,16 @@ If REFERENCE is non-nil, peek its references, otherwise peek its
 definitions."
   (interactive)
   (citre-peek--error-if-not-peeking)
-  (let ((prev-buf (current-buffer)))
-    (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window))
-                (tags (save-excursion
-                        (with-current-buffer (car buffer-point)
-                          ;; TODO: this is not totally reliable, e.g., when the
-                          ;; user restores the peek session in a buffer that's
-                          ;; not in the current project.  We should add a
-                          ;; command to set tags file for current buffer or
-                          ;; current peek window.  AND, we should make
-                          ;; `citre--backend-after-jump-functions' to let all
-                          ;; backends work (think about peek definition then
-                          ;; peek through reference, the backend has changed).
-                          (citre-after-jump-action prev-buf)
-                          (when (region-active-p) (deactivate-mark))
-                          (goto-char (cdr buffer-point))
-                          (citre-peek--get-tags reference)))))
+  (when-let* ((buffer-point (citre-ace-pick-point-in-peek-window)))
+    (let* ((peeked-tag (citre-peek-peeked-tag))
+           (backend (citre-get-tag-field 'citre-backend peeked-tag))
+           (peeked-file (citre-get-tag-field 'ext-abspath peeked-tag))
+           tags)
+      (citre-with-file-buffer peeked-file 'visit nil
+        (citre-backend-after-jump backend)
+        (when (region-active-p) (deactivate-mark))
+        (goto-char (cdr buffer-point))
+        (setq tags (citre-peek--get-tags reference)))
       (citre-peek-make-current-tag-first)
       (citre-peek--make-branch tags))))
 
@@ -252,30 +247,13 @@ definitions."
 (defun citre-ace-peek-reference ()
   "Peek the references of a symbol on screen using ace jump."
   (interactive)
-  (citre-peek-through 'reference))
+  (citre-ace-peek 'reference))
 
 ;;;###autoload
 (defun citre-peek-through-reference ()
   "Peek through a symbol in current peek window for references."
   (interactive)
   (citre-peek-through 'reference))
-
-;;;;; Jump
-
-(defun citre-peek-jump ()
-  "Jump to the definition that is currently peeked."
-  (interactive)
-  (citre-peek--error-if-not-peeking)
-  (let ((prev-buf (current-buffer)))
-    (citre-peek-abort)
-    (citre-goto-tag
-     (citre-peek--tag-node-tag
-      (citre-peek--current-tag-node)))
-    (citre-after-jump-action prev-buf))
-  (when citre-peek-auto-restore-after-jump
-    (citre-peek-restore)
-    (when citre-peek-backward-in-chain-after-jump
-      (citre-peek-chain-backward))))
 
 ;;;; Capf
 
@@ -378,21 +356,8 @@ line number in TAG, or 0 if it doesn't record the line number.
 This is because we don't want to fail an xref session only
 because one file is lost, and users may manually use the line
 number if they know the file is renamed/moved to which file."
-  (let* ((path (citre-get-tag-field 'ext-abspath tag))
-         (buf-opened (find-buffer-visiting path))
-         buf linum)
-    (if (not (citre-non-dir-file-exists-p path))
-        (or (citre-get-tag-field 'extra-line tag) 0)
-      (if buf-opened
-          (setq buf buf-opened)
-        (setq buf (generate-new-buffer (format " *citre-xref-%s*" path)))
-        (with-current-buffer buf
-          (insert-file-contents path)))
-      (with-current-buffer buf
-        (setq linum (citre-locate-tag tag 'use-linum)))
-      (unless buf-opened
-        (kill-buffer buf))
-      linum)))
+  (citre-with-file-buffer (citre-get-tag-field 'ext-abspath tag) nil nil
+    (citre-locate-tag tag 'use-linum)))
 
 (defun citre-xref--make-object (tag)
   "Make xref object of TAG."
@@ -438,8 +403,8 @@ The returned value is a valid return value for
     ;; We need this since Xref calls this function in minibuffer.
     (let* ((result (with-selected-window (or (minibuffer-selected-window)
                                              (selected-window))
-                     (citre-get-backend-and-id-list))))
-      (complete-with-action action (cdr result) str pred))))
+                     (citre-get-id-list))))
+      (complete-with-action action result str pred))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql 'citre)) symbol)
   "Method for xref to find definitions of SYMBOL."
