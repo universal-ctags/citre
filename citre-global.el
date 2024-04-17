@@ -358,6 +358,13 @@ See *citre-global-update* buffer" s))))
      :file-handler t)
     (message "Updating...")))
 
+;;;; Get identifiers
+
+(defun citre-global-get-identifiers ()
+  "Get a list of identifiers in current project."
+  (citre-global--get-output-lines
+   '("--completion")))
+
 ;;;; Completion backend
 
 ;; TODO: Do we need to cache the result like tags backend?
@@ -381,11 +388,19 @@ See *citre-global-update* buffer" s))))
   "Get tags of definitions to symbol at point."
   (citre-global-get-tags nil 'definition))
 
+(defun citre-global-get-definitions-of-id (id)
+  "Get tags of definitions of ID."
+  (citre-global-get-tags id 'definition))
+
 ;;;; Find references backend
 
 (defun citre-global-get-references ()
   "Get tags of references to symbol at point."
   (citre-global-get-tags nil 'reference))
+
+(defun citre-global-get-references-of-id (id)
+  "Get tags of references of ID."
+  (citre-global-get-tags id 'reference))
 
 ;;;; Backend definition
 
@@ -394,8 +409,11 @@ See *citre-global-update* buffer" s))))
    :usable-probe #'citre-global-dbpath
    :symbol-at-point-fn #'citre-tags-symbol-at-point
    :completions-fn #'citre-global-get-completions
+   :id-list-fn #'citre-global-get-identifiers
    :defs-fn #'citre-global-get-definitions
+   :defs-of-id-fn #'citre-global-get-definitions-of-id
    :refs-fn #'citre-global-get-references
+   :refs-of-id-fn #'citre-global-get-references-of-id
    :tags-in-buffer-fn #'citre-global-get-tags-in-file)
   "Global backend.")
 
