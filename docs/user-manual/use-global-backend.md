@@ -1,17 +1,13 @@
 # Use Global Backend
 
-`citre-global` is a GNU Global plugin for Citre. With `citre-global`, you can
-find the completions, definitions or references of a symbol using capf, xref or
-UI similar to `citre-jump` and `citre-peek`. It also support Imenu.
-
 ## Prerequisite
 
 You need to install GNU Global. In most distributions its package name is
 "global", and should contain "gtags" and "global" program.
 
 The built-in parser of GNU Global supports C, Yacc, Java, PHP4 and assembly. By
-using the Pygments plugin parser, Global supports finding references of 150+
-languages. To use the Pygments plugin parser, you need:
+using the Pygments plugin parser, Global supports finding definitions and
+references of 150+ languages. To use the Pygments plugin parser, you need:
 
 - Python (>=2.6. 3.x are also supported)
 - Pygments. Check if it's installed properly by `$ python -m pygments -h`. This
@@ -40,7 +36,7 @@ to run:
 $ mkdir -p ~/.cache/gtags/
 ```
 
-This may not work on Windows, see `citre-gtags-args`.
+This may not work on Windows, see the docstring of `citre-gtags-args`.
 
 If you want to use the Pygments plugin parser, you need the following config:
 
@@ -96,17 +92,6 @@ f                   8 test.c             f();
 If all works as expected, you now have an working GNU Global installation that
 handles references.
 
-## Emacs configuration
-
-You don't need further configuration to use the global backend. If this doesn't
-work for you, make sure `global` is in:
-
-- `citre-completion-backends` (for auto completion)
-- `citre-find-definition-backends` (for finding definitions)
-- `citre-find-reference-backends` (for finding references)
-- `citre-tags-in-buffer-backends` (for Imenu integration)
-- `citre-auto-enable-citre-mode-backends` (for auto-enabling `citre-mode`)
-
 ## Tagging the source tree
 
 Open any file or directory in your project. Type `M-x
@@ -114,24 +99,11 @@ citre-global-update-database`. If no gtags database is avaliable, it will guide
 you to create one using gtags, otherwise it will update the existing one, and
 it's done incrementally.
 
-You could also use `citre-global-create-database` to create the database.
+You could also use `citre-global-create-database`, or the `gtags` program
+directly to create the database.
 
-## Use `citre-global`
-
-If a global database is found for current file, you can use all the tools for
-finding completions, definitions and references offered by citre, capf and
-xref.
-
-By default, `xref-find-references` always prompts you to choose an identifier
-from a list. You could set `xref-prompt-for-identifier` to `nil` to make it use
-the symbol at point instead. See its docstring for more details.
-
-`citre` offeres these tools for finding references:
-
-- `citre-jump-to-reference`, which reuses the `citre-jump` UI;
-- `citre-peek-references`, equivalent to `citre-peek`;
-- `citre-ace-peek-references`, equivalent to `citre-ace-peek`;
-- `citre-peek-through-references`, equivalent to `citre-peek-through`.
+After generating a global database, you'll be able to use all Citre tools
+through the global backend.
 
 ## Use global backend for Imenu
 

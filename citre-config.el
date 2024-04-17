@@ -28,7 +28,8 @@
 ;;; Commentary:
 
 ;; This is a default configuration for Citre.  It enables all language support
-;; that Citre provides.  You can use this as a reference and write your own
+;; that Citre provides, and autoloads `citre' on some commands that's not
+;; define in citre.el.  You can use this as a reference and write your own
 ;; config.
 
 ;;; Code:

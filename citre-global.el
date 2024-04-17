@@ -27,17 +27,7 @@
 
 ;;; Commentary:
 
-;; citre-global is a GNU Global plugin for citre.  It offers commands to create
-;; & update gtags database, commands similar to `citre-jump', `citre-peek' to
-;; find references of a symbol using Global, and `xref-find-references'
-;; integration.
-
-;; Read the following doc to know how to use citre-peek:
-;;
-;; - docs/user-manual/citre-global.md
-
-;; If you haven't received the doc, please visit
-;; https://github.com/universal-ctags/citre.
+;; GNU Global backend.
 
 ;;; Code:
 

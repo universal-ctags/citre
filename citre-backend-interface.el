@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 
-;;
+;; This file defines the Citre backend and offers APIs to use them.
 
 ;;; Code:
 
@@ -44,7 +44,8 @@
 
 (defcustom citre-completion-backends '(tags global)
   "List of completion backends.
-The backends are tried in turn until one succeeded."
+When finding completions, these backends are tried in turn until
+one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 

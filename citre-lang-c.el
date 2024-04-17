@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 
-;; Language support for C.  The features are:
+;; Tags backend language support for C.  The features are:
 ;;
 ;; - When the symbol is after "->" or ".", tags of member kind are sorted above
 ;;   others.

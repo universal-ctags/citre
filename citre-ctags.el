@@ -27,14 +27,7 @@
 
 ;;; Commentary:
 
-;; Tool for generating & updating tags files.  Read these docs to know how to
-;; use it:
-
-;; - README.md
-;; - docs/user-manual/about-tags-file.md
-
-;; If you haven't received these docs, please visit
-;; https://github.com/universal-ctags/citre.
+;; Tool for finding, generating and updating tags files.
 
 ;;; Code:
 

@@ -1,4 +1,4 @@
-# About Tags File
+# More About Tags Backend
 
 ## Where to save a tags file, and how Citre finds it
 
@@ -225,6 +225,19 @@ Let's see how it works.
   - `\1`: The tag name is the function name captured by the group.
 
   - `a`: The kind of the tag is `a`/`arrayfunc`.
+
+Another real world example is in the Universal Ctags source tree,
+`ctags/Tmain/nested-subparsers.d/event.ctags`:
+
+```
+--langdef=Event{base=C}
+--kinddef-Event=e,event,events
+--regex-Event=/DEFINE_EVENT\((.*)\);/\1/e/)
+```
+
+It introduces `event` kind. The point is when using `DEFINE_EVENT`, the
+programmer thinks about defining an `event`, rather than what the macro is
+eventually expanded into.
 
 In DSL-heavy projects, Ctags plus some regular expressions could beat
 intelligent tools like language servers.

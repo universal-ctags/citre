@@ -27,9 +27,7 @@
 
 ;;; Commentary:
 
-;; This is a readtags abstraction layer.  See
-;; docs/developer-manual/project-structure.md to know the design.  See the APIs
-;; section in this file to know the APIs it offers.
+;; A readtags abstraction layer.
 
 ;;; Code:
 

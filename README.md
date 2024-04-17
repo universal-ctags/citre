@@ -4,16 +4,27 @@
 
 <p align="center"><i>Ctags IDE on the True Editor!</i></p>
 
+<p align="center">(Or, a superior code reading tool with pluggable
+backends.)</p>
+
 ## What is it?
 
 (If you are already familiar with Citre, see [changelog](CHANGELOG.md) for the
 news.)
 
-Citre is an advanced Ctags (or actually, readtags) frontend for Emacs. It
-offers:
+Citre started out as a tool utilizing tags files (in the ctags format). Now it
+is a sophisticated code reading and auto-completion tool with pluggable backend
+design. The built-in backends include:
+
+- A tags file backend.
+- A GNU global database backend.
+- An xref adapter that transforms any xref backend into Citre backend.
+- Eglot backend, based on the xref adapter.
+
+The tools offered by Citre are:
 
 - `completion-at-point`, xref and imenu integration.
-- `citre-jump`: A `completing-read` UI for jumping to definition.
+- `citre-jump`: A `completing-read` UI for jumping to definition/references.
 - `citre-peek`: A powerful code reading tool that lets you go down the rabbit
   hole without leaving current buffer.
 
@@ -49,71 +60,16 @@ Let's see them in action!
   allows a tree-like code reading history, that you can browse and edit,
   without leaving current buffer!
 
-All above screenshots were taken in a huge project (the Linux kernel), and
-Citre is still fast, because readtags performes binary search on the tags file.
-
-Besides, Citre has a GNU Global plugin that can find completions, definitions
-and references using xref or the above UIs. See [this user
-manual](docs/user-manual/citre-global.md) to know about it. Citre has a
-pluggable backend design so you could forget about ctags and only use Citre as
-a GNU Global frontend.
+All above screenshots were taken in a huge project (the Linux kernel), using
+the tags file backend, and Citre is still fast, because readtags performes
+binary search on the tags file.
 
 ## Quick start
-
-### Prerequisites
-
-#### readtags
-
-Citre uses readtags program to read from tags files.
-
-Citre requires readtags program provided by [Universal
-Ctags](https://github.com/universal-ctags/ctags). The minimal version is:
-
-- commit `31d13e85`, or
-- weekly release p5.9.20200124.0
-
-It's recommended to get the latest version, as Citre actively takes advantage
-of its latest features.
-
-- For GNU/Linux users: If you install ctags from your software repository, run
-  `$ ctags --version` to see if you are using Universal Ctags. The version is a
-  little hard to inspect since Universal Ctags doesn't have a formal version
-  number yet. If it's compiled before Jan 21 2021, it will probably not work.
-  You can [build it
-  yourself](https://github.com/universal-ctags/ctags#how-to-build-and-install),
-  or try the [snap package](https://github.com/universal-ctags/ctags-snap).
-
-- For macOS users: Follow the instructions
-  [here](https://github.com/universal-ctags/homebrew-universal-ctags) to
-  install the latest version.
-
-- For Windows users: Download the binary
-  [here](https://github.com/universal-ctags/ctags-win32). Ctags in cygwin (or
-  msys repo of msys2) won't work since it doesn't come with readtags. Ctags in
-  the mingw64 repo of msys2 is Universal Ctags, but by the time of writing, it
-  doesn't meet the version requirement.
-
-If you don't have readtags executable in your PATH, customize
-`citre-readtags-program` to the path of it.
-
-#### ctags
-
-If you use Citre's built-in tools to create tags file, you need a ctags
-program.
-
-The ctags program provided by Universal Ctags is still recommended. If you
-don't have it in your PATH, customize `citre-ctags-program` to the path of it.
-
-You can also use other program that outputs a tags file, like
-[hasktags](https://hackage.haskell.org/package/hasktags),
-[gotags](https://github.com/jstemmer/gotags) and
-[ripper-tags](https://github.com/tmm1/ripper-tags). You don't need to customize
-`citre-ctags-program` when using these tools.
 
 ### Installation
 
 You can install `citre` from [MELPA](https://melpa.org). Below are instructions
-to manually install Citre.
+to install Citre manually.
 
 1. Clone this repository:
 
@@ -137,155 +93,119 @@ to manually install Citre.
    Or, you can read [citre-config.el](citre-config.el), and write your own
    config.
 
-### Create tags file
+### Pick a backend
 
-#### The customizable way
+Here's a comparison of their capabilities:
 
-Open a file in your project, type `M-x citre-update-this-tags-file`. If it
-can't find a tags file for the current file, it'll guide you to generate one.
-I'll take you through the simplest situation here. To know more, read [this
-user manual](docs/user-manual/about-tags-file.md).
+| Backend | Auto-completion | Find definition | Find references | Imenu |
+|---------|-----------------|-----------------|-----------------|-------|
+| Tags    | ✓               | ✓               |                 | ✓     |
+| Global  | ✓               | ✓               | ✓               | ✓     |
+| Eglot   | [1]             | ✓[2]            | ✓[2]            |       |
 
-You are asked to:
+[1]: Auto-completion is handled by eglot itself.
 
-1. Pick a place to save the tags file, type `1`.
+[2]: Eglot backend doesn't support finding definition or references for an
+    user inputted symbol.
 
-2. Pick a directory in which to use the tags file. This means when you visit a
-   file in that directory, this tags file is used for it.
+Pick a backend, and read its "getting started" documentation:
 
-   Let's genearte a tags file for the whole project and use it in the whole
-   project, so choose `/path/to/project/`.
+- Tags: [Getting Started on Tags
+  Backend](docs/user-manual/getting-started-on-tags-backend.md)
+- Global: [Use Global Backend](docs/user-manual/use-global-backend.md)
+- Eglot: [Use Eglot Backend](docs/user-manual/use-eglot-backend.md)
 
-3. Pick a tags file name. It'll be saved inside `/path/to/project/`. Pick one
-   you like.
+You don't have to use only one. For example, you can use tags backend for
+finding definitions, eglot backend for finding references with global backend
+as a fallback. We'll show you how this works in the configuration section
+later.
 
-4. Pick a root dir to run ctags. This is the working directory when running
-   Ctags. Let's pick the project root.
+Below is a brief discussion of the backends. If you still don't have an idea
+after reading it, I would recommended tags backend as it's fast, easy to use,
+and fulfills most of the needs.
 
-5. You are taken to a command editing buffer, and a help message is shown in
-   the buffer. Read it.
+#### Tags
 
-If you use Universal Ctags, you may write a command like:
+Tags file is a widely adopted text format for source code indexing. The best
+tags file generating tool is [Universal
+Ctags](https://github.com/universal-ctags/ctags). The advantages of the Citre
+tags backend & Universal Ctags combination are:
 
-```
-ctags
--o
-%TAGSFILE%
---languages=C,C++
---kinds-all=*
---fields=*
---extras=*
--R
-./
-/external/lib/used/in/the/project/
-```
+- Supports many, many languages (157 by now!), and works great in a
+  multi-language project. Many markup languages are also supported so you could
+  even use it to browse your personal notes.
+- The tags file contains abundant information, which enables a more informative
+  UI, and Citre uses them to further filter and sort the tags found.
+- Tags are sorted so we can use binary search, and you'll feel super fast when
+  finding definitions/completions.
 
-You can also use other ctags program, for example, gotags:
+The disadvantages are:
 
-```
-~/go/bin/gotags
--R=true
--f=%TAGSFILE%
-./
-/external/lib/used/in/the/project/
-```
+- Is not as accurate as a language server. Think of it as a fuzzy finder.
+- Doesn't support finding references for now.
+- Tags file doesn't support incremental updating.
 
-You get the idea.
+#### Global
 
-Once you've created such a file, run `M-x citre-update-this-tags-file` again to
-update it. The recipe for updating a tags file is stored in the tags file
-itself, so no more configuration file or buffer-local variables are needed!
+This is based on [GNU Global](https://www.gnu.org/software/global/), another
+source code indexing tool. Its advantages are:
 
-You can edit the updating recipe later by `citre-edit-tags-file-recipe`.
+- Supports finding references.
+- Uses a compact binary database format, and supports incremental updating.
 
-#### The simpler way
+The disadvantages are:
 
-Citre searches the tags file in different locations, like in the directory that
-uses it, in global/project cache dir, etc. See [this
-documentation](docs/user-manual/about-tags-file.md) to know the details.
+- Not as accurate as a language server.
+- Supports only 5 languages. But this can be saved by using Universal Ctags &
+  pygments as plugin parsers.
+- The database only contains brief information, so the UI and filtering is not
+  as good as the tags backend.
 
-`citre-default-create-tags-file-location` lets you choose a default location.
-For example, if you always want to use the global cache dir, set it to
-`'global-cache`.
+#### Eglot
 
-Most of the time, people just create a tags file for the whole project and use
-it in the whole project. If you want Citre to do this by default, rather than
-ask you a lot of questions, set `citre-use-project-root-when-creating-tags` to
-`t`. This uses `citre-project-root-function` to detect the project root.
+This is based on [Eglot](https://github.com/joaotavora/eglot), a language
+server client now built into Emacs. Its advantages are:
 
-If you don't want to edit the command line manually, set
-`citre-prompt-language-for-ctags-command` to `t`. Then, instead of giving you a
-buffer to edit the command, Citre lets you choose the languages to scan, and
-generates a command that should work for most projects. This requires the ctags
-program from Universal Ctags.
+- Finds definition/references accurately.
 
-In any situations, you could further edit the tags file updating recipe by
-`citre-edit-tags-file-recipe` later.
+Its disadvantages are:
 
-#### The command line way
-
-You don't have to create a tags file using Citre. You can just `cd` to the
-project root directory and run:
-
-``` console
-$ ctags --languages=c,c++,... --kinds-all='*' --fields='*' --extras='*' -R
-```
-
-This creates a `tags` file in the project root, and Citre could find it. To
-know how Citre finds a tags file for the current buffer, see [this
-documentation](docs/user-manual/about-tags-file.md)
-
-Tags file created this way can't be updated by Citre.
-
-#### Notes
-
-See [this documentation](docs/user-manual/about-tags-file.md) to know more
-about tags file format, how to tweak the command line, how to specify which dir
-uses which tags file, etc.
-
-*Note:* Emacs users are more familiar with the TAGS format. TAGS format is
-generated by `etags` or `$ ctags -e`, and Citre doesn't support it.
-
-Citre supports the tags format, which is the default format used by Ctags.
-Simply puts it, tags format is much more informative than TAGS format, making
-Citre a much more powerful tool. See [this user
-manual](docs/user-manual/compare-with-other-tools.md) for details.
-
-*Note for Windows and macOS users:* Windows and macOS uses case-insensitive
-file system by default, so this may happen:
-
-- You create a tags file named `tags`.
-- Some plugins like `projectile` and `company` (when using the `company-etags`
-  backend) tries find and load a `TAGS` file, which is the default file used by
-  Emacs etags.
-- Since `tags` and `TAGS` are the same to the file system, they tries to load
-  the `tags` file, which can't be recognised by `etags.el`.
-- You'll see a "TAGS is not valid tags table" error.
-
-To avoid this problem, you could configure those plugins to not use a tags
-file, or simply avoid creating a tags file named `tags` on Windows and macOS.
+- You need to install a language server for each language you use.
+- For dynamic languages, sometimes it may fail to find a definition/reference.
+- Some language servers can be slow and heavy on CPU/memory.
 
 ### Use Citre
 
 Use `citre-mode` to enable `completion-at-point`, xref and imenu integration.
 If you also use `company`, make sure `company-capf` is in `company-backends`.
 
-By default, when you open a file, and a tags file can be found for it,
-`citre-mode` is automatically enabled. If you don't use `citre-config`, you can
-put this in your configuration:
+When you open a file, Citre asks the backends if they can work (like if the
+tags backend cound find a tags file). If any of them can work, `citre-mode` is
+automatically enabled. If you don't use `citre-config`, you can put this in
+your configuration:
 
 ``` elisp
 (add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
 ```
 
-`citre-jump` and `citre-peek` works without `citre-mode`. Type `M-x citre-jump`
-on a symbol to jump to its definition, `M-x citre-jump-back` to go back in the
-jump history. About `citre-peek`, See [this user
-manual](docs/user-manual/citre-peek.md) to know how to use it.
+Other tools provided by citre, `citre-jump` and `citre-peek`, doesn't need
+`citre-mode` enabled to work. These are all `citre-jump` commands:
 
-Here's a example configuration using
-[`use-package`](https://github.com/jwiegley/use-package). Be sure to read it
-and tweak it to your own need.
+- `citre-jump` and `citre-jump-to-reference`: Jump to definition or references
+  of symbol at point.
+- `citre-query-jump` and `citre-query-jump-to-reference`: Jump to definition or
+  references of a user inputted symbol. When called with a prefix argument, the
+  identifiers in the project is used as completion for your input, if the
+  backend supports it.
+
+For `citre-peek`, see [Use Citre Peek](docs/user-manual/use-citre-peek.md) to
+know how to use it.
+
+### Configuration
+
+Here's an example configuration using
+[`use-package`](https://github.com/jwiegley/use-package). Be sure to tweak it
+to your own need.
 
 ``` elisp
 (use-package citre
@@ -313,11 +233,10 @@ and tweak it to your own need.
    citre-project-root-function #'projectile-project-root
    ;; Set this if you want to always use one location to create a tags file.
    citre-default-create-tags-file-location 'global-cache
-   ;; See the "Create tags file" section above to know these options
+   ;; Read the tags backend manual to know about these.
    citre-use-project-root-when-creating-tags t
    citre-prompt-language-for-ctags-command t
-   ;; By default, when you open any file, and a tags file can be found for it,
-   ;; `citre-mode' is automatically enabled.  If you only want this to work for
+   ;; If you only want the auto enabling citre-mode behavior to work for
    ;; certain modes (like `prog-mode'), set it like this.
    citre-auto-enable-citre-mode-modes '(prog-mode)))
 ```
@@ -328,10 +247,13 @@ These user options are for customizing enabled backends:
 - `citre-find-definition-backends`
 - `citre-find-reference-backends`
 - `citre-tags-in-buffer-backends`
+- `citre-identifier-list-backends`
 - `citre-auto-enable-citre-mode-backends`
 
-Currently we have `tags` and `global` backends. See [this
-documentation](docs/user-manual/toc.md) to know more customizable options.
+Each is a list that's tried in turn when Citre doing things. For example, when
+finding definitions, backends in `citre-find-definition-backends` are tried in
+turn until one succeeded. See their docstrings to learn more. Normally you
+don't need to modify them.
 
 ## Documentations
 
@@ -339,29 +261,31 @@ documentation](docs/user-manual/toc.md) to know more customizable options.
 - [Developer Manual](docs/developer-manual/toc.md)
 - [Wiki](https://github.com/universal-ctags/citre/wiki)
 
-[This chapter](docs/developer-manual/design-principle.md) in the developer
-manual talks about the strengths/weaknesses of ctags, and the design principle
-of Citre. Non-developers are also encouraged to read it to know more about
-these tools.
-
 ## FAQ
-
-- Q: What are the advantages of Citre & Ctags over etags, gtags, language
-  servers...
-
-  A: See [this documentation](docs/user-manual/compare-with-other-tools.md).
 
 - Q: How to use Citre over TRAMP?
 
-  A: Make sure you've installed readtags on the remote machine, and everything
-  will just work. Tags file generating/updating also works if you have ctags
-  program on the remote machine.
+  A: I don't have a remote machine to test, so I can't guarantee Citre will
+  work over TRAMP. But for now, tags and global backends seem to work over
+  TRAMP if you've installed required executables (readtags, global) on the
+  remote machine. If anything goes wrong, it shouldn't be hard to fix.
+
+  For eglot backend, I've not tried. I think you need to make eglot works over
+  TRAMP, and the eglot backend will just work.
+
+- Q: Why does `xref-find-reference` prompts me for a symbol, rather than pick
+  the symbol at point?
+
+  A: By default, `xref-find-references` always prompts you to choose an
+  identifier from a list. You could set `xref-prompt-for-identifier` to `nil`
+  to make it use the symbol at point instead. See its docstring for more
+  details.
 
 - Q: What to do if Citre didn't grab the right symbol for me, e.g., I want to
   find the definition of `foo.bar`, but can only get `foo` or `bar`?
 
-  A: You can select `foo.bar` first (by an active region), then find its
-  definitions.
+  A: For tags and global backends, you can select `foo.bar` first (by an active
+  region), then find its definitions.
 
 - Q: Why doesn't Citre support automatically update tags file?
 
@@ -378,60 +302,13 @@ these tools.
   them by Ctags, then small edits won't cause much trouble. You can just
   update the tags file when needed.
 
-- Q: How many languages does Citre support?
-
-  A: Citre supports all languages that Ctags support. The latest [Universal
-  Ctags](https://github.com/universal-ctags/ctags) support 134(!) languages:
-
-  ```console
-  $ ctags --list-languages | wc -l
-  134
-  ```
-
-  Besides, you could [define your own parser using
-  regex](http://docs.ctags.io/en/latest/man/ctags-optlib.7.html) to support
-  more languages.
-
-- Q: But seems for now Citre only has support code for C...
-
-  A: No matter what's the language, as long as you have a tags file for it,
-  then Citre works out of the box. Language-specific support is for extra minor
-  goodies, see the "Commentary" section in each language-support code file.
-
-## Current status
-
-Below are the status of tools provided by Citre:
-
-| Tool              | Description                          | Status | Note |
-|-------------------|--------------------------------------|--------|------|
-| Ctags             | Create/update tags files             | alpha  | [^1] |
-| capf, xref, imenu | Integration with built-in mechanisms | stable |      |
-| `citre-jump`      | Jump to the definition               | stable |      |
-| `citre-peek`      | Deep code reading in a peek window   | beta   | [^2] |
-| `citre-global`    | GNU Global plugin                    | alpha  |      |
-
-[^1]: Universal Ctags is exploring concepts like [incremental
-      updating](https://github.com/universal-ctags/ctags/issues/2697),
-      [multi-pass parsing](https://github.com/universal-ctags/ctags/pull/2741),
-      and more. Citre may follow the changes happen in Universal Ctags.
-
-[^2]: I plan to implement a feature that lets you further filter the
-      definitions in a peek window.
-
-"alpha" means the tool is likely to go through breaking changes. "beta" means
-new features and improvements may happen. "stable" means the tool is basically
-finished.
-
-Below are new tools I have in mind, and may come in the future:
-
-- `citre-diagnostics`: Check if you have the right version of readtags, ctags;
-  show the project root, the tags file being used, and things like that.
-
-- A tool that lets you interactively filter a tags file (find a tag whose name
-  contains "foo", the path contains "bar", with the kind "function", etc). Then
-  you can use the results as completion (insert in current bufffer), visit
-  their definition, or convert them into a `citre-peek` or xref session. I
-  consider this to be the "ultimate weapon" of Citre.
+- Q: Citre freezes Emacs when opening a file on Windows.
+- A: I'm not 100% sure about the cause, but seems some anti-virus softwares
+  consider the way Citre communicates with external programs to be suspicious
+  (see [this
+  report](https://github.com/universal-ctags/citre/issues/163#issuecomment-1893801573)).
+  Try adding Emacs and the program Citre uses (readtags and global) to the
+  whitelist and see if it's solved.
 
 ## Donation
 

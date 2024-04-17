@@ -1,13 +1,16 @@
 # How To Use `citre-peek`
 
-## Peek the definition of a symbol
+## Peek the definition/references
 
 The basic use of `citre-peek` is to read the definition of a symbol, without
 leaving current buffer. This is often helpful when writing code.
 
-Type `M-x citre-peek` on a symbol to peek its definition. A peek window will be
-opened under current line, and it follows the cursor. You can use these
-keybindings to browse in the peek window:
+Type `M-x citre-peek` or `M-x citre-peek-reference` on a symbol to peek its
+definition or references. Citre also has `citre-query-peek(-reference)` to take
+a user inputted symbol. See their docstrings for details.
+
+A peek window will be opened under current line, and it follows the cursor. You
+can use these keybindings to browse in the peek window:
 
 - `M-n`, `M-p`: Next/prev line.
 - `M-N`, `M-P`: Next/prev definition.
@@ -16,15 +19,18 @@ keybindings to browse in the peek window:
 
 These keys are defined in `citre-peek-keymap`, and can be customized.
 
-Pro tip: if your cursor is near the bottom of the window, the peek window won't
-be fully displayed. Press `C-l` (the `recenter` command) to center the cursor
-in the window.
+*Pro tip*: if your cursor is near the bottom of the window, the peek window
+won't be fully displayed. Press `C-l` (the `recenter` command) to center the
+cursor in the window.
 
 Here's a little bonus: You can use `citre-peek` in an xref buffer to peek the
 location of current item.
 
-After jumping to the definition, the peek window will still be shown. This
-behavior can be tweaked by `citre-peek-auto-restore-after-jump`.
+After jumping to the peeked location (by `citre-peek-jump`), the peek window
+will still be shown. This behavior can be tweaked by
+`citre-peek-auto-restore-after-jump`.
+
+## Ace peek
 
 When filling the arguments of a function, we often want to see the signature of
 the function. We have a convenient way to do that.
@@ -49,6 +55,8 @@ If you don't type the ace string, but press `RET`, than the symbol under point
 will be used, just like `citre-peek`. Therefore, `citre-ace-peek` could
 completely replace `citre-peek`.
 
+Citre also offers `citre-ace-peek-reference`.
+
 The keys used in an ace session can be customized by `citre-peek-ace-keys`,
 `citre-peek-cancel-ace-keys` and `citre-peek-ace-pick-symbol-at-point-keys`.
 
@@ -59,9 +67,10 @@ interested in the definition of that function too. Use a traditional code
 reading tools to do this, and we'll soon get lost in a lot of buffers.
 
 Not a problem in `citre-peek`. In a peek session, type `M-l p` to call
-`citre-peek-through`, than an ace string will be attached to each symbol in the
-peek window, and you know what to do now :) Just type it to see the definition
-of that symbol, in the same peek window.
+`citre-peek-through`, or `M-l r` to call `citre-peek-through-reference`, than
+an ace string will be attached to each symbol in the peek window, and you know
+what to do now :) Just type it to see the definition of that symbol, in the
+same peek window.
 
 Do this several times, and the history is shown in the bottom of the peek
 window, like this:

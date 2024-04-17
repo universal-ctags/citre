@@ -27,9 +27,9 @@
 
 ;;; Commentary:
 
-;;; Code:
+;; Tags file backend.
 
-;; Tags file backend.  For now it only contains code of `citre-peek'.
+;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and
 ;; then press C-c @ C-t. To also show the top-level functions and

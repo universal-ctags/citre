@@ -1,20 +1,31 @@
 ### Unreleased
 
+- New features
+
+  - An xref adapter to create Citre backend from an xref backend.
+  - An eglot backend based on the adapter.
+  - `citre-query-*` commands to find definitions/references for a user inputted
+    symbol. See their docstrings for details.
+
 - Improvements
 
+  - New user option: `citre-identifier-list-backends`.
   - `company-docsig` and `company-kind` information are offerd by tags backend,
     so company (and corfu, kind-icon, and maybe other packages...) users could
     see more help information.
+  - Global backend now works over TRAMP.
+  - Documentations are updated to follow up the current status of Citre.
+  - Other minor improvements.
+
+- Fixes
+
+  - Various bugfixes.
 
 ### 0.3.1 (released 2022-10-25)
 
 - Improvements
 
   - `citre-global`: Now the global backend supports Imenu.
-
-- Fixes
-
-  - Various bugfixes
 
 ### 0.3 (released 2022-10-19)
 

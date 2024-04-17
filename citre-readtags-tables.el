@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 
-;; Lookup tables used by citre-tag.el.
+;; Lookup tables used by citre-readtags.el.
 
 ;;; Code:
 
@@ -278,8 +278,7 @@ name when the `language' field is not presented.  See
 `citre-readtags-filter-lang'.
 
 Currently this table is not used as we don't want to filter
-languages, see the documentation
-docs/developer-manual/design-principle.md")
+languages.")
 
 ;; Run this snippet to generate `citre-readtags--lang-extension-table'.  The
 ;; result will be shown in a *Pp Eval Output* buffer, and it can be directly

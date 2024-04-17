@@ -27,7 +27,8 @@
 
 ;;; Commentary:
 
-;; Xref backend adapter to provide ...
+;; Xref backend adapter to convert an xref backend to a Citre backend.  It also
+;; bundles an eglot backend as an example.
 
 ;;; Code:
 

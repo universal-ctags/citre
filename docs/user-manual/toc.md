@@ -1,7 +1,16 @@
 # User Manual
 
-- [How to Use `citre-peek`](citre-peek.md)
-- [About Tags File, and How to Create One](about-tags-file.md)
+## Backends
+
+- [Getting Started on Tags Backend](getting-started-on-tags-backend.md)
+- [More about Tags Backend](more-about-tags-backend.md)
+- [Use Global Backend](use-global-backend.md)
+- [Use Eglot Backend](use-eglot-backend.md)
+- [Adapt an Existing Xref Backend](adapt-an-existing-xref-backend.md)
+- [Source Code Indexing Tools
+  Comparison](source-code-indexing-tools-comparison.md)
+
+## Usage
+
+- [Use `citre-peek`](use-citre-peek.md)
 - [Customization](customization.md)
-- [Comparison of Citre & Ctags with other tools](compare-with-other-tools.md)
-- [How to Use `citre-global`](citre-global.md)

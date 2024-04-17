@@ -28,8 +28,8 @@
 ;;; Commentary:
 
 ;; This file supports finding references of the file (or its related
-;; module/library) at point in file browser buffers.  Currently only
-;; Dired is supported.
+;; module/library) at point in file browser buffers, using tags backend.
+;; Currently only Dired is supported.
 
 ;;; Code:
 

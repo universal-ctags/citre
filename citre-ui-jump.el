@@ -27,6 +27,8 @@
 
 ;;; Commentary:
 
+;; UI library for `citre-jump'.
+
 ;;; Code:
 
 ;; To see the outline of this file, run M-x outline-minor-mode and

@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 
-;; Language support for Verilog.  The features are:
+;; Tags backend language support for Verilog.  The features are:
 ;;
 ;; - Correctly grabbing the name of a macro reference.  When the symbol begins
 ;;   with a "`", it's dropped by Citre.
