@@ -96,6 +96,17 @@ all major modes."
                  (const :tag "All major modes" all))
   :group 'citre)
 
+;;;; Helpers
+
+(defun citre--query-symbol (prompt &optional completion)
+  "Query the user for a symbol name with PROMPT.
+If COMPLETION is non-nil, the identifiers in the project is used
+as completion if any backend supports it."
+  (let (id-list)
+    (if (and completion (setq id-list (citre-get-id-list)))
+        (completing-read prompt id-list)
+      (read-string prompt))))
+
 ;;;; citre-jump
 
 (defun citre--symbol-at-point-prompt (backends)
@@ -117,20 +128,27 @@ The returned string looks like:
           "."))
 
 ;;;###autoload
-(defun citre-jump ()
+(defun citre-jump (&optional reference)
   "Jump to the definition of the symbol at point.
 When there's multiple definitions, it lets you pick one using the
 `completing-read' UI, or you could use your own UI by customizing
-`citre-select-definition-function'."
+`citre-select-definition-function'.
+
+If REFERENCE is non-nil, find references instead."
   (interactive)
-  (pcase-let ((`(,backend . ,defs) (citre-get-backend-and-definitions)))
-    (if (null defs)
-        ;; TODO: Customizable fallback action (e.g. update tags file and try
-        ;; again).  I don't know if it's necessary.
-        (user-error (concat "Can't find definition: "
-                            (citre--symbol-at-point-prompt
-                             citre-find-definition-backends))))
-    (citre-jump-show defs)
+  (pcase-let ((`(,backend . ,tags)
+               (if reference
+                   (citre-get-backend-and-references)
+                 (citre-get-backend-and-definitions))))
+    (when (null tags)
+      ;; TODO: Customizable fallback action (e.g. update tags file and try
+      ;; again).  I don't know if it's necessary.
+      (user-error "Can't find %s: %s"
+                  (if reference "reference" "definition")
+                  (citre--symbol-at-point-prompt
+                   (if reference citre-find-reference-backends
+                     citre-find-definition-backends))))
+    (citre-jump-show tags)
     (citre-backend-after-jump backend)))
 
 ;;;###autoload
@@ -140,14 +158,39 @@ When there's multiple definitions, it lets you pick one using the
 `completing-read' UI, or you could use your own UI by customizing
 `citre-select-definition-function'."
   (interactive)
-  (pcase-let* ((`(,backend . ,refs) (citre-get-backend-and-references)))
-    (if (null refs)
-        ;; TODO: Customizable fallback action.
-        (user-error (concat "Can't find references: "
-                            (citre--symbol-at-point-prompt
-                             citre-find-reference-backends))))
-    (citre-jump-show refs)
+  (citre-jump 'reference))
+
+;;;###autoload
+(defun citre-query-jump (&optional completion reference)
+  "Jump to the definition of user inputted symbol.
+If called with a prefix argument, or COMPLETION is non-nil, then
+the identifiers in the project is used as completion if backend
+supports it.
+
+If REFERENCE is non-nil, find references instead."
+  (interactive "P")
+  (pcase-let* ((id (citre--query-symbol
+                    (format "Find %s of: "
+                            (if reference "reference" "definition"))
+                    completion))
+               (`(,backend . ,tags)
+                (if reference
+                    (citre-get-backend-and-references-of-id id)
+                  (citre-get-backend-and-definitions-of-id id))))
+    (when (null tags)
+      (user-error "Can't find %s of %s"
+                  (if reference "reference" "definition") id))
+    (citre-jump-show tags)
     (citre-backend-after-jump backend)))
+
+;;;###autoload
+(defun citre-query-jump-to-reference (&optional completion)
+  "Jump to the reference of user inputted symbol.
+If called with a prefix argument, or COMPLETION is non-nil, then
+the identifiers in the project is used as completion if backend
+supports it."
+  (interactive "P")
+  (citre-query-jump completion 'reference))
 
 ;;;; citre-peek
 
