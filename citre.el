@@ -221,6 +221,7 @@ citre backend, unless when in an xref buffer."
            (concat "Can't find definition: "
                    (citre--symbol-at-point-prompt
                     citre-find-definition-backends))))
+      ;; Keep backend info in private field for `citre-peek-through'.
       (dolist (tag tags) (citre-set-tag-field 'citre-backend backend tag))
       tags)))
 
@@ -241,7 +242,30 @@ When REFERENCE is non-nil, peek the references."
                    (goto-char point)
                    (citre-peek--get-tags reference))))
          (marker (when (buffer-file-name) (point-marker))))
-    ;; Keep backend info in private field for `citre-peek-through'.
+    (citre-peek-show tags marker)))
+
+;;;###autoload
+(defun citre-query-peek (&optional completion reference)
+  "Peek the definition of user inputted symbol.
+If called with a prefix argument, or COMPLETION is non-nil, then
+the identifiers in the project is used as completion if backend
+supports it.
+
+If REFERENCE is non-nil, find references instead."
+  (interactive "P")
+  (pcase-let* ((id (citre--query-symbol
+                    (format "Find %s of: "
+                            (if reference "reference" "definition"))
+                    completion))
+               (`(,backend . ,tags)
+                (if reference
+                    (citre-get-backend-and-references-of-id id)
+                  (citre-get-backend-and-definitions-of-id id)))
+               (marker (when (buffer-file-name) (point-marker))))
+    (when (null tags)
+      (user-error "Can't find %s of %s"
+                  (if reference "reference" "definition") id))
+    (dolist (tag tags) (citre-set-tag-field 'citre-backend backend tag))
     (citre-peek-show tags marker)))
 
 ;;;###autoload
@@ -285,6 +309,15 @@ definitions."
   "Peek the definitions of the symbol at point."
   (interactive)
   (citre-peek nil nil 'reference))
+
+;;;###autoload
+(defun citre-query-peek-reference (&optional completion)
+  "Peek the references of user inputted symbol.
+If called with a prefix argument, or COMPLETION is non-nil, then
+the identifiers in the project is used as completion if backend
+supports it."
+  (interactive "P")
+  (citre-query-peek completion 'reference))
 
 ;;;###autoload
 (defun citre-ace-peek-reference ()
