@@ -62,6 +62,16 @@ The backends are tried in turn until one succeeded."
   :type '(repeat symbol)
   :group 'citre)
 
+(defcustom citre-identifier-list-backends '(global tags)
+  "List of backends for getting all identifiers in current project.
+The backends are tried in turn until one succeeded.  This is not
+useful on its own, but provides completions for finding
+definitions or references of a user inputted symbol.  It's best
+to put backends that gets identifiers faster before the slower
+ones."
+  :type '(repeat symbol)
+  :group 'citre)
+
 (defcustom citre-tags-in-buffer-backends '(tags global)
   "List of backends for finding tags in buffer.
 This is used for imenu integration.  The backends are tried in
@@ -333,8 +343,7 @@ The result is a list (BEG END TAGS)."
 `citre-find-reference-backends' are both tried.  The first
 succeeded backend and the results are returned in a cons pair."
   (citre--try-fn-on-list #'citre-backend-id-list
-                         (cl-union citre-find-definition-backends
-                                   citre-find-reference-backends)))
+                         citre-identifier-list-backends))
 
 (defun citre-get-id-list ()
   "Get a list of identifiers of current project."
