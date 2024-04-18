@@ -45,6 +45,8 @@
 ;;;; Libraries
 
 (require 'citre-backend-interface)
+(require 'citre-ui-jump)
+(require 'citre-ui-peek)
 (require 'citre-tags)
 (require 'citre-global)
 (require 'citre-xref-adapter)

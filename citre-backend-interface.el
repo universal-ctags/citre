@@ -39,8 +39,6 @@
 ;;;; Libraries
 
 (require 'citre-common-tag)
-(require 'citre-ui-jump)
-(require 'citre-ui-peek)
 
 ;;;; User Options
 
