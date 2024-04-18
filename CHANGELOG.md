@@ -9,7 +9,8 @@
 
 - Improvements
 
-  - New user option: `citre-identifier-list-backends`.
+  - New user options: `citre-identifier-list-backends` and
+    `citre-auto-enable-citre-mode-backend-test-timeout`.
   - `company-docsig` and `company-kind` information are offerd by tags backend,
     so company (and corfu, kind-icon, and maybe other packages...) users could
     see more help information.

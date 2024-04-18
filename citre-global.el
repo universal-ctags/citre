@@ -217,15 +217,8 @@ as global program is needed to get the database path."
       (_ (let ((default-directory (or dir default-directory)))
            (condition-case nil
                (setq citre--global-dbpath
-                     ;; Several users have reported that global runs forever in
-                     ;; certain occasions, and it seems to have something to do
-                     ;; with org-mode, see
-                     ;; https://github.com/universal-ctags/citre/issues/163 and
-                     ;; https://github.com/universal-ctags/citre/issues/150.
-                     ;; This is a workaround.
-                     (with-timeout (1 nil)
-                       (car (citre-global--get-output-lines
-                             '("--print-dbpath")))))
+                     (car (citre-global--get-output-lines
+                           '("--print-dbpath"))))
              (error (setq citre--global-dbpath 'none)
                     nil)))))))
 

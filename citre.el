@@ -90,6 +90,13 @@ all major modes."
                  (const :tag "All major modes" all))
   :group 'citre)
 
+(defcustom citre-auto-enable-citre-mode-backend-test-timeout 1
+  "Time limit in seconds for testing if a backend is usable.
+This could prevent a test from running too long when opening a
+file.  A nil value disables the time limit."
+  :type '(set number (const nil))
+  :group 'citre)
+
 ;;;; Helpers
 
 (defun citre--query-symbol (prompt &optional completion)
@@ -599,10 +606,13 @@ Put this in `find-file-hook' to automatically enable `citre-mode'
 when opening a file."
   (when (or (eq citre-auto-enable-citre-mode-modes 'all)
             (apply #'derived-mode-p citre-auto-enable-citre-mode-modes))
-    (cl-dolist (backend citre-auto-enable-citre-mode-backends)
-      (when (citre-backend-usable-p backend)
-        (citre-mode)
-        (cl-return)))))
+    (let ((timeout citre-auto-enable-citre-mode-backend-test-timeout))
+      (cl-dolist (backend citre-auto-enable-citre-mode-backends)
+        (when (if timeout
+                  (with-timeout (timeout) (citre-backend-usable-p backend))
+                (citre-backend-usable-p backend))
+          (citre-mode)
+          (cl-return))))))
 
 (provide 'citre)
 
