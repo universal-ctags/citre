@@ -6,77 +6,49 @@ When Citre seeks a tags file for current file, it goes up directory hierarchy
 from current file. In each directory it passes, it tries the following methods
 to see if a tags file is assgined to it:
 
-1. By `citre-tags-file-alist`. We'll not go through it here, but it's a
-   powerful customizable option to assign any tags file to any directory. Read
-   its docstring for details.
+1. By `citre-tags-file`, which can be set as a directory/file local variable.
 
-2. By `citre-tags-file-per-project-cache-dir`. When
-   `citre-project-root-function` could detect your project root, this directory
-   could store all the tags files in the project. By default it's `./.tags/`
-
-   For example, We are seeking a tags file for the directory
-   `/project/root/some/dir/`, then if `/project/root/.tags/some!dir.tags`
-   exists, it's used as the tags file.
-
-3. By `citre-tags-file-global-cache-dir`. This is similar to 2 but a global
-   cache dir (`~/.cache/tags/` by default) is used so it won't pollute your
-   project directory.
+2. By `citre-tags-file-global-cache-dir`. This uses a global cache dir
+   (`~/.cache/tags/` by default) so it won't pollute your project directory.
 
     For example, for `/project/root/some/dir/`, if
     `~/.cache/tags/project!root!some!dir.tags` exists, it's used as the tags
     file.
 
-4. By `citre-tags-files`. If any file in it exists in the directory, it's used
-   as the tags file for this directory.
+3. By `citre-tags-file-names`. If any file in it exists in the directory, it's
+   used as the tags file for this directory.
 
    By default `citre-tags-files` contains `.tags` and `tags`, so for
    `/project/root/some/dir/`, if `/project/root/some/dir/.tags` exists, it's
    used.
 
-These methods are in the precende order, so if a tags file is found by method
-2, then 3 and 4 won't be tried.
+If any one succeeded, the rest will not be tried.
 
-When you create a tags file, Citre gives you 4 places to save, each corresponds
-to a method above:
-
-1. In the directory to use it: method 4
-2. In the global cache dir: method 3
-3. In the per-project cache dir: method 2
-4. Anywhere: method 1
+When you create a tags file, Citre lets you to choose a location between "the
+directory in which you use the tags file" (which is found by method 3 above)
+and "the global cache dir" (which is method 2). To use method 1, manually
+create the tags file and set `citre-tags-file` as a local variable.
 
 ## More on creating a tags file
 
-After you've decided where to save the tags file, Citre asks you to specify a
-root dir. It has 2 uses:
+When creating a tags file, Citre asks you to specify a directory in which you
+want to use the tags file. It has the following effects:
 
-- It's the working directory when running ctags. You can think Citre `cd` to
-  this directory, then run Ctags.
-- In the command editing buffer, The path of added dir/files relative to the
-  root dir are used, if they are inside the root dir.
+- It's the working directory when running ctags. You can imagine that Citre
+  `cd` to this directory, then run Ctags. Files in this directory is recorded
+  using relative path in the tags file, which saves some space.
+- When editing the options, you could use relative paths as paths to scan.
+- When visiting the files in this directory, Citre will use that tags file.
 
-2 more commands dealing with tags files are not mentioned in README:
+Other than `citre-update-this-tags-file`, which is most commonly used, there
+are more commands generating tags files:
 
 - `citre-update-tags-file`: Select a tags file to update
 - `citre-create-tags-file`: Create a new tags file.
 
 You can also pass the name of a tagsfile as an argument to
-`citre-update-tags-file`, and it will update it. Based on this, you could write
-scripts to update tags files created using Citre.
-
-## User options
-
-These are some more options for tags file creating/updating:
-
-- `citre-edit-cmd-buf-default-cmd`: Default command shown in the command
-  editing buffer. You can customize this to use a command you prefer for most
-  projects.
-- `citre-edit-cmd-buf-map`: Keymap used in the command editing buffer.
-- `citre-default-create-tags-file-location`: If you want to always save the
-  tags file to global cache dir, or in the directory that uses it, etc., use
-  this option.
-- `citre-update-tags-file-when-no-definitions`: By default, when Citre fails to
-  find definitions, it asks if you want to update the tags file and try again.
-  If you don't want this prompt, set this option to nil.
+`citre-update-tags-file`. Based on this, you could write scripts to update tags
+files created using Citre.
 
 ## Tags file concepts
 

@@ -14,6 +14,9 @@
   - `company-docsig` and `company-kind` information are offerd by tags backend,
     so company (and corfu, kind-icon, and maybe other packages...) users could
     see more help information.
+  - Tags file creating/updating tool is largely rewritten, with rarely used
+    features removed, and the hacky "ctags options embedded in tags file"
+    scheme is replaced by option files supported by Universal Ctags.
   - Global backend now works over TRAMP.
   - Documentations are updated to follow up the current status of Citre.
   - Other minor improvements.

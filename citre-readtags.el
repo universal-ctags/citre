@@ -1171,48 +1171,6 @@ field, it must appear in REQUIRE or OPTIONAL."
                               :exclude exclude
                               :parse-all-fields parse-all-fields)))
 
-;;;;; Edit pseudo tags
-
-;; NOTE: Editing tags files may be implemented by an "edittags" program in
-;; Universal Ctags in the future.  After that, we should reimplement this as an
-;; edittags abstraction layer.
-
-;; NOTE: I suspect `write-region' will return before it finishes the writing.
-;; If you pack `citre-readtags-write-pseudo-tag' and any operation that calls
-;; readtags (like `citre-readtags-get-tags') into a `progn' form, there are
-;; chances that readtags process freezes.  For now upper components uses
-;; `sit-for' between them to workaround this bug.  I think it can be solved
-;; after we switch to edittags.
-
-(defun citre-readtags-write-pseudo-tag (tagsfile name value comment)
-  "Write a pseudo tag to TAGSFILE.
-TAGSFILE is the absolute path of the tags file.  NAME is the name
-of the pseudo tags, without the beginning \"!_\".  VALUE is its
-value, and COMMENT is its comment info.
-
-When there's already a pseudo tag with the same name, COMMENT
-will not overwrite the original comment."
-  (setq comment (concat "/" comment "/;\""))
-  (with-temp-file tagsfile
-    (insert-file-contents tagsfile)
-    ;; Jump over all pseudo tags.
-    (while (eq (char-after) ?!)
-      (forward-line))
-    ;; Record the point position, and don't search beyond it later.
-    (let ((end (point)))
-      (goto-char 0)
-      (if (search-forward (concat "!_" name) end 'noerror)
-          (progn
-            (dotimes (_ 2)
-              (search-forward "\t"))
-            (setq comment (buffer-substring (point) (line-end-position)))
-            (delete-region (line-beginning-position) (line-end-position))
-            (unless (eobp)
-              ;; Delete the newline character.
-              (delete-char 1)))
-        (goto-char 0))
-      (insert "!_" name "\t" value "\t" comment "\n"))))
-
 (provide 'citre-readtags)
 
 ;; Local Variables:

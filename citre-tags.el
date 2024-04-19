@@ -556,19 +556,11 @@ This also works on a remote machine."
 
 (defun citre-tags--imenu-ctags-command-cwd ()
   "Return ctags command and its cwd for tags file for imenu."
-  (if-let* ((tagsfile (citre-tags-file-path))
-            (scan-files (list (file-local-name (buffer-file-name))))
-            (target (citre-tags--imenu-temp-tags-file-path))
-            (cmd-and-cwd (citre-get-ctags-recipe-and-replace-parts
-                          tagsfile scan-files target))
-            (cmd (car cmd-and-cwd))
-            (cwd (cdr cmd-and-cwd)))
-      (cons cmd cwd)
-    (cons `(,(or citre-ctags-program "ctags") "-o"
-            ,(citre-tags--imenu-temp-tags-file-path)
-            "--kinds-all=*" "--fields=*" "--extras=*"
-            ,(file-local-name (buffer-file-name)))
-          default-directory)))
+  (cons `(,(or citre-ctags-program "ctags") "-o"
+          ,(citre-tags--imenu-temp-tags-file-path)
+          "--kinds-all=*" "--fields=*" "--extras=*"
+          ,(file-local-name (buffer-file-name)))
+        (file-name-directory (buffer-file-name))))
 
 (defun citre-tags--imenu-tags-from-tags-file ()
   "Get tags for imenu from the tags file being used."
