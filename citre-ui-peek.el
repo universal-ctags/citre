@@ -134,7 +134,17 @@ non-nil."
 ;;;;; Appearance
 
 (defcustom citre-peek-fill-fringe t
-  "Non-nil means fill the fringes with a vertical border of the peek window."
+  "Non-nil means to fill the fringes of the peek window with a vertical border.
+Set this to nil if you have line numbers turned on for a better appearance."
+  :type 'boolean
+  :group 'citre)
+
+(defcustom citre-peek-use-dashes-as-horizontal-border nil
+  "Non-nil means always use dashes as horizontal borders of the peek window.
+On graphic display, Citre uses a thin line as horizontal borders,
+but it will occupy a whole line height when line numbers are
+displayed.  In this situation, set this to t for a better
+appearance."
   :type 'boolean
   :group 'citre)
 
@@ -403,9 +413,7 @@ returned by `citre--ace-key-seqs' or `citre--pop-ace-key-seqs'."
   "Fit STR in current window.
 When STR is too long, it will be truncated, and
 `citre-peek-ellipsis' is added at the end."
-  ;; Depending on the wrapping behavior, in some terminals, a line with exact
-  ;; (window-body-width) characters can be wrapped. So we minus it by one.
-  (let ((limit (1- (window-body-width))))
+  (let ((limit (window-max-chars-per-line)))
     (if (> (length str) limit)
         (concat (truncate-string-to-width
                  str
@@ -1015,12 +1023,13 @@ ROOT is the project root."
 
 (defun citre-peek--make-border ()
   "Return the border to be used in peek windows."
-  (if (display-graphic-p)
+  (if (and (display-graphic-p)
+           (not citre-peek-use-dashes-as-horizontal-border))
       (propertize
        (citre-peek--maybe-decorate-fringes "\n")
        'face 'citre-peek-border-face)
     (propertize
-     (concat (make-string (1- (window-body-width)) ?-) "\n")
+     (concat (make-string (window-max-chars-per-line) ?-) "\n")
      'face (list :inherit 'default
                  :foreground
                  (face-attribute 'citre-peek-border-face

@@ -1,3 +1,10 @@
+### Unreleased
+
+- Improvements
+
+  - New user options for better peek window appearance with line number
+    display: `citre-peek-use-dashes-as-horizontal-border`.
+
 ### 0.4 (released 2024-04-21)
 
 - New features

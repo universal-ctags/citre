@@ -30,6 +30,13 @@ After jumping to the peeked location (by `citre-peek-jump`), the peek window
 will still be shown. This behavior can be tweaked by
 `citre-peek-auto-restore-after-jump`.
 
+### Fix the peek window appearance when displaying line numbers
+
+If you have line numbers turned on, and is using a graphic display, then the
+peek window may look strange. In this situation, set `citre-peek-fill-fringe`
+to nil, and `citre-peek-use-dashes-as-horizontal-border` to `t`. Read their
+docstrings for details.
+
 ## Ace peek
 
 When filling the arguments of a function, we often want to see the signature of
