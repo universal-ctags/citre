@@ -43,7 +43,9 @@ Let's see them in action!
 
   Also, notice that candidates with "member" kind are put above the others
   because we are in a C source file, and the current symbol is after a dot.
-  Citre guesses that you want a struct member.
+  Citre guesses that you want a struct member (but completiong won't be
+  available just after typing a dot, due to limitations of all tagging
+  systems).
 
 - `citre-jump`, with `completing-read` UI provided by
   [Selectrum](https://github.com/raxod502/selectrum):
