@@ -80,7 +80,8 @@ them are:
 
 - `fileScope`: These are tags that have file scope, e.g., local variables.
 - `inputFile`: These are tags of the file names that are tagged by ctags.
-- `reference`: These are reference (the opposite of "definition") tags.
+- `reference`: These are reference tags. Universal Ctags records references to
+  files (like headers) by default.
 
 Citre works by:
 
@@ -132,10 +133,10 @@ $ ctags --list-extras
 You can also tweak the flags to suit the need of your project, but the
 recommended ones should be enough for most projects.
 
-## Extend a parser
+## Extending a parser
 
 One of the unique strengths of Ctags is it's hackable, meaning you could extend
-a parser using regular expressions to tag the symbols you want Ctags to tag.
+a parser using regular expressions to tag symbols that's not recognised before.
 
 A Citre user once asked me this question: in PHP, sometimes a function is
 defined in an array:

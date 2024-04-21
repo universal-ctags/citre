@@ -36,22 +36,21 @@ If you don't have readtags executable in your PATH, customize
 You need a ctags program to generate a tags file for your project. The ctags
 program provided by Universal Ctags is still recommended, as it supports a huge
 amount of languages, produces abundant information, and is well maintained. If
-you use commands offered by Citre to generate the tags file, Universal Ctags is
-required.
+you use Citre commands to generate the tags file, Universal Ctags is required.
 
 You can also use other program that outputs a tags file, like
 [hasktags](https://hackage.haskell.org/package/hasktags),
 [gotags](https://github.com/jstemmer/gotags) and
-[ripper-tags](https://github.com/tmm1/ripper-tags).
+[ripper-tags](https://github.com/tmm1/ripper-tags). Citre doesn't have commands
+for them so you'll have to use the command line.
 
 Note that Emacs comes with a ctags program when installing from source, which
 may override the Universal Ctags program.
 
 ### Create a tags file
 
-After creating a tags file, you'll be able to use all the Citre tools through
-the tags bckend. But note that tags backend doesn't support finding references
-for now.
+After creating a tags file, you'll be able to use Citre tools through the tags
+bckend. But note that tags backend doesn't support finding references for now.
 
 #### The customizable way
 
@@ -62,7 +61,7 @@ I'll take you through the process here.
 You are asked to:
 
 1. Pick a directory in which you want to use the tags file. This means when you
-   visit a file in that directory, this tags file is used for it. Normally it's
+   visit a file in that directory, this tags file is used for it. Usually it's
    the "project root", so let's choose `/path/to/project/`.
 
 1. Pick a place to save the tags file, the option `1` saves it in the project
@@ -86,11 +85,11 @@ You are asked to:
    to save the options, close the buffer, and generate the tags file.
 
 Once you've created such a file, run `M-x citre-update-this-tags-file` again to
-update it. `/path/to/project/.ctags.d/0.ctags` is also a standard path
-recognised by ctags program, so you can also update it by running `ctags` in a
-shell the project root.
+update it. `/path/to/project/.ctags.d/0.ctags` is a standard path recognised by
+ctags program, so you can also update it by running `ctags` in a shell the
+project root.
 
-You can edit the updating recipe later by `citre-edit-tags-file-recipe`.
+You can edit the option file later by `citre-edit-tags-file-recipe`.
 
 #### The simpler way
 
@@ -156,8 +155,8 @@ file system by default, so this may happen:
 - Some plugins like `projectile` and `company` (when using the `company-etags`
   backend) tries find and load a `TAGS` file, which is the default file used by
   Emacs etags.
-- Since `tags` and `TAGS` are the same to the file system, they tries to load
-  the `tags` file, which can't be recognised by `etags.el`.
+- Since `tags` and `TAGS` are the same to the file system, they try to load the
+  `tags` file, which can't be recognised by `etags.el`.
 - You'll see a "TAGS is not valid tags table" error.
 
 To avoid this problem, you could configure those plugins to not use a tags

@@ -4,8 +4,8 @@
 
 <p align="center"><i>Ctags IDE on the True Editor!</i></p>
 
-<p align="center">(Or, a superior code reading tool with pluggable
-backends.)</p>
+<p align="center">(Or, a superior code reading & auto-completion tool with
+pluggable backends.)</p>
 
 ## What is it?
 
@@ -13,11 +13,11 @@ backends.)</p>
 news.)
 
 Citre started out as a tool utilizing tags files (in the ctags format). Now it
-is a sophisticated code reading and auto-completion tool with pluggable backend
+is a superior code reading and auto-completion tool with pluggable backend
 design. The built-in backends include:
 
-- A tags file backend.
-- A GNU global database backend.
+- A tags file (in ctags format) backend.
+- A GNU global backend.
 - An xref adapter that transforms any xref backend into Citre backend.
 - Eglot backend, based on the xref adapter.
 
@@ -41,7 +41,7 @@ Let's see them in action!
   is because Ctags "tags" format records much more abundant info than the etags
   "TAGS" format.
 
-  Also, notice that candidates with the "member" kind are put above the others
+  Also, notice that candidates with "member" kind are put above the others
   because we are in a C source file, and the current symbol is after a dot.
   Citre guesses that you want a struct member.
 
@@ -105,8 +105,8 @@ Here's a comparison of their capabilities:
 
 [1]: Auto-completion is handled by eglot itself.
 
-[2]: Eglot backend doesn't support finding definition or references for an
-    user inputted symbol.
+[2]: Eglot backend doesn't support finding definition or references of an user
+    inputted symbol.
 
 Pick a backend, and read its "getting started" documentation:
 
@@ -115,10 +115,10 @@ Pick a backend, and read its "getting started" documentation:
 - Global: [Use Global Backend](docs/user-manual/use-global-backend.md)
 - Eglot: [Use Eglot Backend](docs/user-manual/use-eglot-backend.md)
 
-You don't have to use only one. For example, you can use tags backend for
-finding definitions, eglot backend for finding references with global backend
-as a fallback. We'll show you how this works in the configuration section
-later.
+You don't have to use only one backend. For example, you can use tags backend
+for finding definitions, eglot backend for finding references with global
+backend as a fallback. We'll show you how this works in the configuration
+section later.
 
 Below is a brief discussion of the backends. If you still don't have an idea
 after reading it, I would recommended tags backend as it's fast, easy to use,
@@ -126,8 +126,8 @@ and fulfills most of the needs.
 
 #### Tags
 
-Tags file is a widely adopted text format for source code indexing. The best
-tags file generating tool is [Universal
+Tags file (in ctags format) is a widely adopted text format for source code
+indexing. The best tags file generating tool is [Universal
 Ctags](https://github.com/universal-ctags/ctags). The advantages of the Citre
 tags backend & Universal Ctags combination are:
 
@@ -135,9 +135,9 @@ tags backend & Universal Ctags combination are:
   multi-language project. Many markup languages are also supported so you could
   even use it to browse your personal notes.
 - The tags file contains abundant information, which enables a more informative
-  UI, and Citre uses them to further filter and sort the tags found.
-- Tags are sorted so we can use binary search, and you'll feel super fast when
-  finding definitions/completions.
+  UI, and Citre uses them to further filter the tags.
+- Lines in the tags file are sorted so we can use binary search, and you'll
+  feel super fast when finding definitions/completions.
 
 The disadvantages are:
 
@@ -176,6 +176,8 @@ Its disadvantages are:
 
 ### Use Citre
 
+#### `citre-mode`
+
 Use `citre-mode` to enable `completion-at-point`, xref and imenu integration.
 If you also use `company`, make sure `company-capf` is in `company-backends`.
 
@@ -187,6 +189,8 @@ your configuration:
 ``` elisp
 (add-hook 'find-file-hook #'citre-auto-enable-citre-mode)
 ```
+
+#### `citre-jump` and `citre-peek`
 
 Other tools provided by citre, `citre-jump` and `citre-peek`, doesn't need
 `citre-mode` enabled to work. These are all `citre-jump` commands:
@@ -250,10 +254,10 @@ These user options are for customizing enabled backends:
 - `citre-identifier-list-backends`
 - `citre-auto-enable-citre-mode-backends`
 
-Each is a list that's tried in turn when Citre doing things. For example, when
-finding definitions, backends in `citre-find-definition-backends` are tried in
-turn until one succeeded. See their docstrings to learn more. Normally you
-don't need to modify them.
+Each is a list that's tried in turn when Citre is doing things. For example,
+when finding definitions, backends in `citre-find-definition-backends` are
+tried in turn until one succeeded. See their docstrings to learn more. Normally
+you don't need to modify them.
 
 ## Documentations
 
@@ -261,14 +265,19 @@ don't need to modify them.
 - [Developer Manual](docs/developer-manual/toc.md)
 - [Wiki](https://github.com/universal-ctags/citre/wiki)
 
+Note that the user manual doesn't cover all aspects of Citre. To learn more,
+use `M-x customize-group` to see all customizable options of Citre, and `M-x
+describe-command` to know all commands of Citre.
+
 ## FAQ
 
 - Q: How to use Citre over TRAMP?
 
   A: I don't have a remote machine to test, so I can't guarantee Citre will
-  work over TRAMP. But for now, tags and global backends seem to work over
-  TRAMP if you've installed required executables (readtags, global) on the
-  remote machine. If anything goes wrong, it shouldn't be hard to fix.
+  work over TRAMP. But I've written the code with TRAMP in mind, and for now,
+  tags and global backends seem to work over TRAMP if you've installed required
+  executables (readtags, global) on the remote machine. If anything goes wrong,
+  it shouldn't be hard to fix.
 
   For eglot backend, I've not tried. I think you need to make eglot works over
   TRAMP, and the eglot backend will just work.
