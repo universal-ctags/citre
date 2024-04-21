@@ -1,4 +1,4 @@
-### Unreleased
+### 0.4 (released 2024-04-21)
 
 - New features
 
