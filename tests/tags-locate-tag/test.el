@@ -1,3 +1,7 @@
+;; Note: Locating tags doesn't depends on readtags, but here we get the tags
+;; from a tags file, which uses readtags. So, we start the test name with
+;; "tags" so it would be skipped if there's no readtags on the user's machine.
+
 (ert-deftest test-locate-tag-by-pattern ()
   "Test `citre-locate-tag'.
 This is for situations where the search pattern is presented."
