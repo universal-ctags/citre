@@ -99,7 +99,8 @@ current file.  If not, a command for Universal Ctags is used.
 When this is nil, always use the existing tags file and never
 create one for imenu.  When this is 0, always create a new tags
 file for imenu."
-  :type '(set integer (const nil))
+  :type '(choice (integer :tag "Threshold in bytes")
+                 (const :tag "Never create a tagsfile"))
   :group 'citre)
 
 (make-obsolete 'citre-imenu-create-tags-file-threshold

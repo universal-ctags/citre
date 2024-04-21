@@ -94,7 +94,8 @@ all major modes."
   "Time limit in seconds for testing if a backend is usable.
 This could prevent a test from running too long when opening a
 file.  A nil value disables the time limit."
-  :type '(set number (const nil))
+  :type '(choice (number :tag "Time in seconds")
+                 (const :tag "Disable the time limit" nil))
   :group 'citre)
 
 ;;;; Helpers

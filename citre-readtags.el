@@ -52,7 +52,8 @@ Set this if readtags is not in your PATH, or its name is not
 \"readtags\".
 
 Citre requires the readtags program provided by Universal Ctags."
-  :type '(set string (const nil))
+  :type '(choice (string :tag "Path or name of the readtags program")
+                 (const :tag "readtags" nil))
   :group 'citre)
 
 ;;;; Internals: Basic Helpers

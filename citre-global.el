@@ -50,14 +50,16 @@
   "The name or path of the gtags program.
 Set this if gtags is not in your PATH, or its name is not
 \"gtags\"."
-  :type '(set string (const nil))
+  :type '(choice (string :tag "Path or name of the gtags program")
+                 (const :tag "gtags" nil))
   :group 'citre)
 
 (defcustom citre-global-program nil
   "The name or path of the GNU Global program.
 Set this if global is not in your PATH, or its name is not
 \"global\"."
-  :type '(set string (const nil))
+  :type '(choice (string :tag "Path or name of the global program")
+                 (const :tag "global" nil))
   :group 'citre)
 
 (defcustom citre-gtags-args '("--compact" "--objdir")
