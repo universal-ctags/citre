@@ -65,6 +65,16 @@ The hook `citre-after-jump-hook` that runs after you jumping to the definition.
 By default, it recenters the line and blink it. You can use your own function
 here to do what you want.
 
+One example is if you jump to a tag in an org file, the point may be in a
+folded region. Let's make it automatically unfolded:
+
+``` elisp
+(add-hook 'citre-after-jump-hook
+          (defun unfold-if-in-org-mode ()
+            (when (derived-mode-p 'org-mode)
+              (org-fold-show-context 'isearch))))
+```
+
 ### Definition string format
 
 In `citre-peek` and `citre-jump`, the definition is shown as a string in the
