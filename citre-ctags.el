@@ -92,17 +92,18 @@ this if ctags is not in your PATH, or its name is not \"ctags\""
 (defcustom citre-ctags-default-options
   "-o
 %TAGSFILE%
+-L
+%LISTFILE%
 # Programming languages to be scanned, or \"all\" for all supported languages
 --languages=%LANGUAGES%
 --kinds-all=*
 --fields=*
 --extras=*
--R
-# Add dirs/files to scan here, one line per dir/file. Leave this
-# empty to scan the whole directory.
+--recurse
 "
   "Default content of the option file, the \"recipe\" for creating a tags file.
-It needs to contain \"%TAGSFILE%\" and \"%LANGUAGES%\" as placeholders."
+It needs to contain \"%TAGSFILE%\", \"%LISTFILE%\" and
+\"%LANGUAGES%\" as placeholders."
   :type 'string
   :group 'citre)
 
@@ -121,7 +122,7 @@ It needs to contain \"%TAGSFILE%\" and \"%LANGUAGES%\" as placeholders."
     (define-key map (kbd "C-c C-c") 'citre-ctags-cmd-buf-commit)
     (define-key map (kbd "C-c C-k") 'citre-ctags-cmd-buf-cancel)
     map)
-  "Keymap used when editing tags option files."
+  "Keymap used when editing tags recipe."
   :type 'keymap
   :group 'citre)
 
@@ -156,15 +157,24 @@ generate a option file using `citre-ctags-default-options'."
 
 ;;;; Helper functions
 
+(defun citre--ctags-language-list ()
+  "Return a list of language names supported by Universal Ctags."
+  (let ((lines (with-temp-buffer
+                 (process-file (or citre-ctags-program "ctags")
+                               nil (current-buffer) nil
+                               "--list-languages")
+                 (split-string (buffer-string) "\n" t)))
+        result)
+    (dolist (l lines)
+      ;; There may be a " [disabled]" following languages that are not enabled
+      ;; in the current directory, due to the option file in use.
+      (push (car (split-string l)) result))
+    (nreverse result)))
+
 (defun citre--ctags-read-languages (prompt)
   "Read languages from Universal Ctags supported languages.
 PROMPT is the prompt shown to the user."
-  (completing-read-multiple prompt
-                            (with-temp-buffer
-                              (process-file (or citre-ctags-program "ctags")
-                                            nil (current-buffer) nil
-                                            "--list-languages")
-                              (split-string (buffer-string) "\n" t))))
+  (completing-read-multiple prompt (citre--ctags-language-list)))
 
 (defun citre--encode-path-to-filename (path)
   "Encode local absolute PATH into a file name."
@@ -311,32 +321,44 @@ Use this when a new tags file is created."
 ;;;; Create tags file: Internals
 
 (defvar citre-ctags-cmd-buf-help-msg
-  "# Universal Ctags option file
+  "# This block is the help message.
 #
-# Syntax:
+# The next block is the Universal Ctags option file. Put one
+# command line argument per line. Comments start with \"#\"
 #
-# - One command line argument in one line
-# - Comments start with \"#\"
+# The last block contains the files to scan, one file/dir per
+# line. You can use paths relative to %ROOT%.
 #
-# If you are editing this using Citre, following commands are available:
+# Commands:
 #
-# - citre-ctags-cmd-buf-add-langs: Insert a language (needs Universal \
-Ctags)
-# - citre-ctags-cmd-buf-add-dir-or-file: Insert a dir or file
-# - citre-ctags-cmd-buf-commit: Save, close and update the tags file
-# - citre-ctags-cmd-buf-cancel: Cancel
-
+# - \\[citre-ctags-cmd-buf-add-langs]: Insert a language
+# - \\[citre-ctags-cmd-buf-add-dir-or-file]: Insert a dir or file
+# - \\[citre-ctags-cmd-buf-commit]: Save, close and update the tags file
+# - \\[citre-ctags-cmd-buf-cancel]: Cancel
 "
   "Help message in the command line editing buffer.")
 
-;;;;; Create option files
+(defvar citre--ctags-cmd-buf-divider
+  "---------------8<---------------
+"
+  "The divider in the command line editing buffer.")
 
-(defun citre--generate-option-file-path (tagsfile)
-  "Generate an option file path for TAGSFILE."
-  (let ((cache-dir (citre--tags-global-cache-dir)))
+(defvar citre--ctags-cmd-buf-default-file-list
+  ".
+"
+  "The default files to scan.")
+
+;;;;; Create recipe files
+
+(defun citre--generate-recipe-file-path (tagsfile &optional listfile)
+  "Generate a recipe file path for TAGSFILE.
+If LISTFILE is nil, it returns an option file path.  Otherwise, a
+list file path, which contains the files to scan."
+  (let ((cache-dir (citre--tags-global-cache-dir))
+        (ext (if listfile "list" "ctags")))
     (if (file-in-directory-p tagsfile cache-dir)
-        (concat (file-name-sans-extension tagsfile) ".ctags")
-      (expand-file-name ".ctags.d/0.ctags"
+        (concat (file-name-sans-extension tagsfile) "." ext)
+      (expand-file-name (concat ".ctags.d/0." ext)
                         (file-name-directory tagsfile)))))
 
 (defun citre--default-tags-option-file-content (tagsfile &optional languages)
@@ -344,39 +366,38 @@ Ctags)
 LANGUAGES are the languages to scan, `all' means to scan all
 supported languages.  It can also be nil but then the returned
 content needs to be edited manually to add languages."
-  (if (file-in-directory-p tagsfile (citre--tags-global-cache-dir))
-      (setq tagsfile (file-local-name tagsfile))
-    (setq tagsfile (file-name-nondirectory tagsfile)))
-  (let ((cmd citre-ctags-default-options))
-    (setq cmd (replace-regexp-in-string "%TAGSFILE%" tagsfile cmd
-                                        'fixedcase 'literal))
-    (setq cmd (replace-regexp-in-string
-               "%LANGUAGES%"
-               (if (eq languages 'all) "all" (string-join languages ","))
-               cmd 'fixedcase 'literal))
-    (concat citre-ctags-cmd-buf-help-msg
-            cmd)))
+  (let ((in-global (file-in-directory-p tagsfile
+                                        (citre--tags-global-cache-dir)))
+        (tagsfile (expand-file-name tagsfile)))
+    (let ((cmd citre-ctags-default-options))
+      (setq cmd (replace-regexp-in-string
+                 "%TAGSFILE%"
+                 (if in-global
+                     (file-local-name tagsfile)
+                   (file-name-nondirectory tagsfile))
+                 cmd 'fixedcase 'literal))
+      (setq cmd (replace-regexp-in-string
+                 "%LISTFILE%"
+                 (if in-global
+                     (file-local-name
+                      (concat (file-name-sans-extension tagsfile) ".list"))
+                   ".ctags.d/0.list")
+                 cmd 'fixedcase 'literal))
+      (setq cmd (replace-regexp-in-string
+                 "%LANGUAGES%"
+                 (if (eq languages 'all) "all" (string-join languages ","))
+                 cmd 'fixedcase 'literal))
+      cmd)))
 
-;;;;; Find option files
+;;;;; Find recipe files
 
-(defun citre--find-tags-file-option-files (tagsfile)
-  "Find the option files of TAGSFILE."
-  (if (file-in-directory-p tagsfile (citre--tags-global-cache-dir))
-      (when-let ((opt (citre--generate-option-file-path tagsfile)))
-        (when (citre-non-dir-file-exists-p opt)
-          (list opt)))
-    (let* ((base (file-name-directory tagsfile))
-           (dirs (cl-loop for dir in '("ctags.d/" ".ctags.d/")
-                          for exp-dir = (expand-file-name dir base)
-                          if (citre-dir-exists-p exp-dir)
-                          collect exp-dir))
-           result)
-      (dolist (dir dirs)
-        (setq result
-              (nconc result
-                     (directory-files dir 'full
-                                      (rx (* any) ".ctags" line-end)))))
-      result)))
+(defun citre--find-tags-file-recipe (tagsfile &optional listfile)
+  "Find the recipe files of TAGSFILE.
+If LISTFILE is nil, find the option file.  Otherwise find the
+list file."
+  (let ((file (citre--generate-recipe-file-path tagsfile listfile)))
+    (when (citre-non-dir-file-exists-p file)
+      file)))
 
 ;;;;; Generate/update tags file
 
@@ -392,16 +413,17 @@ content needs to be edited manually to add languages."
 Nil if an option file is not found, or ctags doesn't need to read
 an option file."
   (when (file-in-directory-p tagsfile (citre--tags-global-cache-dir))
-    (file-local-name (car (citre--find-tags-file-option-files tagsfile)))))
+    (file-local-name (citre--find-tags-file-recipe tagsfile))))
 
 (defun citre--update-updatable-tags-file (tagsfile &optional callback sync)
-  "Update TAGSFILE if it has an option file.
+  "Update TAGSFILE if it has a recipe.
 If CALLBACK is non-nil, call it when finish updating.  If SYNC is
 non-nil, update synchronously.
 
 If the tags file is updated or the process is started, return t,
 otherwise return nil."
-  (when (citre--find-tags-file-option-files tagsfile)
+  (when (and (citre--find-tags-file-recipe tagsfile)
+             (citre--find-tags-file-recipe tagsfile 'listfile))
     (let* ((option-file (citre--ctags-cmd-option-file-to-read tagsfile))
            (cwd (citre--ctags-cwd-of-tags-file tagsfile))
            (cmd (list (or citre-ctags-program "ctags")))
@@ -439,40 +461,57 @@ See *citre-ctags* buffer" s))))
 (defvar-local citre--ctags-cmd-buf-tagsfile nil
   "The tags file that'll be generated.")
 
+(defvar-local citre--ctags-cmd-buf-optionfile nil
+  "The option file that'll be written.")
+
+(defvar-local citre--ctags-cmd-buf-listfile nil
+  "The list file that'll be written.")
+
 (defvar-local citre--ctags-cmd-buf-cwd nil
   "The cwd of ctags program.")
 
 (defvar-local citre--ctags-cmd-buf-create-new-p nil
   "Whether a new tags file will be created.")
 
-(defun citre--ctags-edit-option-file (tagsfile &optional file new)
-  "Edit the option file of TAGSFILE.
-If FILE is non-nil, it specifies the option file.  Otherwise the
-option file of TAGSFILE will be opened, and the user may be asked
-to pick one if there are multiple.
-
+(defun citre--ctags-edit-recipe (tagsfile &optional new)
+  "Edit the recipe of TAGSFILE.
 If NEW is non-nil, it means this will create a new tags file, and
 Citre will clean the buffer -> tags file cache."
-  (let ((tagsfile (expand-file-name tagsfile))
-        files)
-    (unless file
-      (setq files (citre--find-tags-file-option-files tagsfile))
-      (pcase (length files)
-        ('0 (user-error "No option file found for tags file %s" tagsfile))
-        ('1 (setq file (car files)))
-        (_ (setq file (completing-read "Pick an option file: "
-                                       files nil 'require-match)))))
-    (find-file file)
-    (when (member major-mode '(fundamental-mode text-mode)) (conf-mode))
+  (let* ((tagsfile (expand-file-name tagsfile))
+         (optionfile (citre--find-tags-file-recipe tagsfile))
+         (listfile (citre--find-tags-file-recipe tagsfile 'listfile))
+         (cwd (citre--ctags-cwd-of-tags-file tagsfile))
+         help-msg)
+    (unless optionfile
+      (user-error "No option file found for tags file %s.  Please recreate \
+the tags file" tagsfile))
+    (unless listfile
+      (user-error "No list file found for tags file %s.  Please recreate \
+the tags file" tagsfile))
+    (pop-to-buffer (generate-new-buffer "*ctags-command-line*")
+                   '(display-buffer-same-window))
+    (conf-mode)
     (setq citre--ctags-cmd-buf-tagsfile tagsfile)
-    (setq citre--ctags-cmd-buf-cwd (citre--ctags-cwd-of-tags-file tagsfile))
+    (setq citre--ctags-cmd-buf-optionfile optionfile)
+    (setq citre--ctags-cmd-buf-listfile listfile)
+    (setq citre--ctags-cmd-buf-cwd cwd)
     (setq citre--ctags-cmd-buf-create-new-p new)
     (let ((map (copy-keymap citre-ctags-cmd-buf-map)))
       (set-keymap-parent map (current-local-map))
-      (use-local-map map))))
+      (use-local-map map))
+    (setq help-msg (replace-regexp-in-string
+                    "%ROOT%" cwd citre-ctags-cmd-buf-help-msg
+                    'fixedcase 'literal))
+    (setq help-msg (substitute-command-keys help-msg))
+    (save-excursion
+      (insert help-msg)
+      (insert citre--ctags-cmd-buf-divider)
+      (forward-char (nth 1 (insert-file-contents optionfile)))
+      (insert citre--ctags-cmd-buf-divider)
+      (forward-char (nth 1 (insert-file-contents listfile))))))
 
 (defun citre-ctags-cmd-buf-add-dir-or-file ()
-  "Insert a directory or file in the option file.
+  "Insert a directory or file in the recipe editing buffer.
 When it's in the working directory that ctags will run, it's
 converted to relative path."
   (interactive)
@@ -495,9 +534,18 @@ This command requires the ctags program from Universal Ctags."
   (insert (string-join (citre--ctags-read-languages "Pick languages: ") ",")))
 
 (defun citre-ctags-cmd-buf-commit ()
-  "Save and close the option file, and update the tags file."
+  "Save and close the recipe, and update the tags file."
   (interactive)
-  (save-buffer)
+  (let ((blocks (save-excursion
+                  (split-string
+                   (buffer-string)
+                   (regexp-quote citre--ctags-cmd-buf-divider)))))
+    (unless (eq (length blocks) 3)
+      (user-error "More then 3 blocks found in the buffer"))
+    (with-temp-file citre--ctags-cmd-buf-optionfile
+      (insert (nth 1 blocks)))
+    (with-temp-file citre--ctags-cmd-buf-listfile
+      (insert (nth 2 blocks))))
   (citre--update-updatable-tags-file
    citre--ctags-cmd-buf-tagsfile
    (when citre--ctags-cmd-buf-create-new-p #'citre-clear-tags-file-cache))
@@ -520,7 +568,7 @@ signaled.  When SYNC is non-nil, update TAGSFILE synchronously."
   (interactive)
   (setq tagsfile (or tagsfile (citre-read-tags-file-name)))
   (or (citre--update-updatable-tags-file tagsfile nil sync)
-      (user-error "Option file for %s not found, please regenerate one using \
+      (user-error "Recipe for %s not found, please regenerate one using \
 `citre-create-tags-file'"
                   tagsfile)))
 
@@ -554,7 +602,7 @@ When NOCONFIRM is non-nil, don't ask the user whether to update
 the tags file now (update it directly instead)."
   (interactive)
   (let ((tagsfile (or tagsfile (citre-read-tags-file-name))))
-    (citre--ctags-edit-option-file tagsfile)))
+    (citre--ctags-edit-recipe tagsfile)))
 
 ;;;###autoload
 (defun citre-create-tags-file ()
@@ -578,7 +626,7 @@ the tags file now (update it directly instead)."
           (lambda (msg)
             (read-char
              (concat msg "\n==> Press any key to pick another location."))))
-         tagsfile optionfile)
+         tagsfile optionfile listfile)
     (setq location citre-default-create-tags-file-location)
     (while (null tagsfile)
       (unless location (funcall read-location))
@@ -605,7 +653,8 @@ should be non-nil to use this location.")
               (and (citre-non-dir-file-exists-p tagsfile)
                    (y-or-n-p (format "%s already exists.  Overwrite it? "
                                      tagsfile))))
-      (setq optionfile (citre--generate-option-file-path tagsfile))
+      (setq optionfile (citre--generate-recipe-file-path tagsfile))
+      (setq listfile (citre--generate-recipe-file-path tagsfile 'listfile))
       (dolist (f (list optionfile tagsfile))
         (unless (file-exists-p (file-name-directory f))
           (make-directory (file-name-directory f) 'parents)))
@@ -618,8 +667,11 @@ should be non-nil to use this location.")
 supported languages: ")
                        'all))))
         (write-file optionfile))
+      (with-temp-buffer
+        (insert citre--ctags-cmd-buf-default-file-list)
+        (write-file listfile))
       (if citre-edit-ctags-options-manually
-          (citre--ctags-edit-option-file tagsfile optionfile 'new)
+          (citre--ctags-edit-recipe tagsfile 'new)
         (citre--update-updatable-tags-file tagsfile
                                            #'citre-clear-tags-file-cache)))))
 

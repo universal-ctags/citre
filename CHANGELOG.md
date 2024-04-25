@@ -5,6 +5,14 @@
   - New user options for better peek window appearance with line number
     display: `citre-peek-use-dashes-as-horizontal-border`.
 
+- Fixes
+
+  - Tags backend: In 0.4, we switched to using an option file to record command
+    line options, and I ignored the fact that an option file can't record the
+    files to scan. The result is: only the project root is scanned. Now we use
+    a separated file to record files to scan, and the "tags file generating
+    recipe" editing tool is rewritten to make this easy to use.
+
 ### 0.4 (released 2024-04-21)
 
 - New features
