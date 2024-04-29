@@ -490,20 +490,15 @@ for your callback function."
     proc-data))
 
 ;; This is a synchronous function, but we use async process in it internally,
-;; rather than using the synchronous `call-process', is quitting (pressing
+;; rather than using the synchronous `call-process', as quitting (pressing
 ;; `C-g') during `call-process' tries to terminate the process using SIGINT,
-;; and only when the process doesn't end immediately, and quitting happens
-;; again, it uses SIGKILL.  This may cause lagging for popup completion.
+;; and waits for the process to terminate.  This may cause lagging for popup
+;; completion (which may wrap this function in an `while-no-input' form).
 ;;
-;; The detailed explanation is: The completion UI may wrap this function in
-;; `while-no-input' for not blocking the UI, which sends a quit signal when
-;; user input arrives, which triggers SIGINT or SIGKILL.  But SIGINT may not
-;; kill the process immediately, which freezes the UI.  This is the case when
-;; reading a large tags file using readtags in Windows.
-;;
-;; Citre before (and including) commit "093722a: ctags, fix: wrong usage of
-;; read-file-name" uses a different trick which works well for me,
-;; unfortunately Windows users often report bugs related to processes.
+;; Before (and including) commit "093722a: ctags, fix: wrong usage of
+;; read-file-name", we used a different trick which works well for me,
+;; unfortunately Windows users often report bugs related to processes, so we've
+;; changed the implementation.
 (defun citre-get-output-lines (cmd)
   "Run CMD and return its output in a list of lines.
 Keyboard quit is allowed to terminate the process.  When the
@@ -554,14 +549,21 @@ signaled."
           ;; Wait for the process to finish.  This trick is borrowed from
           ;; emacs-aio (https://github.com/skeeto/emacs-aio).  This doesn't
           ;; block.
-          (while (not finished) (accept-process-output))
+          (while (not finished)
+            ;; Some users report that Emacs freezes here, which implies that
+            ;; the sentinel is never called. `accept-process-output' should
+            ;; allow the sentinel to run, so I don't know, but maybe try these
+            ;; 2 forms: the first one to accept user input, the second one to
+            ;; allow the sentinel to run?
+            (accept-process-output)
+            (accept-process-output proc 0))
           ;; The process is finished, but there may still be buffered output
-          ;; that's pending, so we `accept-process-output' from the process,
-          ;; and the related stderr pipe process.  This blocks, but doesn't
-          ;; cause a problem, as the process is finished, and the remaining
-          ;; data should be consumed rather quickly.  No need to wait for the
-          ;; stderr pipe process as the error message is already set when the
-          ;; process exits, and in practice this lags popup completion.
+          ;; that's pending, so we `accept-process-output' from the process.
+          ;; This blocks, but doesn't cause a problem, as the process is
+          ;; finished, and the pending output should be consumed rather
+          ;; quickly.  No need to wait for the stderr pipe process as the error
+          ;; message is already set when the process exits, and in practice
+          ;; this lags popup completion.
           (when success
             (while (accept-process-output proc)))
           (cond
