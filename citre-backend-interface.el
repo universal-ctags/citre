@@ -82,8 +82,9 @@ turn until one succeeded."
 ;; cache the results only when this is non-nil.
 (defcustom citre-capf-optimize-for-popup t
   "Non-nil means optimize for popup completion.
-This caches latest completion result, and allows typing while
-calculating completions, making it slicker to use.
+This allows user input to interrupt the completing calculation,
+so Emacs won't freeze for popup completion.  Backends may have
+further optimizations depending on this variable.
 
 `company' and `auto-complete' users should leave this as t.  For
 other users, set this to nil may be slightly better, since a
