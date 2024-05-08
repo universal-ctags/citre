@@ -374,7 +374,7 @@ cons pair."
 (defun citre-get-definitions-of-id (id)
   "Get definitions of identifier ID.
 The result is a list of tags."
-  (car (citre-get-backend-and-definitions-of-id id)))
+  (cdr (citre-get-backend-and-definitions-of-id id)))
 
 (defun citre-get-backend-and-references ()
   "Get references of symbol at point.
@@ -401,7 +401,7 @@ cons pair."
 (defun citre-get-references-of-id (id)
   "Get references of identifier ID.
 The result is a list of tags."
-  (car (citre-get-backend-and-references-of-id id)))
+  (cdr (citre-get-backend-and-references-of-id id)))
 
 (defun citre-get-backend-and-tags-in-buffer ()
   "Try getting tags in buffer using `citre-tags-in-buffer-backends'.
