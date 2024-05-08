@@ -87,9 +87,9 @@ database in the project directory."
 (defun citre-global--get-output-lines (args)
   "Get output from global program.
 ARGS is the arguments passed to the program."
-  (citre-get-output-lines
-   (append (list (or citre-global-program "global"))
-           args)))
+  (let ((prog (or citre-global-program "global")))
+    (when (citre-executable-find prog)
+      (citre-get-output-lines (append (list prog) args)))))
 
 (defun citre-global--get-lines (name &optional mode case-fold start-file)
   "Find tags related to NAME using global and return the outputed lines.
@@ -105,7 +105,6 @@ result by nearness (see the help message of global) start from
 START-FILE."
   (let* ((name (when name (substring-no-properties name)))
          cmd)
-    (push (or citre-global-program "global") cmd)
     (pcase mode
       ('completion (push "--completion" cmd))
       ('definition (push "--definition" cmd))
@@ -127,7 +126,7 @@ START-FILE."
                             "--result=grep"
                             "--literal"
                             "--" name)))
-    (citre-get-output-lines cmd)))
+    (citre-global--get-output-lines cmd)))
 
 (defun citre-global--get-tag-lines-in-file (&optional file)
   "Find definitions in FILE using global and return the outputed lines.
@@ -135,10 +134,7 @@ START-FILE."
 The output is in cxref format.  FILE can be absolute or relative
 to `default-directory', and is the current file if it's nil."
   (let ((file (or file (file-relative-name buffer-file-name))))
-    (citre-get-output-lines
-     (list (or citre-global-program "global")
-           "--file"
-           file))))
+    (citre-global--get-output-lines (list "--file" file))))
 
 (defun citre-global--parse-path (path)
   "Translate escaped sequences in PATH.
@@ -212,17 +208,16 @@ database of current directory.
 
 When the global program is not found on the machine, return nil
 as global program is needed to get the database path."
-  (when (citre-executable-find (or citre-global-program "global") t)
-    (pcase citre--global-dbpath
-      ('none nil)
-      ((and val (pred stringp) (pred citre-dir-exists-p)) val)
-      (_ (let ((default-directory (or dir default-directory)))
-           (condition-case nil
-               (setq citre--global-dbpath
-                     (car (citre-global--get-output-lines
-                           '("--print-dbpath"))))
-             (error (setq citre--global-dbpath 'none)
-                    nil)))))))
+  (pcase citre--global-dbpath
+    ('none nil)
+    ((and val (pred stringp) (pred citre-dir-exists-p)) val)
+    (_ (let ((default-directory (or dir default-directory)))
+         (condition-case nil
+             (setq citre--global-dbpath
+                   (car (citre-global--get-output-lines
+                         '("--print-dbpath"))))
+           (error (setq citre--global-dbpath 'none)
+                  nil))))))
 
 (defun citre-global-clear-dbpath-cache ()
   "Clear the cache of buffer -> global database path.
@@ -347,8 +342,9 @@ See *citre-global-update* buffer" s))))
 
 (defun citre-global-get-identifiers ()
   "Get a list of identifiers in current project."
-  (citre-global--get-output-lines
-   '("--completion")))
+  (when (citre-global-dbpath)
+    (citre-global--get-output-lines
+     '("--completion"))))
 
 ;;;; Completion backend
 
