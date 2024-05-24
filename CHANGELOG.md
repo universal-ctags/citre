@@ -1,9 +1,10 @@
-### Unreleased
+### 0.4.1 (released 2024.05-24)
 
 - Improvements
 
   - New user options for better peek window appearance with line number
     display: `citre-peek-use-dashes-as-horizontal-border`.
+  - Other minor improvements.
 
 - Fixes
 
@@ -12,6 +13,7 @@
     files to scan. The result is: only the project root is scanned. Now we use
     a separated file to record files to scan, and the "tags file generating
     recipe" editing tool is rewritten to make this easy to use.
+  - Other various bugfixes.
 
 ### 0.4 (released 2024-04-21)
 
