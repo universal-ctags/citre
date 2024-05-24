@@ -86,7 +86,8 @@ cache dir instead."
   "The name or path of the ctags program.
 Citre requires ctags program provided by Universal Ctags.  Set
 this if ctags is not in your PATH, or its name is not \"ctags\""
-  :type 'file
+  :type '(choice (string :tag "Path or name of the ctags program")
+                 (const :tag "readtags" nil))
   :group 'citre)
 
 (defcustom citre-ctags-default-options
