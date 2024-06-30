@@ -80,10 +80,6 @@ database in the project directory."
 
 ;;;;; Internals
 
-(declare-function tramp-file-name-localname "tramp" (structure))
-(declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
-(declare-function tramp-handle-expand-file-name "tramp" (name &optional dir))
-
 (defun citre-global--get-output-lines (args)
   "Get output from global program.
 ARGS is the arguments passed to the program."
@@ -113,12 +109,10 @@ START-FILE."
       (_ (error "Invalid MODE")))
     (when case-fold (push "--ignore-case" cmd))
     ;; Global doesn't know how to expand "~", so we need to expand START-FILE.
-    (when start-file (let ((file (if (file-remote-p start-file)
-                                     (tramp-file-name-localname
-                                      (tramp-dissect-file-name
-                                       (tramp-handle-expand-file-name
-                                        start-file)))
-                                   (expand-file-name start-file))))
+    (when start-file (let* ((filename (expand-file-name start-file))
+                            (file (if (file-remote-p start-file)
+                                      (file-local-name filename)
+                                    filename)))
                        (push (concat "--nearness=" file) cmd)))
     (setq cmd (append (nreverse cmd)
                       (list "--color=never"
@@ -337,6 +331,38 @@ If no database is found, prompt the user to create one."
 See *citre-global-update* buffer" s))))
      :file-handler t)
     (message "Updating...")))
+
+;;;###autoload
+(defun citre-global-update-file (&optional f)
+  "Update the gtags database of a single file F.
+If no database is found, prompt the user to create one."
+  (interactive)
+  (let* ((prog (or citre-global-program "global"))
+         (filename (expand-file-name (or f (buffer-file-name))))
+         (file (if (file-remote-p filename)
+                   (file-local-name filename)
+                 filename)))
+    (make-process
+     :name "global"
+     :buffer (get-buffer-create "*citre-global-update-file*")
+     :command (list prog "--single-update" file)
+     :connection-type 'pipe
+     :stderr nil
+     :sentinel
+     (lambda (proc _msg)
+       (pcase (process-status proc)
+         ('exit
+          (pcase (process-exit-status proc)
+            (0 (message "Finished updating file \"%s\"" file))
+            (_ (if (citre-executable-find prog t)
+                   (when (y-or-n-p "Can't find database.  Create one? ")
+                     (citre-global-create-database))
+                 (user-error "Can't find global program")))))
+         (s (user-error "Abnormal status of global: %s.  \
+See *citre-global-update-file* buffer" s))))
+     :file-handler t)
+    (message "Updating file \"%s\"..." file)))
+
 
 ;;;; Get identifiers
 
