@@ -719,6 +719,11 @@ the position of a tag."
               (citre-find-nearest-regexp
                (concat pat-beg (rx (* space)) (regexp-quote (string-trim str)))
                lim 'case-fold))))
+         ;; Warn if the buffer size is larger than the search limit. Fall
+         ;; through to search for the tag name.
+         (and nil (when (> (buffer-size) citre-tag-pattern-search-limit)
+                    (message (concat "regexp not found but the buffer size is larger than "
+                                     "citre-tag-pattern-search-limit; consider increasing it."))))
          ;; Last try: search for the tag name.
          (when name
            (or
