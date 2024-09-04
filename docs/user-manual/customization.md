@@ -87,13 +87,20 @@ kind/type@scope<R> /path/to/source/file(line): line content
 This is self explanatory. The mark `<R>` means the definition comes from a
 reference tag. Some parts of it may be missing if it's not recorded in the tags
 file (maybe ctags doesn't support it for the particular language, or some tags
-just don't have a scope).
+just don't have a scope). If the tag has `roles` field, the value for the field
+is shown instead of `<R>`:
+
+```
+kind/type@scope<roles> /path/to/source/file(line): line content
+```
+
 
 To tweak the display format, see these options:
 
 - `citre-definition-annotation-separator`
 - `citre-definition-annotation-separator-for-scope`
 - `citre-definition-reference-mark`
+- `citre-tag-roles-format`
 - `citre-definition-missing-file-mark`
 
 If the path of the tags is under current project, it's displayed using the

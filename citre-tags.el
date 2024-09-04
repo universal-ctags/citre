@@ -410,7 +410,10 @@ is found."
                   :definition-sorter symbol)
                  citre-tags-definition-default-sorter)
      :require '(name ext-abspath pattern)
-     :optional '(ext-kind-full line typeref scope extras))))
+     :optional `(ext-kind-full line typeref scope extras
+                               ,@(when citre-tag-roles-format
+                                   '(roles))))
+    ))
 
 ;;;; Completion
 
