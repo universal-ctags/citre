@@ -501,8 +501,10 @@ The returned value is a valid return value for
   (if-let ((buf (citre-get-property 'xref-symbol-buffer symbol)))
       (with-current-buffer buf
         (citre-xref--make-collection (citre-get-references)))
-    (user-error "Finding references of completed symbol is not supported \
-by Citre")))
+    (message "Finding references of completed symbol is not supported by \
+Citre")
+    ;; return nil so `xref' can try other backends
+    nil))
 
 ;;;; Imenu
 
