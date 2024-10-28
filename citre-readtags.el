@@ -159,7 +159,7 @@ This returns a cons pair like (dir . os)."
     (cons
      ;; If tagsfile is a remote file, we may have to prefix dir by the remote
      ;; identifier (e.g., if dir comes from the TAG_PROC_CWD ptag).
-     (if-let ((remote-id (file-remote-p tagsfile)))
+     (if-let* ((remote-id (file-remote-p tagsfile)))
          (concat remote-id dir-local)
        dir-local)
      (pcase (aref dir-local 0)
@@ -255,8 +255,8 @@ any valid actions in readtags, e.g., \"-D\", to get pseudo tags."
   "Translate escaped sequences in VALUE.
 See tags(5) manpage to know about the escaped sequences.  VALUE
 should be a field value in a tags file."
-  (if-let ((backslash-idx
-            (citre-string-match-all-escaping-backslash value)))
+  (if-let* ((backslash-idx
+             (citre-string-match-all-escaping-backslash value)))
       (let ((last 0)
             (i nil)
             (parts nil))
@@ -336,7 +336,7 @@ this returns nil, and the caller should stop parsing."
               ;; field.
               ((and (eq n 3)
                     (or (null sep)
-                        (when-let ((tab (string-match "\t" line pos)))
+                        (when-let* ((tab (string-match "\t" line pos)))
                           (> sep tab))))
                'kind)
               (sep
@@ -518,7 +518,7 @@ extension field (see `citre-readtags-extra-ext-fields-table').")
   "Write the value of extension field FIELD to TAG.
 TAG should contain the fields that FIELD depends on.
 TAGSFILE-INFO is the additional info that FIELD depends on."
-  (if-let ((method (gethash field citre-readtags--ext-fields-method-table)))
+  (if-let* ((method (gethash field citre-readtags--ext-fields-method-table)))
       (citre-set-tag-field field (funcall method tag tagsfile-info) tag)
     (error "Invalid FIELD")))
 

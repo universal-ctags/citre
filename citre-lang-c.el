@@ -89,7 +89,7 @@
 
 (defun citre-lang-c--get-normal-symbol ()
   "Get non-header symbol at point."
-  (when-let ((symbol (citre-tags-get-symbol-default)))
+  (when-let* ((symbol (citre-tags-get-symbol-default)))
     (let* ((bounds (citre-get-property 'bounds symbol))
            syntax)
       (save-excursion

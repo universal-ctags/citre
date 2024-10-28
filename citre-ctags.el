@@ -584,7 +584,7 @@ the tags file.
 
 When SYNC is non-nil, update the tags file synchronously."
   (interactive)
-  (if-let ((tagsfile (citre-tags-file-path)))
+  (if-let* ((tagsfile (citre-tags-file-path)))
       (citre-update-tags-file tagsfile sync)
     (when (y-or-n-p "Can't find tags file for this buffer.  Create one? ")
       (citre-create-tags-file))))

@@ -123,8 +123,8 @@ The returned string looks like:
   (concat (string-join
            (mapcar (lambda (backend)
                      (let ((symbol
-                            (if-let ((s (citre-backend-symbol-at-point
-                                         backend)))
+                            (if-let* ((s (citre-backend-symbol-at-point
+                                          backend)))
                                 (format "\"%s\"" s)
                               "no symbol at point")))
                        (format "%s (%s backend)"
@@ -284,7 +284,7 @@ This command is useful when you want to see the definition of a
 function while filling its arglist.  When REFERENCE is non-nil,
 peek the references."
   (interactive)
-  (when-let ((pt (citre-ace-pick-point)))
+  (when-let* ((pt (citre-ace-pick-point)))
     (when (region-active-p) (deactivate-mark))
     (citre-peek (current-buffer) pt reference)))
 
@@ -348,10 +348,10 @@ supports it."
                                             :suffix ")"))
    'signature
    (or (citre-get-tag-field 'signature tag)
-       (when-let ((str (citre-get-tag-field 'extra-matched-str tag)))
+       (when-let* ((str (citre-get-tag-field 'extra-matched-str tag)))
          (string-trim str)))
    'kind
-   (when-let ((kind (citre-get-tag-field 'ext-kind-full tag)))
+   (when-let* ((kind (citre-get-tag-field 'ext-kind-full tag)))
      (intern kind))))
 
 (defun citre-capf--make-collection (tags start end)
@@ -469,7 +469,7 @@ The returned value is a valid return value for
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql 'citre)))
   "Define method for xref to get symbol at point."
-  (when-let ((symbol (symbol-at-point)))
+  (when-let* ((symbol (symbol-at-point)))
     ;; The symbol name doesn't matter for us.  We record the buffer in the text
     ;; property so Citre backends could goto the buffer and find
     ;; definitions/references for symbol at point.
@@ -488,7 +488,7 @@ The returned value is a valid return value for
 
 (cl-defmethod xref-backend-definitions ((_backend (eql 'citre)) symbol)
   "Method for xref to find definitions of SYMBOL."
-  (if-let ((buf (citre-get-property 'xref-symbol-buffer symbol)))
+  (if-let* ((buf (citre-get-property 'xref-symbol-buffer symbol)))
       ;; If true, the symbol is grabbed from a buffer, not identifier
       ;; completion table.
       (with-current-buffer buf
@@ -498,7 +498,7 @@ The returned value is a valid return value for
 
 (cl-defmethod xref-backend-references ((_backend (eql 'citre)) symbol)
   "Method for xref to find references of SYMBOL."
-  (if-let ((buf (citre-get-property 'xref-symbol-buffer symbol)))
+  (if-let* ((buf (citre-get-property 'xref-symbol-buffer symbol)))
       (with-current-buffer buf
         (citre-xref--make-collection (citre-get-references)))
     (message "Finding references of completed symbol is not supported by \
@@ -522,7 +522,7 @@ is a list of tags of that kind."
       (cl-symbol-macrolet ((place (alist-get class
                                              result nil nil #'equal)))
         (let* ((kind (citre-get-tag-field 'ext-kind-full tag))
-               (extras (when-let ((extras (citre-get-tag-field 'extras tag)))
+               (extras (when-let* ((extras (citre-get-tag-field 'extras tag)))
                          (split-string extras ","
                                        t (rx (+ " ")))))
                (classes (or (mapcar
@@ -569,7 +569,7 @@ The returned value is a valid element of the return value of
 
 (defun citre-imenu-create-index-function ()
   "Create imenu index."
-  (when-let ((tags (citre-get-tags-in-buffer)))
+  (when-let* ((tags (citre-get-tags-in-buffer)))
     (citre-imenu--make-index tags)))
 
 ;;;; citre-mode

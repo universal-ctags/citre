@@ -58,8 +58,8 @@ When there's an active region, the text inside it is returned, so
 if the default behavior is inappropriate, you can mark the module
 name part manually."
   (or (citre-tags-get-marked-symbol)
-      (when-let ((file (and (derived-mode-p 'dired-mode)
-                            (dired-get-filename 'no-dir t))))
+      (when-let* ((file (and (derived-mode-p 'dired-mode)
+                             (dired-get-filename 'no-dir t))))
         (if (string-match "\\.[^.]*$" file)
             (if (member (match-string 0 file)
                         '(".h" ".hpp"))

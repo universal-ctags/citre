@@ -264,7 +264,7 @@ A cons cell of that element in LST and the returned value of FN
 is returned.  Elements in LST is used as the first argument of
 FN, ARGS are the rest."
   (cl-dolist (e lst)
-    (when-let ((v (apply fn e args)))
+    (when-let* ((v (apply fn e args)))
       (cl-return (cons e v)))))
 
 ;;;;; APIs for backends

@@ -377,12 +377,12 @@ See *citre-global-update-file* buffer" s))))
 ;; TODO: Do we need to cache the result like tags backend?
 (defun citre-global-get-completions ()
   "Get tags of completions of symbol at point."
-  (when-let ((symbol (citre-tags-get-symbol))
-             (bounds (citre-get-property 'bounds symbol))
-             (tags (citre-global-get-tags
-                    symbol 'completion
-                    (not citre-global-completion-case-sensitive)
-                    'alpha)))
+  (when-let* ((symbol (citre-tags-get-symbol))
+              (bounds (citre-get-property 'bounds symbol))
+              (tags (citre-global-get-tags
+                     symbol 'completion
+                     (not citre-global-completion-case-sensitive)
+                     'alpha)))
     (list (car bounds) (cdr bounds)
           ;; Sort by length
           (sort tags (lambda (a b)

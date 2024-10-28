@@ -408,7 +408,7 @@ This returns a number or nil.  It tries these in turn:
 - Use the `line' field directly.
 - Use the `pattern' field if it contains the line number.
 - Return nil."
-  (or (when-let (line (citre-get-tag-field-primitive 'line tag))
+  (or (when-let* ((line (citre-get-tag-field-primitive 'line tag)))
         (string-to-number line))
       (car (citre-split-tag-pattern
             (citre-get-tag-field-primitive 'pattern tag)))))
@@ -432,9 +432,9 @@ It tries these in turn:
   an extension.
 - Return nil."
   (or (citre-get-tag-field-primitive 'language tag)
-      (when-let ((input (or (citre-get-tag-field-primitive 'input tag)
-                            (citre-get-tag-field-primitive 'ext-abspath tag)))
-                 (extension (citre-file-name-extension input)))
+      (when-let* ((input (or (citre-get-tag-field-primitive 'input tag)
+                             (citre-get-tag-field-primitive 'ext-abspath tag)))
+                  (extension (citre-file-name-extension input)))
         (or (gethash (downcase extension) citre-tag--extension-lang-table)
             extension))))
 
@@ -574,12 +574,12 @@ the whole field is returned."
                          #'citre-string-after-1st-colon
                        #'identity))
         value)
-    (if-let ((method (gethash field citre-tag-extra-ext-fields-table)))
+    (if-let* ((method (gethash field citre-tag-extra-ext-fields-table)))
         (setq value (funcall method tag))
       (setq value (gethash field tag))
       (when value
         (pcase field
-          ((or 'line 'end) (when-let ((val (gethash field tag)))
+          ((or 'line 'end) (when-let* ((val (gethash field tag)))
                              (string-to-number val)))
           (_ (funcall maybe-split (gethash field tag))))))))
 
@@ -637,8 +637,8 @@ chars.  See the code of this function for the detail."
                                pattern))
          ;; Remove the beginning "^" and trailing "$"
          (pattern (substring pattern (if from-beg 1 0) (if to-end -1 nil))))
-    (when-let ((backslash-idx
-                (citre-string-match-all-escaping-backslash pattern)))
+    (when-let* ((backslash-idx
+                 (citre-string-match-all-escaping-backslash pattern)))
       (let ((last 0)
             (i nil)
             (parts nil))
@@ -711,11 +711,11 @@ the position of a tag."
              lim 'case-fold)
             ;; The content is changed.  Try cutting from the end of the tag
             ;; name and search.
-            (when-let ((name name)
-                       (bound (when (let ((case-fold-search nil))
-                                      (string-match (regexp-quote name) str))
-                                (match-end 0)))
-                       (str (substring str 0 bound)))
+            (when-let* ((name name)
+                        (bound (when (let ((case-fold-search nil))
+                                       (string-match (regexp-quote name) str))
+                                 (match-end 0)))
+                        (str (substring str 0 bound)))
               (citre-find-nearest-regexp
                (concat pat-beg (rx (* space)) (regexp-quote (string-trim str)))
                lim 'case-fold))))
@@ -850,7 +850,7 @@ PROP controls the format.  See `citre-make-tag-str' for details."
            (concat
             (if (citre-non-dir-file-exists-p abspath) ""
               citre-tag-missing-file-mark)
-            (propertize (if-let ((root (plist-get prop :root)))
+            (propertize (if-let* ((root (plist-get prop :root)))
                             (citre-relative-path abspath root)
                           abspath)
                         'face 'citre-tag-path-face))
@@ -866,12 +866,12 @@ PROP controls the format.  See `citre-make-tag-str' for details."
 (defun citre--make-tag-content-str (tag prop)
   "Return the string recorded in the pattern field of TAG.
 PROP controls the format.  See `citre-make-tag-str' for details."
-  (if-let ((str (citre-get-tag-field 'extra-matched-str tag)))
+  (if-let* ((str (citre-get-tag-field 'extra-matched-str tag)))
       (concat (or (plist-get prop :prefix) "")
               (string-trim str)
               (or (plist-get prop :suffix) ""))
     (when (plist-get prop :ensure)
-      (if-let ((path (citre-get-tag-field 'ext-abspath tag)))
+      (if-let* ((path (citre-get-tag-field 'ext-abspath tag)))
           (or (citre-with-file-buffer path nil nil
                 (goto-char (citre-locate-tag tag))
                 (buffer-substring (line-beginning-position)

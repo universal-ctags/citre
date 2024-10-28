@@ -95,7 +95,7 @@ indicated by `default-directory' instead."
 (defun citre-string-after-1st-colon (string)
   "Return the part in STRING after the first colon in it.
 If STRING doesn't contain a colon, return it directly."
-  (if-let ((sep (string-match ":" string)))
+  (if-let* ((sep (string-match ":" string)))
       (substring string (1+ sep))
     string))
 
@@ -207,7 +207,7 @@ is prefixed by \"citre-\".  Propertized STR is returned."
 (defun citre--project-root ()
   "Full path of project root of current buffer.
 This uses `project-current' internally."
-  (when-let ((project (project-current nil)))
+  (when-let* ((project (project-current nil)))
     (if (fboundp #'project-root)
         (project-root project)
       ;; Suppress the warning in Emacs master that `project-roots' is
@@ -250,7 +250,7 @@ This is faster than `file-name-extension'."
 This means the directory of the buffer file, or expanded
 `default-directory' if it's not a file buffer."
   (expand-file-name
-   (if-let (file (buffer-file-name))
+   (if-let* ((file (buffer-file-name)))
        (file-name-directory file)
      default-directory)))
 
@@ -384,7 +384,7 @@ This doesn't run `kill-buffer-hook' and
 `kill-buffer-query-functions' so it should be faster."
   (let ((kill-buffer-hook nil)
         (kill-buffer-query-functions nil))
-    (when-let ((proc (get-buffer-process buffer)))
+    (when-let* ((proc (get-buffer-process buffer)))
       (delete-process proc))
     (kill-buffer buffer)))
 

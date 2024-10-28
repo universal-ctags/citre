@@ -130,7 +130,7 @@ Each element in the returned value is a list containing the tag
 and some of its fields, which can be utilized by
 `citre-get-tag-field'."
   (when (citre-executable-find (or citre-readtags-program "readtags") t)
-    (when-let ((tagsfile (or tagsfile (citre-tags-file-path))))
+    (when-let* ((tagsfile (or tagsfile (citre-tags-file-path))))
       (citre-readtags-get-tags tagsfile name match
                                (unless (or (null match) (eq match 'exact))
                                  (not citre-tags-completion-case-sensitive))
@@ -250,9 +250,9 @@ PROP.
 
 If SYMBOL is non-nil, and the value we get is a function, call
 the function on SYMBOL and return its value."
-  (when-let ((value (plist-get (alist-get major-mode
-                                          citre-tags-language-support-alist)
-                               prop)))
+  (when-let* ((value (plist-get (alist-get major-mode
+                                           citre-tags-language-support-alist)
+                                prop)))
     (cond
      ((and (symbolp value) (boundp value))
       (symbol-value value))
@@ -272,7 +272,7 @@ the function on SYMBOL and return its value."
 
 (defun citre-tags-get-symbol-at-point ()
   "Get the symbol at point."
-  (when-let ((bounds (bounds-of-thing-at-point 'symbol)))
+  (when-let* ((bounds (bounds-of-thing-at-point 'symbol)))
     (citre-put-property
      (buffer-substring-no-properties (car bounds) (cdr bounds))
      'bounds bounds)))
@@ -434,8 +434,8 @@ Its props are:
 The result is a list (BEG END TAGS), see
 `citre-register-completion-backend'."
   ;; Just to make sure the tags file exists.
-  (when-let ((tagsfile (citre-tags-file-path))
-             (symbol (citre-tags-get-symbol)))
+  (when-let* ((tagsfile (citre-tags-file-path))
+              (symbol (citre-tags-get-symbol)))
     (if citre-capf-optimize-for-popup
         (let* ((cache citre-tags--completion-cache)
                (file (buffer-file-name))
@@ -456,8 +456,8 @@ The result is a list (BEG END TAGS), see
             ;; Make sure we get a non-nil collection first, then setup the
             ;; cache, since the calculation can be interrupted by user input,
             ;; and we get nil, which aren't the actual completions.
-            (when-let ((cands (citre-tags-get-completions
-                               symbol nil citre-tags-substr-completion)))
+            (when-let* ((cands (citre-tags-get-completions
+                                symbol nil citre-tags-substr-completion)))
               ;; Prevent keyboard quit when building cache.
               (let ((inhibit-quit t))
                 (plist-put cache :file file)
@@ -475,8 +475,8 @@ The result is a list (BEG END TAGS), see
 
 (defun citre-tags-get-definitions-at-point ()
   "Get definitions of symbol at point."
-  (when-let ((tagsfile (citre-tags-file-path))
-             (symbol (citre-tags-get-symbol)))
+  (when-let* ((tagsfile (citre-tags-file-path))
+              (symbol (citre-tags-get-symbol)))
     (citre-tags-get-definitions symbol tagsfile)))
 
 (defvar citre-tags--find-definition-for-id-filter
@@ -565,7 +565,7 @@ This also works on a remote machine."
 
 (defun citre-tags--imenu-tags-from-tags-file ()
   "Get tags for imenu from the tags file being used."
-  (when-let ((tagsfile (citre-tags-file-path)))
+  (when-let* ((tagsfile (citre-tags-file-path)))
     (citre-tags-get-tags
      tagsfile nil nil
      :filter
