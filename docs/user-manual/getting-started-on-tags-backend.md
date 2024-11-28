@@ -50,7 +50,7 @@ may override the Universal Ctags program.
 ### Create a tags file
 
 After creating a tags file, you'll be able to use Citre tools through the tags
-bckend. But note that tags backend doesn't support finding references for now.
+backend. But note that tags backend doesn't support finding references for now.
 
 #### The customizable way
 
