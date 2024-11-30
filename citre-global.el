@@ -62,7 +62,13 @@ Set this if global is not in your PATH, or its name is not
                  (const :tag "global" nil))
   :group 'citre)
 
-(defcustom citre-gtags-args '("--compact" "--objdir")
+(defcustom citre-gtags-args `("--compact"
+                              ;; The "--objdir" option isn't valid unless one
+                              ;; of "MAKEOBJDIRPREFIX" or "GTAGSOBJDIRPREFIX"
+                              ;; is set as an environment variable.
+                              ,@(when (or (getenv "MAKEOBJDIRPREFIX")
+                                          (getenv "GTAGSOBJDIRPREFIX"))
+                                  '("--objdir")))
   "Arguments for running gtags.
 On Windows, the \"--objdir\" argument may cause \"Objdir not
 found\" error.  If this happens, you need to customize this
