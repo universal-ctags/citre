@@ -272,7 +272,7 @@ the function on SYMBOL and return its value."
 
 (defun citre-tags-get-symbol-at-point ()
   "Get the symbol at point."
-  (when-let* ((bounds (bounds-of-thing-at-point 'symbol)))
+  (when-let* ((bounds (citre-bounds-of-sym-or-op-at-point)))
     (citre-put-property
      (buffer-substring-no-properties (car bounds) (cdr bounds))
      'bounds bounds)))

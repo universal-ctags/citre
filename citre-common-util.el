@@ -173,6 +173,15 @@ goes.  CASE-FOLD decides case-sensitivity."
                         "\\(,\\|$\\)")
                 string))
 
+(defun citre-bounds-of-sym-or-op-at-point ()
+  "Bounds of symbol or operator at point."
+  (or (bounds-of-thing-at-point 'symbol)
+      (let ((step-forward (save-excursion (skip-syntax-forward ".")))
+            (step-backward (save-excursion (skip-syntax-backward "."))))
+        (unless (and (eq 0 step-forward) (eq 0 step-backward))
+          (cons (- (point) step-backward)
+                (+ (point) step-forward))))))
+
 ;;;; Text property
 
 (defun citre-get-property (field str)
