@@ -32,7 +32,7 @@ jobs:
           if-no-files-found: error
       - name: '[cache] Check cache'
         id: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: 'uctags-bin'
           key: ${{ env.UCTAGS_REV }}
@@ -85,7 +85,7 @@ jobs:
           UCTAGS_REV=`cat uctags-rev`
           echo "UCTAGS_REV=$UCTAGS_REV" >> $GITHUB_ENV
       - name: '[dep] Download ctags binaries'
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         id: cache
         with:
           path: 'uctags-bin'
