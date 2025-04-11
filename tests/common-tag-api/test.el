@@ -147,7 +147,23 @@
                    "variable"))
     (should (equal (citre-make-tag-str tag nil
                                        '(annotation :reference-first t))
-                   "<R>variable"))))
+                   "<R>variable")))
+  (let ((tag (citre-make-tag 'ext-kind-full "variable"
+                             'extras "reference,fileScope"
+			     'roles "assigned")))
+    (should (equal (citre-make-tag-str tag nil '(annotation))
+                   "variable<assigned>"))
+    (should (equal (citre-make-tag-str tag nil '(annotation :no-reference t))
+                   "variable"))
+    (should (equal (citre-make-tag-str tag nil
+                                       '(annotation :reference-first t))
+                   "<assigned>variable")))
+  (let ((citre-tag-roles-format nil)
+	(tag (citre-make-tag 'ext-kind-full "variable"
+                             'extras "reference,fileScope"
+			     'roles "assigned")))
+    (should (equal (citre-make-tag-str tag nil '(annotation))
+                   "variable<R>"))))
 
 (ert-deftest test-make-tag-str-location ()
   "Test location component."

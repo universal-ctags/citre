@@ -192,7 +192,16 @@ Annotations include kind, type, etc."
 
 (defcustom citre-tag-reference-mark
   (propertize "<R>" 'face 'citre-tag-annotation-face)
-  "Mark added for references in tags."
+  "Mark added for references in tags that have no roles field."
+  :type 'string
+  :group 'citre)
+
+(defcustom citre-tag-roles-format "<%s>"
+  "A format string for roles annotation.
+If a tag is a reference tag and has roles field, this is used to format
+the roles field of the tag.  If this is nil, or the tag doesn't have a
+roles field, `citre-tag-reference-mark' is used to indicate that it is a
+reference tag."
   :type 'string
   :group 'citre)
 
@@ -811,9 +820,17 @@ PROP controls the format.  See `citre-make-tag-str' for details."
           (unless (plist-get prop :no-reference)
             (and extras
                  (citre-csv-contain "reference" extras))))
-         (reference (when reference citre-tag-reference-mark))
          (ref-first (plist-get prop :reference-first))
-         (face 'citre-tag-annotation-face))
+         (face 'citre-tag-annotation-face)
+         (reference
+          (when reference
+            (or
+             (and citre-tag-roles-format
+                  (if-let* ((roles (citre-get-tag-field 'roles tag)))
+                      (propertize
+                       (format citre-tag-roles-format roles)
+                       'face face)))
+             citre-tag-reference-mark))))
     ;; "typename:" is a placeholder. It doesn't offer useful info, so we can
     ;; drop it.  We don't drop it if it is, say, "struct:" or "union:".
     (when (and type (string-prefix-p "typename:" type))
