@@ -179,7 +179,7 @@ goes.  CASE-FOLD decides case-sensitivity."
       (let ((step-forward (save-excursion (skip-syntax-forward ".")))
             (step-backward (save-excursion (skip-syntax-backward "."))))
         (unless (and (eq 0 step-forward) (eq 0 step-backward))
-          (cons (- (point) step-backward)
+          (cons (+ (point) step-backward)
                 (+ (point) step-forward))))))
 
 ;;;; Text property
