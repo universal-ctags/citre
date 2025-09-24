@@ -270,25 +270,33 @@ the function on SYMBOL and return its value."
        (buffer-substring-no-properties (car bounds) (cdr bounds))
        'bounds bounds))))
 
-(defun citre-tags-get-symbol-at-point ()
-  "Get the symbol at point."
-  (when-let* ((bounds (citre-bounds-of-sym-or-op-at-point)))
+(defun citre-tags-get-symbol-at-point (&optional no-check-for-op)
+  "Get the symbol at point.
+
+If NO-CHECK-FOR-OP is t, then don't check if there is an operator
+at point."
+  (when-let* ((bounds (if (not no-check-for-op)
+                          (citre-bounds-of-sym-or-op-at-point)
+                        (bound-of-thing-at-point 'symbol))))
     (citre-put-property
      (buffer-substring-no-properties (car bounds) (cdr bounds))
      'bounds bounds)))
 
-(defun citre-tags-get-symbol-default ()
+(defun citre-tags-get-symbol-default (&optional no-check-for-op)
   "Get the symbol at point.
 If there's an active region, the text in it is returned as a
 symbol.  Otherwise, the symbol at point is returned.  If both
 fails, nil is returned.
 
 The returned symbol is a string with a `citre-bounds' property,
-recording the beginning/end positions of the symbol."
-  (or (citre-tags-get-marked-symbol)
-      (citre-tags-get-symbol-at-point)))
+recording the beginning/end positions of the symbol.
 
-(defun citre-tags-get-symbol (&optional tagsfile)
+If NO-CHECK-FOR-OP is t, then don't check if there is an operator
+at point."
+  (or (citre-tags-get-marked-symbol)
+      (citre-tags-get-symbol-at-point no-check-for-op)))
+
+(defun citre-tags-get-symbol (&optional tagsfile no-check-for-op)
   "Get the symbol at point.
 Set `citre-tags-language-support-alist' to control the behavior
 of this function for different languages.  `citre-file-path' and
@@ -299,9 +307,12 @@ When TAGSFILE is non-nil, write it (rather than the tags file
 associated with current buffer) to the `citre-tags-file' property
 in the returned string.  This is needed when getting
 definitions/completions of the returned symbol from a specified
-tags file."
+tags file.
+
+when NO-CHECK-FOR-OP is nil, then don't check if there is an operator
+at point."
   (let ((sym (funcall (or (citre-tags--get-value-in-language-alist :get-symbol)
-                          #'citre-tags-get-symbol-default))))
+                          (lambda () (citre-tags-get-symbol-default no-check-for-op))))))
     (citre-put-property sym 'file-path (buffer-file-name))
     (citre-put-property sym 'tags-file (or tagsfile (citre-tags-file-path)))
     sym))
@@ -438,7 +449,7 @@ The result is a list (BEG END TAGS), see
 `citre-register-completion-backend'."
   ;; Just to make sure the tags file exists.
   (when-let* ((tagsfile (citre-tags-file-path))
-              (symbol (citre-tags-get-symbol)))
+              (symbol (citre-tags-get-symbol nil t)))
     (if citre-capf-optimize-for-popup
         (let* ((cache citre-tags--completion-cache)
                (file (buffer-file-name))
