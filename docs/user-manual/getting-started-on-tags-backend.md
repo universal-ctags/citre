@@ -64,7 +64,7 @@ You are asked to:
    visit a file in that directory, this tags file is used for it. Usually it's
    the "project root", so let's choose `/path/to/project/`.
 
-1. Pick a place to save the tags file, the option `1` saves it in the project
+2. Pick a place to save the tags file, the option `1` saves it in the project
    root, while option `2` saves it in a global cache directory, which is
    `~/.cache/tags/` by default, in case you don't want to pollute your project.
    Let's choose `1` this time.
